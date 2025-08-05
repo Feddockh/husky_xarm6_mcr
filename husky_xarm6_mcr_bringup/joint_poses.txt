@@ -1,0 +1,80 @@
+Top Left
+
+joint1 = 0.0
+joint2 = -50.2
+joint3 = -135.0
+joint4 = 90.0
+joint5 = 90.0
+joint6 = 95.1
+
+Top Center
+
+joint1 = 0.0
+joint2 = -44.8
+joint3 = -102.2
+joint4 = 90.0
+joint5 = 90.0
+joint6 = 56.8
+
+Top Right
+
+joint1 = 0.0
+joint2 = 0.5
+joint3 = -135.0
+joint4 = 90.0
+joint5 = 90.0
+joint6 = 44.4
+
+Center Right
+
+joint1 = 0.0
+joint2 = -29.7
+joint3 = -71.8
+joint4 = 90.0
+joint5 = 90.0
+joint6 = 11.4
+
+Center Center
+
+joint1 = 0.0
+joint2 = -79.6
+joint3 = -50.6
+joint4 = 90.0
+joint5 = 90.0
+joint6 = 40.0
+
+Center Left
+
+joint1 = 0.0
+joint2 = -99.1
+joint3 = -71.9
+joint4 = 90.0
+joint5 = 90.0
+joint6 = 80.8
+
+Bottom Left
+
+joint1 = 0.0
+joint2 = -109.3
+joint3 = -57.3
+joint4 = -90.0
+joint5 = -90.0
+joint6 = -103.8
+
+Bottom Center
+
+joint1 = 0.0
+joint2 = -73.6
+joint3 = -21.6
+joint4 = -90.0
+joint5 = -90.0
+joint6 = -177.0
+
+Bottom Right
+
+joint1 = 0.0
+joint2 = -5.1
+joint3 = -57.2
+joint4 = -90.0
+joint5 = -90.0
+joint6 = -150.1

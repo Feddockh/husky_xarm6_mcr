@@ -1,0 +1,89 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro" name="husky_xarm6_mcr">
+
+    <!-- Parameters -->
+
+    
+    <!-- HUSKY PLATFORM & ATTACHMENTS -->
+    <!-- Husky body -->
+    <xacro:include filename="$(find clearpath_platform_description)/urdf/common.urdf.xacro"/>
+    <xacro:include filename="$(find clearpath_platform_description)/urdf/a200/a200.urdf.xacro"/>
+    <xacro:a200 wheel="default"/>
+    <!-- front & rear bumper -->
+    <xacro:include filename="$(find clearpath_platform_description)/urdf/a200/attachments/bumper.urdf.xacro"/>
+    <xacro:bumper name="front_bumper"
+                model="default"
+                parent_link="front_bumper_mount">
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+    </xacro:bumper>
+    <xacro:bumper name="rear_bumper"
+                model="default"
+                parent_link="rear_bumper_mount">
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+    </xacro:bumper>
+
+    <!-- X-RAIL PLATFORM -->
+    <link name="x-rail_platform_link">
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="package://husky_xarm6_mcr_description/meshes/Platform_Electronics.dae" scale="1 1 1"/>
+            </geometry>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="package://husky_xarm6_mcr_description/meshes/Platform_Electronics_Collision.stl" scale="1 1 1"/>
+            </geometry>
+        </collision>
+        <!-- <inertial>
+            <origin xyz="0.01142856 0.38887557 0.14875439" rpy="0 0 0"/>
+            <mass value="37.70490883"/>
+            <inertia
+                ixx="3.0863383" ixy="0.13633027" ixz="-0.05595213"
+                iyy="1.23426261" iyz="0.14585405"
+                izz="3.73292102"/>
+        </inertial> -->
+    </link>
+    <joint name="x-rail_husky_joint" type="fixed">
+        <parent link="base_link"/>
+        <child link="x-rail_platform_link"/>
+        <origin xyz="0.0 0.0 0.24020000" rpy="0 0 ${-pi/2}"/>
+    </joint>
+
+    <!-- XARM6 -->
+    <xacro:include filename="$(find xarm_description)/urdf/xarm_device_macro.xacro"/>
+    <xacro:xarm_device
+        prefix="xarm_"
+        hw_ns="xarm"
+        dof="6"
+        robot_type="xarm"
+
+        attach_to="x-rail_platform_link"
+        attach_xyz="0.09500000 0 0.31610000"
+        attach_rpy="0 0 ${-pi/2}"
+        create_attach_link="false"
+
+        limited="false"
+        effort_control="false"
+        velocity_control="false"
+        ros2_control_plugin="uf_robot_hardware/UFRobotSystemHardware"
+        ros2_control_params=""
+        load_gazebo_plugin="false"
+
+        add_gripper="false"
+        add_vacuum_gripper="false"
+        add_bio_gripper="false"
+        model1300="false"
+    />
+
+    <!-- MULTI CAMERA RIG -->
+    <xacro:include filename="$(find multi_cam_rig_description)/urdf/multi_cam_rig_macro.urdf.xacro"/>
+    <xacro:multi_camera_rig/>
+    <joint name="tool_mount" type="fixed">
+        <parent link="xarm_link_eef"/>
+        <child link="multi_camera_rig_link"/>
+        <origin xyz="0.0 0.0 0.0" rpy="${pi/2} 0 0"/>
+    </joint>
+
+</robot>

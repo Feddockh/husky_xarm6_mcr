@@ -1,0 +1,8 @@
+# config/initial_positions.yaml
+initial_positions:
+  xarm_joint1: 0.0
+  xarm_joint2: 0.0
+  xarm_joint3: 0.0
+  xarm_joint4: 0.0
+  xarm_joint5: 0.0
+  xarm_joint6: 0.0
