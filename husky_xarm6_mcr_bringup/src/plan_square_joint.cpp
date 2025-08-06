@@ -17,8 +17,8 @@ int main(int argc, char **argv)
 
     // Planning group for xArm6 (override with a launch param if needed)
     const std::string group_name = node->declare_parameter<std::string>("group_name", "xarm6");
-    const double vel_scale = node->declare_parameter<double>("velocity_scaling", 0.3);
-    const double acc_scale = node->declare_parameter<double>("acceleration_scaling", 0.3);
+    const double vel_scale = node->declare_parameter<double>("velocity_scaling", 0.5);
+    const double acc_scale = node->declare_parameter<double>("acceleration_scaling", 0.5);
     const double planning_time = node->declare_parameter<double>("planning_time", 10.0);
     const int attempts = node->declare_parameter<int>("planning_attempts", 10);
     const double dwell_s = node->declare_parameter<double>("dwell_seconds", 0.5);
