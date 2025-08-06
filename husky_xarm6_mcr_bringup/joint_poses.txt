@@ -1,20 +1,26 @@
+(-0.30, 0.91) (0.0, 0.91) (0.3, 0.91)
+(-0.30, 0.76) (0.0, 0.76) (0.3, 0.76)
+(-0.30, 0.61) (0.0, 0.61) (0.3, 0.61)
+
+
+
 Top Left
 
 joint1 = 0.0
-joint2 = -50.2
-joint3 = -135.0
+joint2 = -44.2
+joint3 = -144.4
 joint4 = 90.0
 joint5 = 90.0
-joint6 = 95.1
+joint6 = 98.5
 
 Top Center
 
 joint1 = 0.0
-joint2 = -44.8
-joint3 = -102.2
+joint2 = -42.5
+joint3 = -106.1
 joint4 = 90.0
 joint5 = 90.0
-joint6 = 56.8
+joint6 = 58.5
 
 Top Right
 

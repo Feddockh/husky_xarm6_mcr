@@ -39,10 +39,11 @@ int main(int argc, char **argv)
         /* Center Right */ {0.0, -29.7, -71.8, 90.0, 90.0, 11.4},
         /* Center Center*/ {0.0, -79.6, -50.6, 90.0, 90.0, 40.0},
         /* Center Left  */ {0.0, -99.1, -71.9, 90.0, 90.0, 80.8},
-        /* Bottom Left  */ {0.0, -109.3, -57.3, -90.0, -90.0, -103.8},
-        /* Bottom Center*/ {0.0, -73.6, -21.6, -90.0, -90.0, -177.0},
+        // /* Bottom Left  */ {0.0, -109.3, -57.3, -90.0, -90.0, -103.8},
+        // /* Bottom Center*/ {0.0, -73.6, -21.6, -90.0, -90.0, -177.0},
         //   /* Bottom Right */ {  0.0,   -5.1,  -57.2,  -90.0,  -90.0, -150.1}
-        /* Bottom Right */ {0.0, -36.1, -39.6, 90.0, 90.0, -14.7}};
+        // /* Bottom Right */ {0.0, -36.1, -39.6, 90.0, 90.0, -14.7}
+    };
 
     RCLCPP_INFO(node->get_logger(), "Starting loop through %zu joint waypoints for group '%s'...",
                 waypoints_deg.size(), group_name.c_str());
