@@ -66,75 +66,92 @@ Visualization Manager:
         Expand Link Details: false
         Expand Tree: false
         Link Tree Style: Links in Alphabetic Order
-        base_footprint:
+        a200_base_footprint:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-        base_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        default_mount:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        front_bumper_base_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        front_bumper_link:
+        a200_base_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        front_bumper_mount:
+        a200_default_mount:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-        front_left_wheel:
+        a200_front_bumper_mount:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-          Value: true
-        front_right_wheel:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        inertial_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        platform_electronics_link:
+        a200_front_left_wheel:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        rear_bumper_base_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        rear_bumper_link:
+        a200_front_right_wheel:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        rear_bumper_mount:
+        a200_inertial_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-        rear_left_wheel:
+        a200_rear_bumper_mount:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        a200_rear_left_wheel:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        rear_right_wheel:
+        a200_rear_right_wheel:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        top_chassis_link:
+        a200_top_chassis_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        x_rail_riser_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        xarm6_base_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        xarm6_link1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        xarm6_link2:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        xarm6_link3:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        xarm6_link4:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        xarm6_link5:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        xarm6_link6:
           Alpha: 1
           Show Axes: false
           Show Trail: false
@@ -150,7 +167,7 @@ Visualization Manager:
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
-    Fixed Frame: base_link
+    Fixed Frame: a200_base_link
     Frame Rate: 30
   Name: root
   Tools:
