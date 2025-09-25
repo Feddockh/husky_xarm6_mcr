@@ -26,23 +26,23 @@ platform_velocity_controller:
     cmd_vel_timeout: 0.5
     use_stamped_vel: false
 
-    # linear.x.has_velocity_limits: true
-    # linear.x.max_velocity: 1.0
-    # linear.x.has_acceleration_limits: true
-    # linear.x.max_acceleration: 1.0
+    linear.x.has_velocity_limits: true
+    linear.x.max_velocity: 1.0
+    linear.x.has_acceleration_limits: true
+    linear.x.max_acceleration: 1.0
 
-    # angular.z.has_velocity_limits: true
-    # angular.z.max_velocity: 1.0
-    # angular.z.has_acceleration_limits: true
-    # angular.z.max_acceleration: 1.0
+    angular.z.has_velocity_limits: true
+    angular.z.max_velocity: 1.0
+    angular.z.has_acceleration_limits: true
+    angular.z.max_acceleration: 1.0
 
-    open_loop: true
-    linear.x.has_velocity_limits: false
-    linear.x.has_acceleration_limits: false
-    angular.z.has_velocity_limits: false
-    angular.z.has_acceleration_limits: false
-    velocity_rolling_window_size: 1
-    publish_cmd: true
+    # open_loop: true
+    # linear.x.has_velocity_limits: false
+    # linear.x.has_acceleration_limits: false
+    # angular.z.has_velocity_limits: false
+    # angular.z.has_acceleration_limits: false
+    # velocity_rolling_window_size: 1
+    # publish_cmd: true
 
 wheel_velocity_controller:
   ros__parameters:

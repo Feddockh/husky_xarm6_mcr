@@ -99,32 +99,32 @@
             <child link="${prefix}front_left_wheel"/>
             <origin xyz="${wheelbase/2} ${track/2} ${wheel_vertical_offset}" rpy="0 0 0" />
             <axis xyz="0 1 0" rpy="0 0 0" />
-            <limit effort="10000.0" velocity="100.0"/>
-            <dynamics damping="0.0" friction="0.0"/>
+            <!-- <limit effort="10000.0" velocity="100.0"/>
+            <dynamics damping="0.0" friction="0.0"/> -->
         </joint>
         <joint name="${prefix}front_right_wheel_joint" type="continuous">
             <parent link="${prefix}base_link"/>
             <child link="${prefix}front_right_wheel"/>
             <origin xyz="${wheelbase/2} ${-track/2} ${wheel_vertical_offset}" rpy="0 0 0" />
             <axis xyz="0 1 0" rpy="0 0 0" />
-            <limit effort="10000.0" velocity="100.0"/>
-            <dynamics damping="0.0" friction="0.0"/>
+            <!-- <limit effort="10000.0" velocity="100.0"/>
+            <dynamics damping="0.0" friction="0.0"/> -->
         </joint>
         <joint name="${prefix}rear_left_wheel_joint" type="continuous">
             <parent link="${prefix}base_link"/>
             <child link="${prefix}rear_left_wheel"/>
             <origin xyz="${-wheelbase/2} ${track/2} ${wheel_vertical_offset}" rpy="0 0 0" />
             <axis xyz="0 1 0" rpy="0 0 0" />
-            <limit effort="10000.0" velocity="100.0"/>
-            <dynamics damping="0.0" friction="0.0"/>
+            <!-- <limit effort="10000.0" velocity="100.0"/>
+            <dynamics damping="0.0" friction="0.0"/> -->
         </joint>
         <joint name="${prefix}rear_right_wheel_joint" type="continuous">
             <parent link="${prefix}base_link"/>
             <child link="${prefix}rear_right_wheel"/>
             <origin xyz="${-wheelbase/2} ${-track/2} ${wheel_vertical_offset}" rpy="0 0 0" />
             <axis xyz="0 1 0" rpy="0 0 0" />
-            <limit effort="10000.0" velocity="100.0"/>
-            <dynamics damping="0.0" friction="0.0"/>
+            <!-- <limit effort="10000.0" velocity="100.0"/>
+            <dynamics damping="0.0" friction="0.0"/> -->
         </joint>
 
         <!-- Front bumper mount -->

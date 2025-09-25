@@ -92,15 +92,20 @@ def launch_setup(context, *args, **kwargs):
         arguments=[
             '-topic', 'robot_description',
             '-name', 'husky_xarm6_mcr',
+            '-z', '0.3' # slight z offset to avoid collision with ground plane
         ],
         parameters=[{'use_sim_time': True}],
     )
 
     # The [ means GZ → ROS (subscribe to GZ /clock, publish to ROS /clock). Avoid ROS→GZ /clock to prevent loops.
+    # Example: /cmd_vel@geometry_msgs/msg/Twist means the bridge will expose a ROS topic /cmd_vel with type geometry_msgs/msg/Twist.
     bridge = Node(
         package='ros_gz_bridge',
         executable='parameter_bridge',
-        arguments=['/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock'], # For some reason just one bracket works
+        arguments=[
+            '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock',
+            '/platform_velocity_controller/cmd_vel_unstamped@geometry_msgs/msg/Twist[gz.msgs.Twist'
+        ],
         output='screen'
     )
 
