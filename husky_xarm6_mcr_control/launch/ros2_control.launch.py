@@ -64,7 +64,7 @@ def launch_setup(context, *args, **kwargs):
             os.path.join(get_package_share_directory('ros_gz_sim'), 'launch', 'gz_sim.launch.py')
         ),
         # run (-r), verbose, load empty.sdf
-        launch_arguments={'gz_args': '-r -v 4 empty.sdf'}.items()
+        launch_arguments={'gz_args': '-r empty.sdf'}.items()
     )
 
     # Process the xacro file

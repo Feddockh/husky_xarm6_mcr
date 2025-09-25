@@ -24,7 +24,8 @@
       <visual>
         <origin xyz="0 0 0" rpy="0 0 0" />
         <geometry>
-          <mesh filename="package://clearpath_platform_description/meshes/a200/base_link.dae" />
+          <mesh filename="file://$(find clearpath_platform_description)/meshes/a200/base_link.dae" />
+          <!-- <mesh filename="package://clearpath_platform_description/meshes/a200/base_link.dae" /> -->
         </geometry>
       </visual>
       <collision>
@@ -55,7 +56,8 @@
       <visual>
         <origin xyz="0 0 0" rpy="0 0 0" />
         <geometry>
-          <mesh filename="package://clearpath_platform_description/meshes/a200/top_chassis.dae" />
+          <mesh filename="file://$(find clearpath_platform_description)/meshes/a200/top_chassis.dae" />
+          <!-- <mesh filename="package://clearpath_platform_description/meshes/a200/top_chassis.dae" /> -->
         </geometry>
       </visual>
     </link>
