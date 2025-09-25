@@ -41,23 +41,6 @@ def launch_setup(context, *args, **kwargs):
     control_pkg = get_package_share_directory('husky_xarm6_mcr_control')
     controllers_yaml = Path(control_pkg) / 'config' / 'controllers.yaml'
 
-
-    clearpath_desc = get_package_share_directory('clearpath_platform_description')
-    husky_desc    = get_package_share_directory('husky_xarm6_mcr_description')
-
-    set_res_path = SetEnvironmentVariable(
-        name='IGN_GAZEBO_RESOURCE_PATH',
-        value=':'.join([clearpath_desc, husky_desc, os.environ.get('IGN_GAZEBO_RESOURCE_PATH','')])
-    )
-    set_ign_file = SetEnvironmentVariable(
-        name='IGN_FILE_PATH',
-        value=':'.join([clearpath_desc, husky_desc, os.environ.get('IGN_FILE_PATH','')])
-    )
-    set_gz_file = SetEnvironmentVariable(
-        name='GZ_FILE_PATH',
-        value=':'.join([clearpath_desc, husky_desc, os.environ.get('GZ_FILE_PATH','')])
-    )
-
     # Start the Ignition/Gazebo (Fortress) server via ros_ign_gazebo
     gazebo_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -180,9 +163,6 @@ def launch_setup(context, *args, **kwargs):
     # )
 
     return [
-        set_res_path,
-        set_ign_file,
-        set_gz_file,
         gazebo_launch,
         robot_state_publisher,
         spawn_entity,
