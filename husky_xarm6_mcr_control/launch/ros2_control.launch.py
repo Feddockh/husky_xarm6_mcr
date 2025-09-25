@@ -79,6 +79,7 @@ def launch_setup(context, *args, **kwargs):
         executable='spawner',
         arguments=[
             'platform_velocity_controller',
+            '--controller-manager', '/controller_manager',
             '--param-file', str(controllers_yaml)
             ],
     )
@@ -95,10 +96,11 @@ def launch_setup(context, *args, **kwargs):
         parameters=[{'use_sim_time': True}],
     )
 
+    # The [ means GZ → ROS (subscribe to GZ /clock, publish to ROS /clock). Avoid ROS→GZ /clock to prevent loops.
     bridge = Node(
         package='ros_gz_bridge',
         executable='parameter_bridge',
-        arguments=['/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock]'],
+        arguments=['/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock'], # For some reason just one bracket works
         output='screen'
     )
 
