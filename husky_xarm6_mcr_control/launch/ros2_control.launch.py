@@ -14,9 +14,6 @@ from launch.event_handlers import OnProcessExit
 from launch.actions import SetEnvironmentVariable
 
 
-
-
-
 # From xarm packages
 def get_xacro_content(context, xacro_file, **kwargs):
     xacro_file = Path(xacro_file.perform(context)) if isinstance(xacro_file, LaunchConfiguration) else Path(xacro_file) if isinstance(xacro_file, str) else xacro_file
@@ -84,6 +81,16 @@ def launch_setup(context, *args, **kwargs):
             ],
     )
 
+    xarm6_traj_controller = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=[
+            'xarm6_traj_controller',
+            '--controller-manager', '/controller_manager',
+            '--param-file', str(controllers_yaml)
+            ],
+    )
+
     # Use ros_gz_sim entity creation for Ignition Fortress
     spawn_entity = Node(
         package='ros_gz_sim',
@@ -113,46 +120,9 @@ def launch_setup(context, *args, **kwargs):
         OnProcessExit(target_action=spawn_entity, on_exit=[joint_state_broadcaster])
     )
     jsb_then_base = RegisterEventHandler(
-        OnProcessExit(target_action=joint_state_broadcaster, on_exit=[platform_velocity_controller])
+        OnProcessExit(target_action=joint_state_broadcaster, on_exit=[platform_velocity_controller, xarm6_traj_controller])
     )
 
-    # ros2_control_node = Node(
-    #     package='controller_manager',
-    #     executable='ros2_control_node',
-    #     parameters=[controllers_yaml],
-    #     output='screen'
-    # )
-
-    # joint_state_broadcaster = Node(
-    #     package='controller_manager',
-    #     executable='spawner',
-    #     arguments=[
-    #         'joint_state_broadcaster', 
-    #         '--controller-manager', '/controller_manager',
-    #         '--param-file', str(controllers_yaml),
-    #         'config', 'controllers.yaml'
-    #     ],
-    #     output='screen'
-    # )
-
-    # joint_state_broadcaster_spawner = RegisterEventHandler(
-    #     OnProcessExit(
-    #         target_action=gazebo_spawn,
-    #         on_exit=[joint_state_broadcaster]
-    #     )
-    # )
-
-    # arm_controller = Node(
-    #     package='controller_manager',
-    #     executable='spawner',
-    #     arguments=[
-    #         'xarm6_controller', 
-    #         '--controller-manager', '/controller_manager',
-    #         '--param-file', str(controllers_yaml),
-    #         'config', 'controllers.yaml'
-    #     ],
-    #     output='screen'
-    # )
 
     # arm_controller_spawner = RegisterEventHandler(
     #     OnProcessExit(

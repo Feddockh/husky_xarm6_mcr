@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://ros.org/wiki/xacro">
-    <xacro:macro name="xarm6_ros2_control" params="prefix sim:=true">
+    <xacro:macro name="xarm6_ros2_control" params="prefix use_gazebo:=true">
 
-        <xacro:if value="${sim}">
+        <xacro:if value="${use_gazebo}">
             <ros2_control name="${prefix}gazebo_system" type="system">
                 <hardware>
                     <plugin>gz_ros2_control/GazeboSimSystem</plugin>
@@ -47,8 +47,8 @@
             </ros2_control>
         </xacro:if>
 
-        <xacro:unless value="${sim}">
-            <!-- Real hardware (later) -->
+        <!-- Real hardware (later) -->
+        <!-- <xacro:unless value="${use_gazebo}">
             <ros2_control name="${prefix}uf_hw" type="system">
                 <hardware>
                     <plugin>uf_robot_hardware/UFRobotSystemHardware</plugin>
@@ -88,7 +88,7 @@
                     <state_interface name="velocity"/>
                 </joint>
             </ros2_control>
-        </xacro:unless>
+        </xacro:unless> -->
         
     </xacro:macro>
 </robot>

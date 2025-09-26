@@ -5,8 +5,7 @@ controller_manager:
 
     joint_state_broadcaster.type: joint_state_broadcaster/JointStateBroadcaster
     platform_velocity_controller.type: diff_drive_controller/DiffDriveController
-    wheel_velocity_controller.type: forward_command_controller/ForwardCommandController
-
+    xarm6_traj_controller.type: joint_trajectory_controller/JointTrajectoryController
 
 platform_velocity_controller:
   ros__parameters:
@@ -36,19 +35,30 @@ platform_velocity_controller:
     angular.z.has_acceleration_limits: true
     angular.z.max_acceleration: 1.0
 
-    # open_loop: true
-    # linear.x.has_velocity_limits: false
-    # linear.x.has_acceleration_limits: false
-    # angular.z.has_velocity_limits: false
-    # angular.z.has_acceleration_limits: false
-    # velocity_rolling_window_size: 1
-    # publish_cmd: true
-
-wheel_velocity_controller:
+xarm6_traj_controller:
   ros__parameters:
+    command_interfaces:
+      - position
+      - velocity
+    state_interfaces:
+      - position
+      - velocity
     joints:
-      - a200_front_left_wheel_joint
-      - a200_rear_left_wheel_joint
-      - a200_front_right_wheel_joint
-      - a200_rear_right_wheel_joint
-    interface_name: velocity
+      - xarm6_joint1
+      - xarm6_joint2
+      - xarm6_joint3
+      - xarm6_joint4
+      - xarm6_joint5
+      - xarm6_joint6
+    constraints:
+      goal_time: 0.5
+      stopped_velocity_tolerance: 0.0
+      xarm6_joint1: {trajectory: 1.0, goal: 0.01}
+      xarm6_joint2: {trajectory: 1.0, goal: 0.01}
+      xarm6_joint3: {trajectory: 1.0, goal: 0.01}
+      xarm6_joint4: {trajectory: 1.0, goal: 0.01}
+      xarm6_joint5: {trajectory: 1.0, goal: 0.01}
+      xarm6_joint6: {trajectory: 1.0, goal: 0.01}
+    interface_name: position
+    state_publish_rate: 25.0
+    action_monitor_rate: 10.0

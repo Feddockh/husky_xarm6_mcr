@@ -16,9 +16,17 @@
         <origin xyz="0.0 0.0 0.0" rpy="0 0 ${-pi/2}"/>
     </xacro:x_rail_riser>
 
+    <!-- XARM6 -->
+    <xacro:include filename="$(find husky_xarm6_mcr_description)/urdf/xarm6/xarm6_macro.urdf.xacro"/>
+    <xacro:xarm6 prefix="$(arg manipulator_prefix)" model_num="1303" parent_link="x_rail_riser_link">
+        <origin xyz="0.09500000 0 0.31610000" rpy="0 0 ${-pi/2}"/>
+    </xacro:xarm6>
+
     <!-- ROS2_CONTROL -->
     <xacro:include filename="$(find husky_xarm6_mcr_description)/urdf/husky/husky_ros2_control.xacro"/>
     <xacro:husky_ros2_control prefix="$(arg platform_prefix)" use_gazebo="$(arg sim)"/>
+    <xacro:include filename="$(find husky_xarm6_mcr_description)/urdf/xarm6/xarm6_ros2_control.xacro"/>
+    <xacro:xarm6_ros2_control prefix="$(arg manipulator_prefix)" use_gazebo="$(arg sim)"/>
 
     <gazebo>
         <plugin filename="gz_ros2_control-system" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
@@ -27,11 +35,8 @@
     </gazebo>
 
 
-    <!-- XARM6 -->
-    <!-- <xacro:include filename="$(find husky_xarm6_mcr_description)/urdf/xarm6/xarm6_macro.urdf.xacro"/>
-    <xacro:xarm6 prefix="$(arg manipulator_prefix)" model_num="1303" parent_link="x_rail_riser_link">
-        <origin xyz="0.09500000 0 0.31610000" rpy="0 0 ${-pi/2}"/>
-    </xacro:xarm6> -->
+    
+
     <!-- MULTI CAMERA RIG -->
     <!-- <xacro:include filename="$(find multi_cam_rig_description)/urdf/multi_cam_rig_macro.urdf.xacro"/>
     <xacro:multi_camera_rig/>
