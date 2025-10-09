@@ -1,296 +1,216 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://ros.org/wiki/xacro">
+
   <xacro:macro name="xarm6" params="prefix use_gazebo:=true
     joint1_lower_limit:=${-2.0*pi}  joint1_upper_limit:=${2.0*pi}
-    joint2_lower_limit:=${-2.059}  joint2_upper_limit:=${2.0944}
-    joint3_lower_limit:=${-3.927}  joint3_upper_limit:=${0.19198}
+    joint2_lower_limit:=${-2.059}   joint2_upper_limit:=${2.0944}
+    joint3_lower_limit:=${-3.927}   joint3_upper_limit:=${0.19198}
     joint4_lower_limit:=${-2.0*pi}  joint4_upper_limit:=${2.0*pi}
-    joint5_lower_limit:=${-1.69297}  joint5_upper_limit:=${pi}
+    joint5_lower_limit:=${-1.69297} joint5_upper_limit:=${pi}
     joint6_lower_limit:=${-2.0*pi}  joint6_upper_limit:=${2.0*pi}
     model_num:=1303
-    inertial_params_filename:='xarm6_type6_HT_BR2' kinematics_params_filename:='xarm6_default_kinematics' 
-    parent_link:='' *origin"
-    >
+    inertial_params_filename:='xarm6_type6_HT_BR2'
+    kinematics_params_filename:='xarm6_default_kinematics'
+    parent_link:='' *origin">
 
-    <!-- Include common links and transmissions -->
-    <xacro:include filename="$(find xarm_description)/urdf/common/common.link.xacro" />
-    <!-- <xacro:include filename="$(find xarm_description)/urdf/xarm6/xarm6.transmission.xacro" /> -->
-    
-    <!-- add simple transmissions for each joint (uses prefix and Effort interface) -->
-    <!-- <xacro:xarm6_transmission prefix="${prefix}" hard_interface="EffortJointInterface" reduction="100" /> -->
+    <!-- Materials (kept) -->
+    <xacro:include filename="$(find xarm_description)/urdf/common/common.material.xacro"/>
+    <xacro:common_material prefix="${prefix}"/>
 
-    <!-- define property -->
-    <xacro:if value="${model_num >= 1305 and model_num != 1380}">
-      <xacro:property name="visual_dir" value="xarm6_1305/visual"/>
-      <xacro:property name="collision_dir" value="xarm6_1305/collision"/>
-      <xacro:property name="add_mesh_suffix" value="false"/>
-      <xacro:property name="collison_mesh_suffix" value="obj"/>
-      <xacro:property name="link6_visual" value="xarm6_1305/visual/link6"/>
-      <xacro:property name="link6_collision" value="xarm6_1305/collision/link6"/>
-    </xacro:if>
-    <xacro:unless value="${model_num >= 1305 and model_num != 1380}">
-      <xacro:property name="visual_dir" value="xarm6/visual"/>
-      <xacro:property name="collision_dir" value="xarm6/visual"/>
-      <xacro:property name="add_mesh_suffix" value="true"/>
-      <xacro:property name="collison_mesh_suffix" value="stl"/>
-      <xacro:if value="${model_num >= 1300}">
-        <xacro:property name="link6_visual" value="end_tool/visual/end_tool_1300"/>
-        <xacro:property name="link6_collision" value="end_tool/collision/end_tool_1300"/>
-      </xacro:if>
-      <xacro:unless value="${model_num >= 1300}">
-        <xacro:property name="link6_visual" value="xarm6/visual/link6"/>
-        <xacro:property name="link6_collision" value="end_tool/collision/end_tool"/>
-      </xacro:unless>
-    </xacro:unless>
-    
-    <!-- load params and define property (use full package paths for YAML files) -->
+    <!-- Load link inertials & kinematics from YAML (kept) -->
     <xacro:property name="inertial_params_file" value="$(find xarm_description)/config/link_inertial/${inertial_params_filename}.yaml"/>
     <xacro:property name="inertial_params" value="${xacro.load_yaml(inertial_params_file)}"/>
     <xacro:property name="kinematics_params_file" value="$(find xarm_description)/config/kinematics/default/${kinematics_params_filename}.yaml"/>
     <xacro:property name="kinematics_config" value="${xacro.load_yaml(kinematics_params_file)}"/>
     <xacro:property name="kinematics_params" value="${kinematics_config['kinematics']}"/>
-    <xacro:property name="mesh_path" value="$(find xarm_description)/meshes" scope="parent"/>
-    <xacro:property name="mesh_suffix" value="stl" scope="parent"/>
 
-    <!-- xarm material colors -->
-    <xacro:include filename="$(find xarm_description)/urdf/common/common.material.xacro" />
-    <xacro:common_material prefix="${prefix}"/>
+    <!-- Mesh directory & extension rules -->
+    <!-- Use file://$(find <package>) so Gazebo/Ignition can locate meshes -->
+    <!-- CRITICAL that path is designed with "file://$(find x)/..." so that it works in both ROS and Gazebo Sim -->
+    <xacro:property name="visual_dir"    value="file://$(find xarm_description)/meshes/xarm6/visual"/>
+    <!-- TODO: Add in collision meshes for planning speed increase -->
+    <xacro:property name="collision_dir" value="file://$(find xarm_description)/meshes/xarm6/visual"/> 
+    <xacro:property name="visual_ext"    value="stl"/>
+    <xacro:property name="collision_ext" value="stl"/>
+    
 
-    <!-- xarm links -->
+    <!-- ========== Links ========== -->
+
+    <!-- base_link -->
     <link name="${prefix}base_link">
       <inertial>
-        <origin xyz="0.0 0.0 0.09103" rpy="0 0 0" />
-        <mass value="2.7" />
-        <inertia
-          ixx="0.00494875" ixy="-3.5E-06" ixz="1.25E-05"
-          iyy="0.00494174" iyz="1.67E-06" izz="0.002219" />
+        <origin xyz="0 0 0.09103" rpy="0 0 0"/>
+        <mass value="2.7"/>
+        <inertia ixx="0.00494875" ixy="-3.5E-06" ixz="1.25E-05"
+                 iyy="0.00494174" iyz="1.67E-06" izz="0.002219"/>
       </inertial>
-      <xacro:common_link_visual 
-        mesh_filename="${visual_dir}/link_base"  
-        origin_xyz="0 0 0" 
-        origin_rpy="0 0 0"
-        material_name="${prefix}White" />
-      <xacro:common_link_collision 
-        mesh_filename="${collision_dir}/link_base" 
-        add_mesh_suffix="${add_mesh_suffix}" 
-        other_mesh_suffix="${collison_mesh_suffix}" 
-        origin_xyz="0 0 0" 
-        origin_rpy="0 0 0" />
-    </link>
-    <link name="${prefix}link1">
-      <xacro:common_link_inertial 
-        link_inertial_params="${inertial_params['link1']}" 
-        origin_rpy="0 0 0"/>
-      <xacro:common_link_visual 
-        mesh_filename="${visual_dir}/link1"  
-        origin_xyz="0 0 0" 
-        origin_rpy="0 0 0"
-        material_name="${prefix}White" />
-      <xacro:common_link_collision 
-        mesh_filename="${collision_dir}/link1"  
-        add_mesh_suffix="${add_mesh_suffix}" 
-        other_mesh_suffix="${collison_mesh_suffix}"
-        origin_xyz="0 0 0" 
-        origin_rpy="0 0 0" />
-    </link>
-    <link name="${prefix}link2">
-      <xacro:common_link_inertial 
-        link_inertial_params="${inertial_params['link2']}" 
-        origin_rpy="0 0 0"/>
-      <xacro:common_link_visual 
-        mesh_filename="${visual_dir}/link2"  
-        origin_xyz="0 0 0" 
-        origin_rpy="0 0 0"
-        material_name="${prefix}White" />
-      <xacro:common_link_collision 
-        mesh_filename="${collision_dir}/link2"  
-        add_mesh_suffix="${add_mesh_suffix}" 
-        other_mesh_suffix="${collison_mesh_suffix}"
-        origin_xyz="0 0 0" 
-        origin_rpy="0 0 0" />
-    </link>
-    <link name="${prefix}link3">
-      <xacro:common_link_inertial 
-        link_inertial_params="${inertial_params['link3']}" 
-        origin_rpy="0 0 0"/>
-      <xacro:common_link_visual 
-        mesh_filename="${visual_dir}/link3"  
-        origin_xyz="0 0 0" 
-        origin_rpy="0 0 0"
-        material_name="${prefix}White" />
-      <xacro:common_link_collision 
-        mesh_filename="${collision_dir}/link3"  
-        add_mesh_suffix="${add_mesh_suffix}" 
-        other_mesh_suffix="${collison_mesh_suffix}"
-        origin_xyz="0 0 0" 
-        origin_rpy="0 0 0" />
-    </link>
-    <link name="${prefix}link4">
-      <xacro:common_link_inertial 
-        link_inertial_params="${inertial_params['link4']}" 
-        origin_rpy="0 0 0"/>
-      <xacro:common_link_visual 
-        mesh_filename="${visual_dir}/link4"  
-        origin_xyz="0 0 0" 
-        origin_rpy="0 0 0"
-        material_name="${prefix}White" />
-      <xacro:common_link_collision 
-        mesh_filename="${collision_dir}/link4"  
-        add_mesh_suffix="${add_mesh_suffix}" 
-        other_mesh_suffix="${collison_mesh_suffix}"
-        origin_xyz="0 0 0" 
-        origin_rpy="0 0 0" />
-    </link>
-    <link name="${prefix}link5">
-      <xacro:common_link_inertial 
-        link_inertial_params="${inertial_params['link5']}" 
-        origin_rpy="0 0 0"/>
-      <xacro:common_link_visual 
-        mesh_filename="${visual_dir}/link5"  
-        origin_xyz="0 0 0" 
-        origin_rpy="0 0 0"
-        material_name="${prefix}White" />
-      <xacro:common_link_collision 
-        mesh_filename="${collision_dir}/link5"  
-        add_mesh_suffix="${add_mesh_suffix}" 
-        other_mesh_suffix="${collison_mesh_suffix}"
-        origin_xyz="0 0 0" 
-        origin_rpy="0 0 0" />
-    </link>
-    <link name="${prefix}link6">
-      <xacro:common_link_inertial 
-        link_inertial_params="${inertial_params['link6']}" 
-        origin_rpy="0 0 0"/>
-      <xacro:common_link_visual 
-        mesh_filename="${link6_visual}"  
-        origin_xyz="0 0 0" 
-        origin_rpy="0 0 0"
-        material_name="${prefix}Silver" />
-      <xacro:common_link_collision 
-        mesh_filename="${link6_collision}"  
-        add_mesh_suffix="${add_mesh_suffix}" 
-        other_mesh_suffix="${collison_mesh_suffix}"
-        origin_xyz="0 0 0" 
-        origin_rpy="0 0 0" />
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+            <mesh filename="${visual_dir}/link_base.${visual_ext}"/>
+        </geometry>
+        <material name="${prefix}White"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="${collision_dir}/link_base.${collision_ext}"/>
+        </geometry>
+      </collision>
     </link>
 
-    <!-- Optional: attach base link to an external parent link -->
+    <!-- link1-5 share the same pattern -->
+    <xacro:macro name="_link_block" params="n">
+      <link name="${prefix}link${n}">
+        <inertial>
+          <origin xyz="${inertial_params['link' + str(n)]['origin']['x']} ${inertial_params['link' + str(n)]['origin']['y']} ${inertial_params['link' + str(n)]['origin']['z']}"
+                  rpy="0 0 0"/>
+          <mass value="${inertial_params['link' + str(n)]['mass']}"/>
+          <inertia ixx="${inertial_params['link' + str(n)]['inertia']['ixx']}"
+                   ixy="${inertial_params['link' + str(n)]['inertia']['ixy']}"
+                   ixz="${inertial_params['link' + str(n)]['inertia']['ixz']}"
+                   iyy="${inertial_params['link' + str(n)]['inertia']['iyy']}"
+                   iyz="${inertial_params['link' + str(n)]['inertia']['iyz']}"
+                   izz="${inertial_params['link' + str(n)]['inertia']['izz']}"/>
+        </inertial>
+        <visual>
+          <origin xyz="0 0 0" rpy="0 0 0"/>
+          <geometry>
+            <mesh filename="${visual_dir}/link${n}.${visual_ext}"/>
+          </geometry>
+          <material name="${prefix}White"/>
+        </visual>
+        <collision>
+          <origin xyz="0 0 0" rpy="0 0 0"/>
+          <geometry>
+            <mesh filename="${collision_dir}/link${n}.${collision_ext}"/>
+          </geometry>
+        </collision>
+      </link>
+    </xacro:macro>
+
+    <xacro:_link_block n="1"/>
+    <xacro:_link_block n="2"/>
+    <xacro:_link_block n="3"/>
+    <xacro:_link_block n="4"/>
+    <xacro:_link_block n="5"/>
+
+    <!-- link6 (custom file names for some models) -->
+    <link name="${prefix}link6">
+      <inertial>
+        <origin xyz="${inertial_params['link6']['origin']['x']} ${inertial_params['link6']['origin']['y']} ${inertial_params['link6']['origin']['z']}" rpy="0 0 0"/>
+        <mass value="${inertial_params['link6']['mass']}"/>
+        <inertia ixx="${inertial_params['link6']['inertia']['ixx']}"
+                 ixy="${inertial_params['link6']['inertia']['ixy']}"
+                 ixz="${inertial_params['link6']['inertia']['ixz']}"
+                 iyy="${inertial_params['link6']['inertia']['iyy']}"
+                 iyz="${inertial_params['link6']['inertia']['iyz']}"
+                 izz="${inertial_params['link6']['inertia']['izz']}"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="${visual_dir}/link6.${visual_ext}"/>
+        </geometry>
+        <material name="${prefix}Silver"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="${collision_dir}/link6.${collision_ext}"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <!-- Optional: attach to external parent -->
     <xacro:if value="${parent_link != ''}">
       <joint name="${prefix}joint_base_fixed" type="fixed">
         <parent link="${parent_link}"/>
-        <child link="${prefix}base_link"/>
+        <child  link="${prefix}base_link"/>
         <xacro:insert_block name="origin"/>
       </joint>
     </xacro:if>
 
-    <!-- xarm joints -->
+    <!-- ========== Joints (origins inlined from kinematics_params) ========== -->
+
     <joint name="${prefix}joint1" type="revolute">
       <parent link="${prefix}base_link"/>
-      <child link="${prefix}link1"/>
-      <!-- <origin xyz="0 0 0.267" rpy="0 0 0"/> -->
-      <xacro:common_joint_origin joint_kinematic_params="${kinematics_params['joint1']}" />
+      <child  link="${prefix}link1"/>
+      <origin xyz="${kinematics_params['joint1']['x']} ${kinematics_params['joint1']['y']} ${kinematics_params['joint1']['z']}"
+              rpy ="${kinematics_params['joint1']['roll']} ${kinematics_params['joint1']['pitch']} ${kinematics_params['joint1']['yaw']}"/>
       <axis xyz="0 0 1"/>
-      <limit
-        lower="${joint1_lower_limit}"
-        upper="${joint1_upper_limit}"
-        effort="50.0"
-        velocity="3.14"/>
+      <limit lower="${joint1_lower_limit}" upper="${joint1_upper_limit}" effort="50.0" velocity="3.14"/>
       <dynamics damping="1.0" friction="1.0"/>
     </joint>
+
     <joint name="${prefix}joint2" type="revolute">
       <parent link="${prefix}link1"/>
-      <child link="${prefix}link2"/>
-      <!-- <origin xyz="0 0 0" rpy="-1.5708 0 0" /> -->
-      <xacro:common_joint_origin joint_kinematic_params="${kinematics_params['joint2']}" />
+      <child  link="${prefix}link2"/>
+      <origin xyz="${kinematics_params['joint2']['x']} ${kinematics_params['joint2']['y']} ${kinematics_params['joint2']['z']}"
+              rpy ="${kinematics_params['joint2']['roll']} ${kinematics_params['joint2']['pitch']} ${kinematics_params['joint2']['yaw']}"/>
       <axis xyz="0 0 1"/>
-      <limit
-        lower="${joint2_lower_limit}"
-        upper="${joint2_upper_limit}"
-        effort="50.0"
-        velocity="3.14"/>
+      <limit lower="${joint2_lower_limit}" upper="${joint2_upper_limit}" effort="50.0" velocity="3.14"/>
       <dynamics damping="1.0" friction="1.0"/>
     </joint>
+
     <joint name="${prefix}joint3" type="revolute">
       <parent link="${prefix}link2"/>
-      <child link="${prefix}link3"/>
-      <!-- <origin xyz="0.0535 -0.2845 0" rpy="0 0 0"/> -->
-      <xacro:common_joint_origin joint_kinematic_params="${kinematics_params['joint3']}" />
+      <child  link="${prefix}link3"/>
+      <origin xyz="${kinematics_params['joint3']['x']} ${kinematics_params['joint3']['y']} ${kinematics_params['joint3']['z']}"
+              rpy ="${kinematics_params['joint3']['roll']} ${kinematics_params['joint3']['pitch']} ${kinematics_params['joint3']['yaw']}"/>
       <axis xyz="0 0 1"/>
-      <limit
-        lower="${joint3_lower_limit}"
-        upper="${joint3_upper_limit}"
-        effort="32.0"
-        velocity="3.14"/>
+      <limit lower="${joint3_lower_limit}" upper="${joint3_upper_limit}" effort="32.0" velocity="3.14"/>
       <dynamics damping="1.0" friction="1.0"/>
     </joint>
+
     <joint name="${prefix}joint4" type="revolute">
       <parent link="${prefix}link3"/>
-      <child link="${prefix}link4"/>
-      <!-- <origin xyz="0.0775 0.3425 0" rpy="-1.5708 0 0"/> -->
-      <xacro:common_joint_origin joint_kinematic_params="${kinematics_params['joint4']}" />
+      <child  link="${prefix}link4"/>
+      <origin xyz="${kinematics_params['joint4']['x']} ${kinematics_params['joint4']['y']} ${kinematics_params['joint4']['z']}"
+              rpy ="${kinematics_params['joint4']['roll']} ${kinematics_params['joint4']['pitch']} ${kinematics_params['joint4']['yaw']}"/>
       <axis xyz="0 0 1"/>
-      <limit
-        lower="${joint4_lower_limit}"
-        upper="${joint4_upper_limit}"
-        effort="32.0"
-        velocity="3.14"/>
+      <limit lower="${joint4_lower_limit}" upper="${joint4_upper_limit}" effort="32.0" velocity="3.14"/>
       <dynamics damping="1.0" friction="1.0"/>
     </joint>
+
     <joint name="${prefix}joint5" type="revolute">
       <parent link="${prefix}link4"/>
-      <child link="${prefix}link5"/>
-      <xacro:common_joint_origin joint_kinematic_params="${kinematics_params['joint5']}" />
+      <child  link="${prefix}link5"/>
+      <origin xyz="${kinematics_params['joint5']['x']} ${kinematics_params['joint5']['y']} ${kinematics_params['joint5']['z']}"
+              rpy ="${kinematics_params['joint5']['roll']} ${kinematics_params['joint5']['pitch']} ${kinematics_params['joint5']['yaw']}"/>
       <axis xyz="0 0 1"/>
-      <limit
-        lower="${joint5_lower_limit}"
-        upper="${joint5_upper_limit}"
-        effort="32.0"
-        velocity="3.14"/>
+      <limit lower="${joint5_lower_limit}" upper="${joint5_upper_limit}" effort="32.0" velocity="3.14"/>
       <dynamics damping="1.0" friction="1.0"/>
     </joint>
+
     <joint name="${prefix}joint6" type="revolute">
       <parent link="${prefix}link5"/>
-      <child link="${prefix}link6"/>
-      <!-- <origin xyz="0.076 0.097 0" rpy="-1.5708 0 0"/> -->
-      <xacro:common_joint_origin joint_kinematic_params="${kinematics_params['joint6']}" />
+      <child  link="${prefix}link6"/>
+      <origin xyz="${kinematics_params['joint6']['x']} ${kinematics_params['joint6']['y']} ${kinematics_params['joint6']['z']}"
+              rpy ="${kinematics_params['joint6']['roll']} ${kinematics_params['joint6']['pitch']} ${kinematics_params['joint6']['yaw']}"/>
       <axis xyz="0 0 1"/>
-      <limit
-        lower="${joint6_lower_limit}"
-        upper="${joint6_upper_limit}"
-        effort="20.0"
-        velocity="3.14"/>
+      <limit lower="${joint6_lower_limit}" upper="${joint6_upper_limit}" effort="20.0" velocity="3.14"/>
       <dynamics damping="1.0" friction="1.0"/>
     </joint>
-    <!-- <link name="${prefix}link_eef" />
+
+    <!-- Optional EEF stub (commented)
+    <link name="${prefix}link_eef"/>
     <joint name="${prefix}joint_eef" type="fixed">
-      <origin xyz="0 0 0" rpy="0 0 0" />
-      <parent link="${prefix}link6" />
-      <child link="${prefix}link_eef" />
-    </joint> -->
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <parent link="${prefix}link6"/>
+      <child  link="${prefix}link_eef"/>
+    </joint>
+    -->
 
     <!-- Gazebo -->
     <xacro:if value="${use_gazebo}">
-      <gazebo reference="${prefix}base_link">
-            <selfCollide>true</selfCollide>
-        </gazebo>
-        <gazebo reference="${prefix}link1">
-            <selfCollide>true</selfCollide>
-        </gazebo>
-        <gazebo reference="${prefix}link2">
-            <selfCollide>true</selfCollide>
-        </gazebo>
-        <gazebo reference="${prefix}link3">
-            <selfCollide>true</selfCollide>
-        </gazebo>
-        <gazebo reference="${prefix}link4">
-            <selfCollide>true</selfCollide>
-        </gazebo>
-        <gazebo reference="${prefix}link5">
-            <selfCollide>true</selfCollide>
-        </gazebo>
-        <gazebo reference="${prefix}link6">
-            <selfCollide>true</selfCollide>
-        </gazebo>
+      <gazebo reference="${prefix}base_link"><selfCollide>true</selfCollide></gazebo>
+      <gazebo reference="${prefix}link1"><selfCollide>true</selfCollide></gazebo>
+      <gazebo reference="${prefix}link2"><selfCollide>true</selfCollide></gazebo>
+      <gazebo reference="${prefix}link3"><selfCollide>true</selfCollide></gazebo>
+      <gazebo reference="${prefix}link4"><selfCollide>true</selfCollide></gazebo>
+      <gazebo reference="${prefix}link5"><selfCollide>true</selfCollide></gazebo>
+      <gazebo reference="${prefix}link6"><selfCollide>true</selfCollide></gazebo>
     </xacro:if>
 
   </xacro:macro>

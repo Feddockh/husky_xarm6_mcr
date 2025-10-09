@@ -38,14 +38,13 @@ def launch_setup(context, *args, **kwargs):
     control_pkg = get_package_share_directory('husky_xarm6_mcr_control')
     controllers_yaml = Path(control_pkg) / 'config' / 'controllers.yaml'
 
-    # Start the Ignition/Gazebo (Fortress) server via ros_ign_gazebo
-    gazebo_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(get_package_share_directory('ros_gz_sim'), 'launch', 'gz_sim.launch.py')
-        ),
-        # run (-r), verbose, load empty.sdf
-        launch_arguments={'gz_args': '-r empty.sdf'}.items()
-    )
+    # gazebo_launch = IncludeLaunchDescription(
+    #     PythonLaunchDescriptionSource(
+    #         os.path.join(get_package_share_directory('ros_gz_sim'), 'launch', 'gz_sim.launch.py')
+    #     ),
+    #     # run (-r), verbose, load empty.sdf
+    #     launch_arguments={'gz_args': '-r empty.sdf'}.items()
+    # )
 
     # Process the xacro file
     robot_description = get_xacro_content(
@@ -123,24 +122,8 @@ def launch_setup(context, *args, **kwargs):
         OnProcessExit(target_action=joint_state_broadcaster, on_exit=[platform_velocity_controller, xarm6_traj_controller])
     )
 
-
-    # arm_controller_spawner = RegisterEventHandler(
-    #     OnProcessExit(
-    #         target_action=joint_state_broadcaster,
-    #         on_exit=[arm_controller]
-    #     )
-    # )
-
-    # rviz_node = Node(
-    #     package='rviz2',
-    #     executable='rviz2',
-    #     name='rviz2',
-    #     arguments=['-d', os.path.join(description_pkg, 'rviz', 'view.rviz')],
-    #     output='screen'
-    # )
-
     return [
-        gazebo_launch,
+        # gazebo_launch,
         robot_state_publisher,
         spawn_entity,
         spawn_then_jsb,

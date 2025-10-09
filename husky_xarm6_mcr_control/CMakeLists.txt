@@ -10,6 +10,9 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(ros2_control REQUIRED)
 
+install(DIRECTORY launch config
+  DESTINATION share/${PROJECT_NAME}/
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -24,7 +27,3 @@ if(BUILD_TESTING)
 endif()
 
 ament_package()
-
-install(DIRECTORY launch config
-  DESTINATION share/${PROJECT_NAME}/
-)
