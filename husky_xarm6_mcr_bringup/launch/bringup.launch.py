@@ -32,37 +32,20 @@ def launch_setup(context, *args, **kwargs):
     control_pkg = get_package_share_directory('husky_xarm6_mcr_control')
     moveit_pkg = get_package_share_directory('husky_xarm6_mcr_moveit_config')
     
-    # Determine which world to load
-    world_value = world.perform(context)
-    
     launch_actions = []
     
-    # 1. Launch Gazebo with the selected world
-    if world_value == 'apple_orchard':
-        # Use the custom apple orchard launch
-        gazebo_launch = IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(
-                os.path.join(gz_pkg, 'launch', 'apple_orchard.launch.py')
-            )
-        )
-        launch_actions.append(gazebo_launch)
-    else:
-        # For empty world or custom world, use direct ign gazebo command
-        from launch.actions import ExecuteProcess
-        
-        if world_value == 'empty':
-            world_file = 'empty.sdf'
-        else:
-            # Assume it's a path to a world file
-            world_file = world_value
-        
-        gazebo_launch = ExecuteProcess(
-            cmd=['ign', 'gazebo', world_file, '-v', '4'],
-            output='screen'
-        )
-        launch_actions.append(gazebo_launch)
+    # Launch Gazebo with the selected world using the general gazebo.launch.py
+    gazebo_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(gz_pkg, 'launch', 'gazebo.launch.py')
+        ),
+        launch_arguments={
+            'world': world,
+        }.items()
+    )
+    launch_actions.append(gazebo_launch)
     
-    # 2. Launch ros2_control after a delay to ensure Gazebo is ready
+    # Launch ros2_control after a delay to ensure Gazebo is ready
     # This prevents the gz_ros2_control plugin from auto-spawning before we're ready
     control_launch = TimerAction(
         period=3.0,  # 3 second delay
@@ -81,7 +64,7 @@ def launch_setup(context, *args, **kwargs):
     )
     launch_actions.append(control_launch)
     
-    # 3. Launch MoveIt move_group
+    # Launch MoveIt move_group
     moveit_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(moveit_pkg, 'launch', 'move_group.launch.py')
@@ -94,7 +77,7 @@ def launch_setup(context, *args, **kwargs):
     )
     launch_actions.append(moveit_launch)
     
-    # 4. Optionally launch RViz
+    # Optionally launch RViz
     use_rviz_value = use_rviz.perform(context)
     if use_rviz_value.lower() == 'true':
         rviz_launch = IncludeLaunchDescription(

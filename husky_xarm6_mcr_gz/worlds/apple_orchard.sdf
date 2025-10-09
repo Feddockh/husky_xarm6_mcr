@@ -17,7 +17,7 @@
     <include>
       <uri>model://apple_orchard</uri>
       <name>apple_orchard</name>
-      <pose>0 0 0 0 0 0</pose>
+      <pose>0 -3.0 0 0 0 0</pose>
     </include>
   </world>
 </sdf>
