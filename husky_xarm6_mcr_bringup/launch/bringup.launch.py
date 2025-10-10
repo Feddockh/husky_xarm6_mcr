@@ -91,6 +91,22 @@ def launch_setup(context, *args, **kwargs):
             }.items()
         )
         launch_actions.append(rviz_launch)
+
+
+    # Bringup the stereo camera
+
+    # Set up the stereo camera bridge
+    # from launch_ros.actions import Node
+    # image_bridge = Node(
+    #     name='image_bridge',
+    #     package='ros_gz_image',
+    #     executable='image_bridge',
+    #     arguments=[
+    #         '/firefly/left/image@sensor_msgs/msg/Image[ignition.msgs.Image',
+    #     ],
+    #     output='screen'
+    # )
+    # launch_actions.append(image_bridge)
     
     return launch_actions
 

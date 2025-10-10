@@ -27,7 +27,7 @@
     <group name="camera_rig">
         <link name="zed2i_camera_center"/>
         <link name="ximea_camera_link"/>
-        <link name="ffs_camera_link"/>
+        <link name="firefly_camera_link"/>
         <link name="multi_camera_rig_link"/>
     </group>
 

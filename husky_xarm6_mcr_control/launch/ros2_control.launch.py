@@ -109,13 +109,14 @@ def launch_setup(context, *args, **kwargs):
 
     # The [ means GZ → ROS (subscribe to GZ /clock, publish to ROS /clock). Avoid ROS→GZ /clock to prevent loops.
     # Example: /cmd_vel@geometry_msgs/msg/Twist means the bridge will expose a ROS topic /cmd_vel with type geometry_msgs/msg/Twist.
-    bridge = Node(
+    control_bridge = Node(
+        name='control_bridge',
         package='ros_gz_bridge',
         executable='parameter_bridge',
         arguments=[
             '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock',
             '/platform_velocity_controller/cmd_vel_unstamped@geometry_msgs/msg/Twist[gz.msgs.Twist',
-            '/firefly/left/image@sensor_msgs/msg/Image[gz.msgs.Image',
+            # '/firefly/left/image@sensor_msgs/msg/Image[ignition.msgs.Image',
         ],
         output='screen'
     )
@@ -133,7 +134,7 @@ def launch_setup(context, *args, **kwargs):
         spawn_entity,
         spawn_then_jsb,
         jsb_then_base,
-        bridge,
+        control_bridge,
     ]
 
 def generate_launch_description():
