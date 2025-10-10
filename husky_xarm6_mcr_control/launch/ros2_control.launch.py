@@ -98,7 +98,11 @@ def launch_setup(context, *args, **kwargs):
         arguments=[
             '-topic', 'robot_description',
             '-name', 'husky_xarm6_mcr',
-            '-z', '0.3' # slight z offset to avoid collision with ground plane
+            '-z', '0.3', # slight z offset to avoid collision with ground plane
+            # Initial joint positions to avoid collision
+            '-j', 'xarm6_joint1', '0.0',
+            '-j', 'xarm6_joint2', '-0.5',
+            '-j', 'xarm6_joint3', '0.5',
         ],
         parameters=[{'use_sim_time': True}],
     )
@@ -110,7 +114,8 @@ def launch_setup(context, *args, **kwargs):
         executable='parameter_bridge',
         arguments=[
             '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock',
-            '/platform_velocity_controller/cmd_vel_unstamped@geometry_msgs/msg/Twist[gz.msgs.Twist'
+            '/platform_velocity_controller/cmd_vel_unstamped@geometry_msgs/msg/Twist[gz.msgs.Twist',
+            '/firefly/left/image@sensor_msgs/msg/Image[gz.msgs.Image',
         ],
         output='screen'
     )

@@ -5,6 +5,9 @@
     <xacro:arg name="manipulator_prefix" default="xarm6_"/>
     <xacro:arg name="platform_prefix" default="a200_"/>
 
+    <!-- Import multi camera rig SRDF -->
+    <xacro:include filename="$(find multi_cam_rig_description)/srdf/multi_cam_rig.srdf.xacro"/>
+
     <!--GROUPS: Representation of a set of joints and links. This can be useful for specifying DOF to plan for, defining arms, end effectors, etc-->
     <group name="$(arg platform_prefix)platform">
         <joint name="$(arg platform_prefix)front_left_wheel_joint" />
@@ -21,12 +24,12 @@
         <joint name="$(arg manipulator_prefix)joint5" />
         <joint name="$(arg manipulator_prefix)joint6" />
     </group>
-    <!-- <group name="camera_rig">
+    <group name="camera_rig">
         <link name="zed2i_camera_center"/>
         <link name="ximea_camera_link"/>
         <link name="ffs_camera_link"/>
         <link name="multi_camera_rig_link"/>
-    </group> -->
+    </group>
 
     <!--LINKS: When a link is specified, the parent joint of that link (if it exists) is automatically included-->
     <!--JOINTS: When a joint is specified, the child link of that joint (which will always exist) is automatically included-->
@@ -59,8 +62,8 @@
     <disable_collisions link1="$(arg manipulator_prefix)base_link" link2="$(arg platform_prefix)rear_left_wheel" reason="Never"/>
     <disable_collisions link1="$(arg manipulator_prefix)base_link" link2="$(arg platform_prefix)rear_right_wheel" reason="Never"/>
     <disable_collisions link1="$(arg manipulator_prefix)base_link" link2="$(arg platform_prefix)base_link" reason="Never"/>
-    <disable_collisions link1="$(arg manipulator_prefix)base_link" link2="x_rail_riser_link" reason="adjacent"/>
-    <disable_collisions link1="$(arg manipulator_prefix)base_link" link2="$(arg manipulator_prefix)link1" reason="adjacent"/>
+    <disable_collisions link1="$(arg manipulator_prefix)base_link" link2="x_rail_riser_link" reason="Adjacent"/>
+    <disable_collisions link1="$(arg manipulator_prefix)base_link" link2="$(arg manipulator_prefix)link1" reason="Adjacent"/>
     <disable_collisions link1="$(arg manipulator_prefix)base_link" link2="$(arg manipulator_prefix)link2" reason="Never"/>
 
     <!-- Manipulator link1 collisions -->
@@ -70,7 +73,7 @@
     <disable_collisions link1="$(arg manipulator_prefix)link1" link2="$(arg platform_prefix)rear_right_wheel" reason="Never"/>
     <disable_collisions link1="$(arg manipulator_prefix)link1" link2="$(arg platform_prefix)base_link" reason="Never"/>
     <disable_collisions link1="$(arg manipulator_prefix)link1" link2="x_rail_riser_link" reason="Never"/>
-    <disable_collisions link1="$(arg manipulator_prefix)link1" link2="$(arg manipulator_prefix)link2" reason="adjacent"/>
+    <disable_collisions link1="$(arg manipulator_prefix)link1" link2="$(arg manipulator_prefix)link2" reason="Adjacent"/>
     <disable_collisions link1="$(arg manipulator_prefix)link1" link2="$(arg manipulator_prefix)link3" reason="Never"/>
 
     <!-- Manipulator link2 collisions -->
@@ -80,7 +83,7 @@
     <disable_collisions link1="$(arg manipulator_prefix)link2" link2="$(arg platform_prefix)rear_right_wheel" reason="Never"/>
     <disable_collisions link1="$(arg manipulator_prefix)link2" link2="$(arg platform_prefix)base_link" reason="Never"/>
     <disable_collisions link1="$(arg manipulator_prefix)link2" link2="x_rail_riser_link" reason="Never"/>
-    <disable_collisions link1="$(arg manipulator_prefix)link2" link2="$(arg manipulator_prefix)link3" reason="adjacent"/>
+    <disable_collisions link1="$(arg manipulator_prefix)link2" link2="$(arg manipulator_prefix)link3" reason="Adjacent"/>
     <disable_collisions link1="$(arg manipulator_prefix)link2" link2="$(arg manipulator_prefix)link4" reason="Never"/>
     <!-- Manipulator link3 collisions -->
     <disable_collisions link1="$(arg manipulator_prefix)link3" link2="$(arg platform_prefix)front_left_wheel" reason="Never"/>
@@ -88,16 +91,19 @@
     <disable_collisions link1="$(arg manipulator_prefix)link3" link2="$(arg platform_prefix)rear_left_wheel" reason="Never"/>
     <disable_collisions link1="$(arg manipulator_prefix)link3" link2="$(arg platform_prefix)rear_right_wheel" reason="Never"/>
     <disable_collisions link1="$(arg manipulator_prefix)link3" link2="$(arg platform_prefix)base_link" reason="Never"/>
-    <disable_collisions link1="$(arg manipulator_prefix)link3" link2="$(arg manipulator_prefix)link4" reason="adjacent"/>
+    <disable_collisions link1="$(arg manipulator_prefix)link3" link2="$(arg manipulator_prefix)link4" reason="Adjacent"/>
     <disable_collisions link1="$(arg manipulator_prefix)link3" link2="$(arg manipulator_prefix)link5" reason="Never"/>
 
     <!-- Manipulator link4 collisions -->
-    <disable_collisions link1="$(arg manipulator_prefix)link4" link2="$(arg manipulator_prefix)link5" reason="adjacent"/>
+    <disable_collisions link1="$(arg manipulator_prefix)link4" link2="$(arg manipulator_prefix)link5" reason="Adjacent"/>
     <disable_collisions link1="$(arg manipulator_prefix)link4" link2="$(arg manipulator_prefix)link6" reason="Never"/>
     <!-- Manipulator link5 collisions -->
-    <disable_collisions link1="$(arg manipulator_prefix)link5" link2="$(arg manipulator_prefix)link6" reason="adjacent"/>
+    <disable_collisions link1="$(arg manipulator_prefix)link5" link2="$(arg manipulator_prefix)link6" reason="Adjacent"/>
 
     <!-- Manipulator link6 collisions -->
+    <disable_collisions link1="$(arg manipulator_prefix)link6" link2="multi_camera_rig_link" reason="Adjacent"/>
 
+    <!-- Multi camera rig collision settings -->
+    <xacro:multi_camera_rig/>
 
 </robot>

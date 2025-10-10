@@ -11,37 +11,49 @@
                 <joint name="${prefix}joint1">
                     <command_interface name="position"/>
                     <command_interface name="velocity"/>
-                    <state_interface name="position"/>
+                    <state_interface name="position">
+                        <param name="initial_value">${pi/2}</param>
+                    </state_interface>
                     <state_interface name="velocity"/>
                 </joint>
                 <joint name="${prefix}joint2">
                     <command_interface name="position"/>
                     <command_interface name="velocity"/>
-                    <state_interface name="position"/>
+                    <state_interface name="position">
+                        <param name="initial_value">-${pi/4}</param>
+                    </state_interface>
                     <state_interface name="velocity"/>
                 </joint>
                 <joint name="${prefix}joint3">
                     <command_interface name="position"/>
                     <command_interface name="velocity"/>
-                    <state_interface name="position"/>
+                    <state_interface name="position">
+                        <param name="initial_value">-${pi/4}</param>
+                    </state_interface>
                     <state_interface name="velocity"/>
                 </joint>
                 <joint name="${prefix}joint4">
                     <command_interface name="position"/>
                     <command_interface name="velocity"/>
-                    <state_interface name="position"/>
+                    <state_interface name="position">
+                        <param name="initial_value">0.0</param>
+                    </state_interface>
                     <state_interface name="velocity"/>
                 </joint>
                 <joint name="${prefix}joint5">
                     <command_interface name="position"/>
                     <command_interface name="velocity"/>
-                    <state_interface name="position"/>
+                    <state_interface name="position">
+                        <param name="initial_value">0.0</param>
+                    </state_interface>
                     <state_interface name="velocity"/>
                 </joint>
                 <joint name="${prefix}joint6">
                     <command_interface name="position"/>
                     <command_interface name="velocity"/>
-                    <state_interface name="position"/>
+                    <state_interface name="position">
+                        <param name="initial_value">${pi/2}</param>
+                    </state_interface>
                     <state_interface name="velocity"/>
                 </joint>
             </ros2_control>

@@ -12,7 +12,7 @@
 
     <!-- X-RAIL RISER -->
     <xacro:include filename="$(find husky_xarm6_mcr_description)/urdf/risers/x_rail_macro.urdf.xacro"/>
-    <xacro:x_rail_riser prefix="" parent_link="a200_default_mount">
+    <xacro:x_rail_riser prefix="" parent_link="$(arg platform_prefix)default_mount">
         <origin xyz="0.0 0.0 0.0" rpy="0 0 ${-pi/2}"/>
     </xacro:x_rail_riser>
 
@@ -34,30 +34,12 @@
         </plugin>
     </gazebo>
 
-
-    
-
     <!-- MULTI CAMERA RIG -->
-    <!-- <xacro:include filename="$(find multi_cam_rig_description)/urdf/multi_cam_rig_macro.urdf.xacro"/>
-    <xacro:multi_camera_rig/>
+    <xacro:include filename="$(find multi_cam_rig_description)/urdf/multi_cam_rig_macro.urdf.xacro"/>
+    <xacro:multi_camera_rig use_gazebo="$(arg sim)"/>
     <joint name="tool_mount" type="fixed">
-        <parent link="xarm_link_eef"/>
-        <child link="multi_camera_rig_link"/>
+        <parent link="$(arg manipulator_prefix)link_eef"/>
+        <child link="multi_camera_rig_mount"/>
         <origin xyz="0.0 0.0 0.0" rpy="${pi/2} 0 0"/>
-    </joint> -->
-    <!-- ROS2_CONTROL -->
-    <!-- HUSKY ros2_control block (binds joints(arg to hardware) -->
-    <!-- <xacro:include filename="$(find husky_xarm6_mcr_description)/urdf/xarm6/xarm6_ros2_control.xacro"/>
-    <xacro:xarm6_ros2_control prefix="$(arg manipulator_prefix)" sim="$(arg sim)"/>
-
-    <gazebo>
-        <plugin filename="gz_ros2_control-system" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
-            <robot_param>robot_description</robot_param>
-            <robot_param_node>robot_state_publisher</robot_param_node>
-            <parameters>$(find husky_xarm6_mcr_control)/config/controllers.yaml</parameters>
-        </plugin>
-    </gazebo> -->
-    <!-- Gazebo -->
-    <!-- <xacro:include filename="$(find husky_xarm6_mcr_description)/urdf/xarm6/xarm6_gazebo.xacro"/>
-    <xacro:xarm6_gazebo prefix="$(arg manipulator_prefix)"/> -->
+    </joint>
 </robot>
