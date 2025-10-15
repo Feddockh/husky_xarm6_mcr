@@ -39,10 +39,7 @@ def launch_setup(context, *args, **kwargs):
     )
     
     # Determine the world file to load
-    if world_value == 'empty':
-        # Use default empty world from Gazebo
-        world_file = 'empty.sdf'
-    elif world_value in ['apple_orchard']:
+    if world_value in ['apple_orchard', 'empty']:
         # Use one of our custom worlds
         world_file = PathJoinSubstitution([pkg_gz, 'worlds', f'{world_value}.sdf'])
     elif os.path.isabs(world_value):

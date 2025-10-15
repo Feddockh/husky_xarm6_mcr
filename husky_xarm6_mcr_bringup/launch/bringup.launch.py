@@ -7,6 +7,7 @@ from launch.actions import (
 )
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
 import os
 
@@ -65,48 +66,48 @@ def launch_setup(context, *args, **kwargs):
     launch_actions.append(control_launch)
     
     # Launch MoveIt move_group
-    moveit_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(moveit_pkg, 'launch', 'move_group.launch.py')
-        ),
-        launch_arguments={
-            'use_sim_time': use_sim_time,
-            'manipulator_prefix': manipulator_prefix,
-            'platform_prefix': platform_prefix,
-        }.items()
-    )
-    launch_actions.append(moveit_launch)
+    # moveit_launch = IncludeLaunchDescription(
+    #     PythonLaunchDescriptionSource(
+    #         os.path.join(moveit_pkg, 'launch', 'move_group.launch.py')
+    #     ),
+    #     launch_arguments={
+    #         'use_sim_time': use_sim_time,
+    #         'manipulator_prefix': manipulator_prefix,
+    #         'platform_prefix': platform_prefix,
+    #     }.items()
+    # )
+    # launch_actions.append(moveit_launch)
     
     # Optionally launch RViz
-    use_rviz_value = use_rviz.perform(context)
-    if use_rviz_value.lower() == 'true':
-        rviz_launch = IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(
-                os.path.join(moveit_pkg, 'launch', 'rviz.launch.py')
-            ),
-            launch_arguments={
-                'use_sim_time': use_sim_time,
-                'manipulator_prefix': manipulator_prefix,
-                'platform_prefix': platform_prefix,
-            }.items()
-        )
-        launch_actions.append(rviz_launch)
+    # use_rviz_value = use_rviz.perform(context)
+    # if use_rviz_value.lower() == 'true':
+    #     rviz_launch = IncludeLaunchDescription(
+    #         PythonLaunchDescriptionSource(
+    #             os.path.join(moveit_pkg, 'launch', 'rviz.launch.py')
+    #         ),
+    #         launch_arguments={
+    #             'use_sim_time': use_sim_time,
+    #             'manipulator_prefix': manipulator_prefix,
+    #             'platform_prefix': platform_prefix,
+    #         }.items()
+    #     )
+    #     launch_actions.append(rviz_launch)
 
 
     # Bringup the stereo camera
 
     # Set up the stereo camera bridge
-    # from launch_ros.actions import Node
-    # image_bridge = Node(
-    #     name='image_bridge',
-    #     package='ros_gz_image',
-    #     executable='image_bridge',
-    #     arguments=[
-    #         '/firefly/left/image@sensor_msgs/msg/Image[ignition.msgs.Image',
-    #     ],
-    #     output='screen'
-    # )
-    # launch_actions.append(image_bridge)
+    
+    image_bridge = Node(
+        name='image_bridge',
+        package='ros_gz_image',
+        executable='image_bridge',
+        arguments=[
+            '/camera',
+        ],
+        output='screen'
+    )
+    launch_actions.append(image_bridge)
     
     return launch_actions
 

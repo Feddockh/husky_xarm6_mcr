@@ -116,9 +116,10 @@ def launch_setup(context, *args, **kwargs):
         arguments=[
             '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock',
             '/platform_velocity_controller/cmd_vel_unstamped@geometry_msgs/msg/Twist[gz.msgs.Twist',
-            # '/firefly/left/image@sensor_msgs/msg/Image[ignition.msgs.Image',
+            # '/camera@sensor_msgs/msg/Image[gz.msgs.Image',
         ],
-        output='screen'
+        output='screen',
+        parameters=[{'use_sim_time': True}]
     )
 
     spawn_then_jsb = RegisterEventHandler(
