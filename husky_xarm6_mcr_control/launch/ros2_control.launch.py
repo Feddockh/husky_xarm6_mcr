@@ -107,14 +107,14 @@ def launch_setup(context, *args, **kwargs):
         parameters=[{'use_sim_time': True}],
     )
 
-    # The [ means GZ → ROS (subscribe to GZ /clock, publish to ROS /clock). Avoid ROS→GZ /clock to prevent loops.
+    # Control bridge - handles robot control topics only
+    # Clock is now handled by the gazebo.launch.py file
     # Example: /cmd_vel@geometry_msgs/msg/Twist means the bridge will expose a ROS topic /cmd_vel with type geometry_msgs/msg/Twist.
     control_bridge = Node(
         name='control_bridge',
         package='ros_gz_bridge',
         executable='parameter_bridge',
         arguments=[
-            '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock',
             '/platform_velocity_controller/cmd_vel_unstamped@geometry_msgs/msg/Twist[gz.msgs.Twist',
             # '/camera@sensor_msgs/msg/Image[gz.msgs.Image',
         ],

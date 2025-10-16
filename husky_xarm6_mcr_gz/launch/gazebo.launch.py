@@ -3,6 +3,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, SetEnvironmentVariable, IncludeLaunchDescription, OpaqueFunction
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
 
 
@@ -69,6 +70,20 @@ def launch_setup(context, *args, **kwargs):
             launch_arguments={
                 'gz_args': ['-r ', world_file]
             }.items()
+        ),
+
+        # Clock bridge - Gazebo to ROS2 clock synchronization
+        # The [ means GZ → ROS (subscribe to GZ /clock, publish to ROS /clock)
+        # Avoid ROS→GZ /clock to prevent loops
+        Node(
+            name='clock_bridge',
+            package='ros_gz_bridge',
+            executable='parameter_bridge',
+            arguments=[
+                '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock'
+            ],
+            output='screen',
+            parameters=[{'use_sim_time': True}]
         ),
     ]
 

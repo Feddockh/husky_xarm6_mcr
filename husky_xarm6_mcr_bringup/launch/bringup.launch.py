@@ -4,7 +4,11 @@ from launch.actions import (
     IncludeLaunchDescription,
     OpaqueFunction,
     TimerAction,
+    RegisterEventHandler,
+    Shutdown,
 )
+from launch.actions import RegisterEventHandler, Shutdown
+from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -96,18 +100,32 @@ def launch_setup(context, *args, **kwargs):
 
     # Bringup the stereo camera
 
-    # Set up the stereo camera bridge
+    # Set up the stereo camera bridges
+    # Image bridge for camera images only
+    # image_bridge = Node(
+    #     name='image_bridge',
+    #     package='ros_gz_image',
+    #     executable='image_bridge',
+    #     arguments=[
+    #         '/firefly_left/image_raw',
+    #         '/firefly_right/image_raw',
+    #     ],
+    #     output='screen'
+    # )
+    # launch_actions.append(image_bridge)
     
-    image_bridge = Node(
-        name='image_bridge',
-        package='ros_gz_image',
-        executable='image_bridge',
-        arguments=[
-            '/camera',
-        ],
-        output='screen'
-    )
-    launch_actions.append(image_bridge)
+    # # Generic bridge for camera_info
+    # camera_info_bridge = Node(
+    #     name='camera_info_bridge',
+    #     package='ros_gz_bridge',
+    #     executable='parameter_bridge',
+    #     arguments=[
+    #         '/firefly_left/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
+    #         '/firefly_right/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
+    #     ],
+    #     output='screen'
+    # )
+    # launch_actions.append(camera_info_bridge)
     
     return launch_actions
 
@@ -116,7 +134,7 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument(
             'world',
-            default_value='apple_orchard',
+            default_value='empty',
             description='World to load: "apple_orchard", "empty", or path to .sdf file'
         ),
         DeclareLaunchArgument(
