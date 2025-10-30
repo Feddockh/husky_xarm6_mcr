@@ -39,6 +39,19 @@ def launch_setup(context, *args, **kwargs):
     
     launch_actions = []
     
+    # Publish static map->odom transform for grounding the TF tree
+    map_frame_publisher = Node(
+        package='husky_xarm6_mcr_bringup',
+        executable='map_frame_publisher',
+        name='map_frame_publisher',
+        output='screen',
+        parameters=[{
+            'map_frame': 'map',
+            'odom_frame': 'odom'
+        }]
+    )
+    launch_actions.append(map_frame_publisher)
+    
     # Launch Gazebo with the selected world using the general gazebo.launch.py
     gazebo_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -70,17 +83,17 @@ def launch_setup(context, *args, **kwargs):
     launch_actions.append(control_launch)
     
     # Launch MoveIt move_group
-    # moveit_launch = IncludeLaunchDescription(
-    #     PythonLaunchDescriptionSource(
-    #         os.path.join(moveit_pkg, 'launch', 'move_group.launch.py')
-    #     ),
-    #     launch_arguments={
-    #         'use_sim_time': use_sim_time,
-    #         'manipulator_prefix': manipulator_prefix,
-    #         'platform_prefix': platform_prefix,
-    #     }.items()
-    # )
-    # launch_actions.append(moveit_launch)
+    moveit_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(moveit_pkg, 'launch', 'move_group.launch.py')
+        ),
+        launch_arguments={
+            'use_sim_time': use_sim_time,
+            'manipulator_prefix': manipulator_prefix,
+            'platform_prefix': platform_prefix,
+        }.items()
+    )
+    launch_actions.append(moveit_launch)
     
     # Optionally launch RViz
     # use_rviz_value = use_rviz.perform(context)
@@ -97,9 +110,7 @@ def launch_setup(context, *args, **kwargs):
     #     )
     #     launch_actions.append(rviz_launch)
 
-
     # Bringup the stereo camera
-
     # Set up the stereo camera bridges
     # Image bridge for camera images only
     # image_bridge = Node(

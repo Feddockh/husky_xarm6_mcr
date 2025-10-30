@@ -1,0 +1,39 @@
+# NBV Planner Configuration
+
+nbv_planner:
+  ros__parameters:
+    # Sampling parameters
+    num_samples: 50
+    camera_distance: 1.5  # meters from target
+    
+    # Target region to scan (e.g., tree location)
+    target_x: 1.5
+    target_y: 0.0
+    target_z: 1.0
+    target_radius: 1.0
+    
+    # Camera parameters
+    camera_fov: 80.0  # degrees
+    camera_max_range: 5.0  # meters
+    
+    # Planning parameters
+    planning_timeout: 5.0
+    max_iterations: 10
+    convergence_threshold: 0.95  # Stop when 95% explored
+
+volumetric_map:
+  ros__parameters:
+    # Map parameters
+    resolution: 0.05  # 5cm voxels
+    map_size_x: 10.0
+    map_size_y: 10.0
+    map_size_z: 5.0
+    
+    # Open3D octree parameters
+    max_depth: 8  # Octree depth (higher = finer resolution)
+    
+    # Point cloud topic from camera rig
+    pointcloud_topic: "/merged_pointcloud"
+    
+    # Save interval (save point cloud every N updates)
+    save_interval: 100

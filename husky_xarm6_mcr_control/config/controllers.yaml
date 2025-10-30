@@ -19,8 +19,8 @@ platform_velocity_controller:
 
     publish_rate: 50.0
     odom_frame_id: odom
-    base_frame_id: a200_base_link   # <— IMPORTANT
-    enable_odom_tf: false           # you can set true later if you want TF
+    base_frame_id: a200_base_footprint
+    enable_odom_tf: true           # you can set true later if you want TF
 
     cmd_vel_timeout: 0.5
     use_stamped_vel: false

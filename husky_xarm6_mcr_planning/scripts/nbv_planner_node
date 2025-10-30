@@ -1,0 +1,7 @@
+#!/usr/bin/env python3
+"""NBV Planner Node."""
+
+from husky_xarm6_mcr_planning.planners.nbv_planner import main
+
+if __name__ == '__main__':
+    main()
