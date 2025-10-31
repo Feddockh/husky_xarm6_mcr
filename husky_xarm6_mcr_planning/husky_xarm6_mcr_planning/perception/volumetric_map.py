@@ -85,11 +85,6 @@ def transform_points(T: np.ndarray, pts: np.ndarray) -> np.ndarray:
 # ----------------------------
 
 class VolumetricMap:
-    """
-    Maintains a 3D volumetric representation on a regular voxel grid
-    (tracked as sets), plus an Open3D octree for optional hierarchical ops.
-    """
-
     def __init__(
         self,
         resolution: float = 0.05,  # voxel edge in meters

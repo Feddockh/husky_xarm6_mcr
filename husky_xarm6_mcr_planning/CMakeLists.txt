@@ -77,6 +77,7 @@ ament_python_install_package(${PROJECT_NAME})
 install(PROGRAMS
   scripts/nbv_planner_node
   scripts/volumetric_map_node
+  scripts/occupancy_map_node
   scripts/moveit_interface_node
   DESTINATION lib/${PROJECT_NAME}
 )

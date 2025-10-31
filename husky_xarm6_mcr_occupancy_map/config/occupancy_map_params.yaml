@@ -1,0 +1,64 @@
+# Occupancy Map Configuration
+# This file contains default parameters for the occupancy mapping system
+
+occupancy_map_server:
+  ros__parameters:
+    # Map parameters
+    resolution: 0.05          # Octree resolution in meters (5cm voxels)
+    map_frame: "map"         # Reference frame for the map
+    
+    # Sensor range filtering
+    max_range: 5.0            # Maximum sensor range in meters
+    min_range: 0.3            # Minimum sensor range in meters
+    
+    # Octomap probability parameters
+    prob_hit: 0.7             # Probability for hit (occupied)
+    prob_miss: 0.4            # Probability for miss (free)
+    clamp_min: 0.12           # Minimum clamping threshold
+    clamp_max: 0.97           # Maximum clamping threshold
+    occupancy_threshold: 0.5  # Threshold for occupied voxels
+    
+    # Ground plane filtering
+    filter_ground_plane: true
+    ground_distance_threshold: 0.04  # Distance in meters
+    
+    # Input topics
+    pointcloud_topic: "/firefly_left/points2"
+    
+    # Visualization
+    publish_free_voxels: false  # Set to true to visualize free space
+    visualization_rate: 2.0     # Hz
+
+moveit_octomap_server:
+  ros__parameters:
+    # Map parameters
+    resolution: 0.05
+    map_frame: "map"
+    
+    # Sensor range filtering
+    max_range: 5.0
+    min_range: 0.3
+    
+    # Octomap probability parameters
+    prob_hit: 0.7
+    prob_miss: 0.4
+    clamp_min: 0.12
+    clamp_max: 0.97
+    occupancy_threshold: 0.5
+    
+    # Ground plane filtering
+    filter_ground_plane: true
+    ground_distance_threshold: 0.04
+    
+    # Input topics
+    pointcloud_topic: "/firefly_left/points2"
+    
+    # Output topics
+    octomap_topic: "/octomap_binary"
+    
+    # Visualization
+    publish_free_voxels: false
+    visualization_rate: 2.0
+    
+    # MoveIt publishing rate
+    octomap_publish_rate: 1.0   # Hz - rate to publish octomap to MoveIt

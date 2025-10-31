@@ -1,0 +1,139 @@
+/**
+ * @file moveit_octomap_server.cpp
+ * @brief MoveIt-integrated occupancy map server with octomap_msgs publishing
+ */
+
+#include "husky_xarm6_mcr_occupancy_map/occupancy_map_monitor.hpp"
+#include "husky_xarm6_mcr_occupancy_map/pointcloud_updater.hpp"
+#include "husky_xarm6_mcr_occupancy_map/occupancy_map_visualizer.hpp"
+#include <rclcpp/rclcpp.hpp>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
+#include <octomap_msgs/msg/octomap.hpp>
+#include <octomap_msgs/conversions.h>
+
+using namespace husky_xarm6_mcr_occupancy_map;
+
+int main(int argc, char **argv)
+{
+    rclcpp::init(argc, argv);
+
+    auto node = std::make_shared<rclcpp::Node>(
+        "moveit_octomap_server",
+        rclcpp::NodeOptions().automatically_declare_parameters_from_overrides(true));
+
+    auto logger = node->get_logger();
+    RCLCPP_INFO(logger, "Starting MoveIt octomap server...");
+
+    // Create TF buffer and listener
+    auto tf_buffer = std::make_shared<tf2_ros::Buffer>(node->get_clock());
+    auto tf_listener = std::make_shared<tf2_ros::TransformListener>(*tf_buffer);
+
+    // Get parameters (already declared by automatically_declare_parameters_from_overrides)
+    OccupancyMapParameters params;
+    params.resolution = node->get_parameter_or("resolution", 0.05);
+    params.max_range = node->get_parameter_or("max_range", 5.0);
+    params.min_range = node->get_parameter_or("min_range", 0.3);
+    params.prob_hit = node->get_parameter_or("prob_hit", 0.7);
+    params.prob_miss = node->get_parameter_or("prob_miss", 0.4);
+    params.clamp_min = node->get_parameter_or("clamp_min", 0.12);
+    params.clamp_max = node->get_parameter_or("clamp_max", 0.97);
+    params.occupancy_threshold = node->get_parameter_or("occupancy_threshold", 0.5);
+    params.map_frame = node->get_parameter_or<std::string>("map_frame", "odom");
+    params.filter_ground_plane = node->get_parameter_or("filter_ground_plane", true);
+    params.ground_distance_threshold = node->get_parameter_or("ground_distance_threshold", 0.04);
+
+    std::string pointcloud_topic = node->get_parameter_or<std::string>(
+        "pointcloud_topic", "/firefly_camera/points");
+
+    std::string octomap_topic = node->get_parameter_or<std::string>(
+        "octomap_topic", "/octomap_binary");
+
+    bool publish_free = node->get_parameter_or("publish_free_voxels", false);
+    double viz_rate = node->get_parameter_or("visualization_rate", 2.0);
+    double octomap_publish_rate = node->get_parameter_or("octomap_publish_rate", 1.0);
+
+    // Create occupancy map monitor
+    auto monitor = std::make_shared<OccupancyMapMonitor>(node, params);
+
+    // Create PointCloud updater
+    auto pc_updater = std::make_shared<PointCloudUpdater>(pointcloud_topic, params);
+    pc_updater->initialize(node, tf_buffer);
+    monitor->addUpdater(pc_updater);
+
+    // Create visualizer
+    auto visualizer = std::make_shared<OccupancyMapVisualizer>(
+        node,
+        monitor->getMapTree(),
+        params.map_frame);
+
+    visualizer->setUpdateRate(viz_rate);
+
+    // Create octomap publisher for MoveIt planning scene
+    auto octomap_pub = node->create_publisher<octomap_msgs::msg::Octomap>(
+        octomap_topic, rclcpp::QoS(1).transient_local());
+
+    rclcpp::Time last_octomap_publish = node->now();
+
+    // Connect update callback to visualizer AND octomap publisher
+    monitor->setUpdateCallback([node,
+                                visualizer,
+                                octomap_pub,
+                                &last_octomap_publish,
+                                octomap_publish_rate,
+                                publish_free,
+                                monitor,
+                                params]()
+                               {
+    // Publish visualization markers
+    visualizer->publishMarkers(publish_free);
+
+    // Rate-limited octomap publishing
+    auto now = node->now();
+    if ((now - last_octomap_publish).seconds() >= (1.0 / octomap_publish_rate))
+    {
+      // Serialize octree to binary message
+      octomap_msgs::msg::Octomap octomap_msg;
+      octomap_msg.header.frame_id = params.map_frame;
+      octomap_msg.header.stamp = now;
+
+      monitor->getMapTree()->lockRead();
+      
+      // Convert OcTree to message (binary format)
+      if (octomap_msgs::binaryMapToMsg(*monitor->getMapTree(), octomap_msg))
+      {
+        octomap_pub->publish(octomap_msg);
+        RCLCPP_DEBUG(
+            node->get_logger(),
+            "Published octomap to %s",
+            octomap_pub->get_topic_name());
+      }
+      else
+      {
+        RCLCPP_WARN(node->get_logger(), "Failed to serialize octomap");
+      }
+
+      monitor->getMapTree()->unlockRead();
+
+      last_octomap_publish = now;
+    } });
+
+    // Start monitoring
+    monitor->startMonitor();
+
+    RCLCPP_INFO(logger, "MoveIt octomap server ready");
+    RCLCPP_INFO(logger, "  Map frame: %s", params.map_frame.c_str());
+    RCLCPP_INFO(logger, "  Resolution: %.3f m", params.resolution);
+    RCLCPP_INFO(logger, "  Max range: %.2f m", params.max_range);
+    RCLCPP_INFO(logger, "  PointCloud topic: %s", pointcloud_topic.c_str());
+    RCLCPP_INFO(logger, "  Octomap topic: %s", octomap_topic.c_str());
+    RCLCPP_INFO(logger, "MoveIt planning scene will subscribe to: %s", octomap_topic.c_str());
+
+    rclcpp::spin(node);
+
+    // Clean shutdown
+    monitor->stopMonitor();
+    rclcpp::shutdown();
+
+    return 0;
+}
