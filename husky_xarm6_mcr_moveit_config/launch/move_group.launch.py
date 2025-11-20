@@ -21,7 +21,7 @@ def _xacro_param(xacro_path, *args):
 
 def launch_setup(context, *args, **kwargs):
     use_sim_time = LaunchConfiguration('use_sim_time')
-
+    use_gazebo = LaunchConfiguration('use_gazebo')
     desc_pkg = Path(get_package_share_directory('husky_xarm6_mcr_description'))
     cfg_pkg = Path(get_package_share_directory('husky_xarm6_mcr_moveit_config'))
 
@@ -31,7 +31,7 @@ def launch_setup(context, *args, **kwargs):
     # robot_description from URDF xacro
     robot_description = {'robot_description': _xacro_param(
         desc_pkg / 'urdf' / 'husky_xarm6_mcr.urdf.xacro',
-        ' sim:=true',
+        ' use_gazebo:=', use_gazebo,
         ' manipulator_prefix:=', manip_prefix,
         ' platform_prefix:=', plat_prefix
     )}
@@ -90,7 +90,8 @@ def launch_setup(context, *args, **kwargs):
 
 def generate_launch_description():
     return LaunchDescription([
-        DeclareLaunchArgument('use_sim_time', default_value='true'),
+        DeclareLaunchArgument('use_sim_time', default_value='false'),
+        DeclareLaunchArgument('use_gazebo', default_value='false'),
         DeclareLaunchArgument('manipulator_prefix', default_value='xarm6_'),
         DeclareLaunchArgument('platform_prefix', default_value='a200_'),
         OpaqueFunction(function=launch_setup),

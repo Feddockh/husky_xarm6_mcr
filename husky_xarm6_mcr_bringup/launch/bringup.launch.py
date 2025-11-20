@@ -26,42 +26,38 @@ def launch_setup(context, *args, **kwargs):
     """
     
     # Get launch configurations
+    use_gazebo = LaunchConfiguration('use_gazebo')
     world = LaunchConfiguration('world')
     use_rviz = LaunchConfiguration('use_rviz')
+    use_localization = LaunchConfiguration('use_localization')
     manipulator_prefix = LaunchConfiguration('manipulator_prefix')
     platform_prefix = LaunchConfiguration('platform_prefix')
     use_sim_time = LaunchConfiguration('use_sim_time')
+    robot_ip = LaunchConfiguration('robot_ip')
+    report_type = LaunchConfiguration('report_type')
     
     # Get package directories
+    bringup_pkg = get_package_share_directory('husky_xarm6_mcr_bringup')
     gz_pkg = get_package_share_directory('husky_xarm6_mcr_gz')
     control_pkg = get_package_share_directory('husky_xarm6_mcr_control')
     moveit_pkg = get_package_share_directory('husky_xarm6_mcr_moveit_config')
     
     launch_actions = []
     
-    # Publish static map->odom transform for grounding the TF tree
-    map_frame_publisher = Node(
-        package='husky_xarm6_mcr_bringup',
-        executable='map_frame_publisher',
-        name='map_frame_publisher',
-        output='screen',
-        parameters=[{
-            'map_frame': 'map',
-            'odom_frame': 'odom'
-        }]
-    )
-    launch_actions.append(map_frame_publisher)
+    # Note: map_frame_publisher is now conditionally launched based on use_localization
+    # (see below after MoveIt launch)
     
-    # Launch Gazebo with the selected world using the general gazebo.launch.py
-    gazebo_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(gz_pkg, 'launch', 'gazebo.launch.py')
-        ),
-        launch_arguments={
-            'world': world,
-        }.items()
-    )
-    launch_actions.append(gazebo_launch)
+    if use_gazebo.perform(context).lower() == 'true':
+        # Launch Gazebo with the selected world using the general gazebo.launch.py
+        gazebo_launch = IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(gz_pkg, 'launch', 'gazebo.launch.py')
+            ),
+            launch_arguments={
+                'world': world,
+            }.items()
+        )
+        launch_actions.append(gazebo_launch)
     
     # Launch ros2_control after a delay to ensure Gazebo is ready
     # This prevents the gz_ros2_control plugin from auto-spawning before we're ready
@@ -75,7 +71,10 @@ def launch_setup(context, *args, **kwargs):
                 launch_arguments={
                     'manipulator_prefix': manipulator_prefix,
                     'platform_prefix': platform_prefix,
-                    'sim': 'true',
+                    'use_gazebo': use_gazebo,
+                    'use_sim_time': use_sim_time,
+                    'robot_ip': robot_ip,
+                    'report_type': report_type,
                 }.items()
             )
         ]
@@ -89,26 +88,51 @@ def launch_setup(context, *args, **kwargs):
         ),
         launch_arguments={
             'use_sim_time': use_sim_time,
+            'use_gazebo': use_gazebo,
             'manipulator_prefix': manipulator_prefix,
             'platform_prefix': platform_prefix,
         }.items()
     )
     launch_actions.append(moveit_launch)
     
+    # Launch Robot Localization (GPS + IMU + Odometry fusion)
+    if use_localization.perform(context).lower() == 'true':
+        localization_launch = IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(bringup_pkg, 'launch', 'localization.launch.py')
+            ),
+            launch_arguments={
+                'use_sim_time': use_sim_time,
+            }.items()
+        )
+        launch_actions.append(localization_launch)
+    else:
+        # If not using localization, still publish static map->odom for grounding TF
+        map_frame_publisher = Node(
+            package='husky_xarm6_mcr_bringup',
+            executable='map_frame_publisher',
+            name='map_frame_publisher',
+            output='screen',
+            parameters=[{
+                'map_frame': 'map',
+                'odom_frame': 'odom'
+            }]
+        )
+        launch_actions.append(map_frame_publisher)
+    
     # Optionally launch RViz
-    # use_rviz_value = use_rviz.perform(context)
-    # if use_rviz_value.lower() == 'true':
-    #     rviz_launch = IncludeLaunchDescription(
-    #         PythonLaunchDescriptionSource(
-    #             os.path.join(moveit_pkg, 'launch', 'rviz.launch.py')
-    #         ),
-    #         launch_arguments={
-    #             'use_sim_time': use_sim_time,
-    #             'manipulator_prefix': manipulator_prefix,
-    #             'platform_prefix': platform_prefix,
-    #         }.items()
-    #     )
-    #     launch_actions.append(rviz_launch)
+    if use_rviz.perform(context).lower() == 'true':
+        rviz_launch = IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(moveit_pkg, 'launch', 'rviz.launch.py')
+            ),
+            launch_arguments={
+                'use_sim_time': use_sim_time,
+                'manipulator_prefix': manipulator_prefix,
+                'platform_prefix': platform_prefix,
+            }.items()
+        )
+        launch_actions.append(rviz_launch)
 
     # Bringup the stereo camera
     # Set up the stereo camera bridges
@@ -144,6 +168,11 @@ def launch_setup(context, *args, **kwargs):
 def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument(
+            'use_gazebo',
+            default_value='false',
+            description='Whether to use Gazebo simulation'
+        ),
+        DeclareLaunchArgument(
             'world',
             default_value='empty',
             description='World to load: "apple_orchard", "empty", or path to .sdf file'
@@ -152,6 +181,11 @@ def generate_launch_description():
             'use_rviz',
             default_value='true',
             description='Whether to launch RViz'
+        ),
+        DeclareLaunchArgument(
+            'use_localization',
+            default_value='false',
+            description='Whether to use robot_localization for GPS+IMU+Odom fusion'
         ),
         DeclareLaunchArgument(
             'manipulator_prefix',
@@ -167,6 +201,16 @@ def generate_launch_description():
             'use_sim_time',
             default_value='true',
             description='Use simulation time'
+        ),
+        DeclareLaunchArgument(
+            'robot_ip',
+            default_value='192.168.1.205',
+            description='IP address of the xArm6 robot'
+        ),
+        DeclareLaunchArgument(
+            'report_type',
+            default_value='normal',
+            description='Report type for xArm (normal, rich, dev)'
         ),
         OpaqueFunction(function=launch_setup)
     ])

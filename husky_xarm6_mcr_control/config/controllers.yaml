@@ -1,7 +1,7 @@
 controller_manager:
   ros__parameters:
     update_rate: 50
-    use_sim_time: true   # <-- set true for sim
+    # use_sim_time will be set by launch file
 
     joint_state_broadcaster.type: joint_state_broadcaster/JointStateBroadcaster
     platform_velocity_controller.type: diff_drive_controller/DiffDriveController
@@ -9,7 +9,7 @@ controller_manager:
 
 platform_velocity_controller:
   ros__parameters:
-    use_sim_time: true   # <-- set true for sim
+    # use_sim_time will be set by launch file
     left_wheel_names:  ["a200_front_left_wheel_joint", "a200_rear_left_wheel_joint"]
     right_wheel_names: ["a200_front_right_wheel_joint", "a200_rear_right_wheel_joint"]
 

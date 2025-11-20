@@ -6,7 +6,7 @@
     <xacro:arg name="platform_prefix" default="a200_"/>
 
     <!-- Import multi camera rig SRDF -->
-    <xacro:include filename="$(find multi_cam_rig_description)/srdf/multi_cam_rig.srdf.xacro"/>
+    <xacro:include filename="$(find multi_camera_rig_description)/srdf/multi_cam_rig.srdf.xacro"/>
 
     <!--GROUPS: Representation of a set of joints and links. This can be useful for specifying DOF to plan for, defining arms, end effectors, etc-->
     <group name="$(arg platform_prefix)platform">

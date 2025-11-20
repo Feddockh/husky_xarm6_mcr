@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://ros.org/wiki/xacro">
-    <xacro:macro name="xarm6_ros2_control" params="prefix use_gazebo:=true">
+    <xacro:macro name="xarm6_ros2_control" params="prefix use_gazebo:=true hw_ns:='xarm' velocity_control:='false' robot_ip:='192.168.1.205' report_type:='normal' baud_checkset:='true'">
 
         <xacro:if value="${use_gazebo}">
             <ros2_control name="${prefix}gazebo_system" type="system">
@@ -59,48 +59,83 @@
             </ros2_control>
         </xacro:if>
 
-        <!-- Real hardware (later) -->
-        <!-- <xacro:unless value="${use_gazebo}">
-            <ros2_control name="${prefix}uf_hw" type="system">
+        <!-- Real hardware -->
+        <xacro:unless value="${use_gazebo}">
+            <xacro:include filename="$(find xarm_description)/urdf/xarm6/xarm6.ros2_control.xacro" />
+            <xacro:include filename="$(find xarm_description)/urdf/xarm6/xarm6.transmission.xacro" />
+
+            <xacro:xarm6_ros2_control prefix="${prefix}"
+                velocity_control="${velocity_control}"
+                ros2_control_plugin="uf_robot_hardware/UFRobotSystemHardware"
+                hw_ns="${hw_ns}" add_gripper="false" add_bio_gripper="false"
+                robot_ip="${robot_ip}" report_type="${report_type}"
+                baud_checkset="${baud_checkset}" default_gripper_baud="2000000"
+                joint1_lower_limit="${-pi*0.99}" joint1_upper_limit="${pi*0.99}"
+                joint2_lower_limit="${-2.059}" joint2_upper_limit="${2.0944}"
+                joint3_lower_limit="${-pi*0.99}" joint3_upper_limit="${0.19198}"
+                joint4_lower_limit="${-pi*0.99}" joint4_upper_limit="${pi*0.99}"
+                joint5_lower_limit="${-1.69297}" joint5_upper_limit="${pi*0.99}"
+                joint6_lower_limit="${-pi*0.99}" joint6_upper_limit="${pi*0.99}"
+            />
+
+            <xacro:xarm6_transmission prefix="${prefix}" hard_interface="EffortJointInterface" reduction="100"/>
+
+            
+
+
+
+            <!-- <ros2_control name="${prefix}uf_robot_hardware/UFRobotSystemHardware" type="system">
                 <hardware>
                     <plugin>uf_robot_hardware/UFRobotSystemHardware</plugin>
-                    <param name="hw_ns">${prefix}xarm</param>
+                    <param name="hw_ns">${prefix}${hw_ns}</param>
+                    <param name="velocity_control">${velocity_control}</param>
+                    <param name="prefix">P${prefix}</param>
+                    <param name="robot_ip">R${robot_ip}</param>
+                    <param name="report_type">${report_type}</param>
                     <param name="dof">6</param>
+                    <param name="baud_checkset">${baud_checkset}</param>
+                    <param name="default_gripper_baud">${default_gripper_baud}</param>
                     <param name="robot_type">xarm</param>
-                    <param name="velocity_control">false</param>
+                    <param name="add_gripper">${add_gripper}</param>
                 </hardware>
                 <joint name="${prefix}joint1">
                     <command_interface name="position"/>
+                    <command_interface name="velocity"/>
                     <state_interface name="position"/>
                     <state_interface name="velocity"/>
                 </joint>
                 <joint name="${prefix}joint2">
                     <command_interface name="position"/>
+                    <command_interface name="velocity"/>
                     <state_interface name="position"/>
                     <state_interface name="velocity"/>
                 </joint>
                 <joint name="${prefix}joint3">
                     <command_interface name="position"/>
+                    <command_interface name="velocity"/>
                     <state_interface name="position"/>
                     <state_interface name="velocity"/>
                 </joint>
                 <joint name="${prefix}joint4">
                     <command_interface name="position"/>
+                    <command_interface name="velocity"/>
                     <state_interface name="position"/>
                     <state_interface name="velocity"/>
                 </joint>
                 <joint name="${prefix}joint5">
                     <command_interface name="position"/>
+                    <command_interface name="velocity"/>
                     <state_interface name="position"/>
                     <state_interface name="velocity"/>
                 </joint>
                 <joint name="${prefix}joint6">
                     <command_interface name="position"/>
+                    <command_interface name="velocity"/>
                     <state_interface name="position"/>
                     <state_interface name="velocity"/>
                 </joint>
-            </ros2_control>
-        </xacro:unless> -->
+            </ros2_control> -->
+        </xacro:unless>
         
     </xacro:macro>
 </robot>

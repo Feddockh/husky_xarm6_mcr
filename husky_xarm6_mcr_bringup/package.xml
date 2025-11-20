@@ -12,6 +12,10 @@
     <depend>rclcpp</depend>
     <depend>tf2_ros</depend>
     <depend>geometry_msgs</depend>
+    
+    <!-- Robot Localization -->
+    <depend>robot_localization</depend>
+    <depend>sensor_msgs</depend>
 
     <!-- <exec_depend>husky_xarm6_mcr_description</exec_depend>
     <exec_depend>husky_xarm6_mcr_control</exec_depend>

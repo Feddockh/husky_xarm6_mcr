@@ -1,0 +1,128 @@
+/**
+ * @file robot_localization_params.yaml
+ * @brief Configuration for robot_localization EKF sensor fusion
+ * 
+ * This configuration fuses:
+ *  - Wheel odometry (velocity only, positions drift)
+ *  - IMU (orientation and angular velocities)
+ *  - GPS (absolute position via navsat_transform)
+ * 
+ * Output: Corrected map->odom->base_link transform chain
+ */
+
+### EKF Filter Node - Map Frame (Global Localization)
+ekf_filter_node_map:
+  ros__parameters:
+    frequency: 30.0
+    sensor_timeout: 0.1
+    two_d_mode: true  # Husky operates on flat ground
+    
+    # Transform frames
+    map_frame: map
+    odom_frame: odom
+    base_link_frame: a200_base_link
+    world_frame: map
+    
+    # Publish transforms
+    publish_tf: true
+    publish_acceleration: false
+    
+    # Sensor configurations
+    # Format: [x, y, z, roll, pitch, yaw, x_vel, y_vel, z_vel, 
+    #          roll_vel, pitch_vel, yaw_vel, x_accel, y_accel, z_accel]
+    
+    # Odometry from wheel encoders (velocities only - positions drift!)
+    odom0: /a200_velocity_controller/odom
+    odom0_config: [false, false, false,    # Don't trust position long-term
+                   false, false, false,    # Don't trust orientation from wheels
+                   true,  true,  false,    # Trust x and y velocities
+                   false, false, true,     # Trust yaw velocity
+                   false, false, false]    # Don't use accelerations
+    odom0_differential: false
+    odom0_relative: false
+    odom0_queue_size: 10
+    odom0_nodelay: false
+    
+    # IMU sensor (orientation and angular velocities)
+    imu0: /imu/data
+    imu0_config: [false, false, false,     # No position from IMU
+                  true,  true,  true,      # Use orientation (roll, pitch, yaw)
+                  false, false, false,     # No linear velocities
+                  true,  true,  true,      # Use angular velocities
+                  true,  true,  false]     # Use x,y accelerations (not z in 2D)
+    imu0_differential: false
+    imu0_relative: false
+    imu0_queue_size: 10
+    imu0_nodelay: false
+    imu0_remove_gravitational_acceleration: true
+    
+    # GPS-derived odometry (from navsat_transform_node)
+    # This provides absolute position corrections
+    odom1: /gps/fix
+    odom1_config: [true,  true,  false,    # Use x, y position (not z in 2D)
+                   false, false, false,    # No orientation from GPS
+                   false, false, false,    # No velocities
+                   false, false, false,    # No angular velocities  
+                   false, false, false]    # No accelerations
+    odom1_differential: false
+    odom1_relative: false
+    odom1_queue_size: 10
+    odom1_nodelay: false
+    
+    # Process noise covariance
+    # Increase these if the robot's motion is very unpredictable
+    process_noise_covariance: [0.05, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.05, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.06, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.03, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.03, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.06, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.025,0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.025,0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.04, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.01, 0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.01, 0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.02, 0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.01, 0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.01, 0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.015]
+
+    # Initial state covariance
+    initial_estimate_covariance: [1e-9, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                                  0.0,  1e-9, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                                  0.0,  0.0,  1e-9, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                                  0.0,  0.0,  0.0,  1e-9, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                                  0.0,  0.0,  0.0,  0.0,  1e-9, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                                  0.0,  0.0,  0.0,  0.0,  0.0,  1e-9, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                                  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  1e-9, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                                  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  1e-9, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                                  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  1e-9, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                                  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  1e-9, 0.0,  0.0,  0.0,  0.0,  0.0,
+                                  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  1e-9, 0.0,  0.0,  0.0,  0.0,
+                                  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  1e-9, 0.0,  0.0,  0.0,
+                                  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  1e-9, 0.0,  0.0,
+                                  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  1e-9, 0.0,
+                                  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  1e-9]
+
+
+### Navsat Transform Node - GPS to Odometry Converter
+navsat_transform_node:
+  ros__parameters:
+    frequency: 10.0
+    delay: 3.0  # Wait for EKF to converge before processing GPS
+    
+    magnetic_declination_radians: 0.0  # Set based on your location if needed
+    yaw_offset: 0.0
+    
+    zero_altitude: true  # Assume flat ground (2D mode)
+    publish_filtered_gps: true
+    use_odometry_yaw: false  # Use IMU yaw instead
+    wait_for_datum: false
+    
+    # Broadcast UTM transform for visualization
+    broadcast_utm_transform: true
+    broadcast_utm_transform_as_parent_frame: false
+    
+    # Frame IDs
+    world_frame: map
+    base_link_frame: a200_base_link

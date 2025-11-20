@@ -2,13 +2,15 @@
 <robot xmlns:xacro="http://ros.org/wiki/xacro" name="husky_xarm6_mcr">
 
     <!-- Arguments -->
-    <xacro:arg name="sim" default="true"/>
+    <xacro:arg name="use_gazebo" default="false"/>
     <xacro:arg name="manipulator_prefix" default="xarm6_"/>
     <xacro:arg name="platform_prefix" default="a200_"/>
+    <xacro:arg name="robot_ip" default="192.168.1.205"/>
+    <xacro:arg name="report_type" default="normal"/>
 
     <!-- HUSKY PLATFORM & ATTACHMENTS -->
     <xacro:include filename="$(find husky_xarm6_mcr_description)/urdf/husky/a200_macro.urdf.xacro"/>
-    <xacro:a200 prefix="$(arg platform_prefix)" use_gazebo="$(arg sim)"/>
+    <xacro:a200 prefix="$(arg platform_prefix)" use_gazebo="$(arg use_gazebo)"/>
 
     <!-- X-RAIL RISER -->
     <xacro:include filename="$(find husky_xarm6_mcr_description)/urdf/risers/x_rail_macro.urdf.xacro"/>
@@ -24,22 +26,38 @@
 
     <!-- ROS2_CONTROL -->
     <xacro:include filename="$(find husky_xarm6_mcr_description)/urdf/husky/husky_ros2_control.xacro"/>
-    <xacro:husky_ros2_control prefix="$(arg platform_prefix)" use_gazebo="$(arg sim)"/>
+    <xacro:husky_ros2_control prefix="$(arg platform_prefix)" use_gazebo="$(arg use_gazebo)"/>
     <xacro:include filename="$(find husky_xarm6_mcr_description)/urdf/xarm6/xarm6_ros2_control.xacro"/>
-    <xacro:xarm6_ros2_control prefix="$(arg manipulator_prefix)" use_gazebo="$(arg sim)"/>
+    <xacro:xarm6_ros2_control prefix="$(arg manipulator_prefix)" use_gazebo="$(arg use_gazebo)" robot_ip="$(arg robot_ip)" report_type="$(arg report_type)"/>
 
-    <gazebo>
-        <plugin filename="gz_ros2_control-system" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
-            <parameters>$(find husky_xarm6_mcr_control)/config/controllers.yaml</parameters>
-        </plugin>
-    </gazebo>
+    <xacro:if value="$(arg use_gazebo)">
+        <gazebo>
+            <plugin filename="gz_ros2_control-system" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+                <parameters>$(find husky_xarm6_mcr_control)/config/controllers.yaml</parameters>
+            </plugin>
+        </gazebo>
+    </xacro:if>
 
     <!-- MULTI CAMERA RIG -->
-    <xacro:include filename="$(find multi_cam_rig_description)/urdf/multi_cam_rig_macro.urdf.xacro"/>
-    <xacro:multi_camera_rig use_gazebo="$(arg sim)"/>
+    <xacro:include filename="$(find multi_camera_rig_description)/urdf/multi_camera_rig_macro.urdf.xacro"/>
+    <xacro:multi_camera_rig use_gazebo="$(arg use_gazebo)"/>
     <joint name="tool_mount" type="fixed">
         <parent link="$(arg manipulator_prefix)link_eef"/>
         <child link="multi_camera_rig_mount"/>
         <origin xyz="0.0 0.0 0.0" rpy="${pi/2} 0 0"/>
     </joint>
+
+    <!-- SWIFTNAV DURO GPS (mounted on top of base_link) -->
+    <!-- <xacro:property name="name" value="gps"/>
+    <xacro:include filename="$(find husky_xarm6_mcr_description)/urdf/sensors/swiftnav_duro.urdf.xacro"/>
+    <xacro:swiftnav_duro parent_link="$(arg platform_prefix)base_link">
+        <origin xyz="0.0 0.0 0.3" rpy="0 0 0"/>
+    </xacro:swiftnav_duro> -->
+
+    <!-- MICROSTRAIN IMU (mounted inside base_link) -->
+    <!-- <xacro:property name="name" value="imu"/>
+    <xacro:include filename="$(find husky_xarm6_mcr_description)/urdf/sensors/microstrain_imu.urdf.xacro"/>
+    <xacro:microstrain_imu parent_link="$(arg platform_prefix)base_link" update_rate="100">
+        <origin xyz="0.0 0.0 0.05" rpy="0 0 0"/>
+    </xacro:microstrain_imu> -->
 </robot>

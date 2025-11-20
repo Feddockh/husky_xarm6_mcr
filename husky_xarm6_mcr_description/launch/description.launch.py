@@ -23,7 +23,7 @@ def get_xacro_content(context, xacro_file, **kwargs):
     return load_xacro(xacro_file, mappings=mappings)
 
 def launch_setup(context, *args, **kwargs):
-    sim = LaunchConfiguration('sim', default='true')
+    use_gazebo = LaunchConfiguration('use_gazebo', default='false')
     manipulator_prefix = LaunchConfiguration('manipulator_prefix', default='xarm6_')
     platform_prefix = LaunchConfiguration('platform_prefix', default='a200_')
 
@@ -33,7 +33,7 @@ def launch_setup(context, *args, **kwargs):
     robot_description = get_xacro_content(
         context,
         xacro_file=urdf_file,
-        sim=sim,
+        use_gazebo=use_gazebo,
         manipulator_prefix=manipulator_prefix,
         platform_prefix=platform_prefix
     )
