@@ -19,14 +19,19 @@ import os
 def launch_setup(context, *args, **kwargs):
     """
     Main bringup orchestration:
-    1. Start Gazebo environment (apple orchard or empty world)
+    1. Start Gazebo environment (apple orchard or empty world) if use_gazebo=true
     2. Spawn the robot and start ros2_control
     3. Bring up MoveIt move_group
     4. Optionally launch RViz
+    
+    Logic:
+    - If use_gazebo=true, then use_fake_hardware is forced to false
+    - If use_gazebo=false, then use_fake_hardware can be true or false
     """
     
     # Get launch configurations
     use_gazebo = LaunchConfiguration('use_gazebo')
+    use_fake_hardware = LaunchConfiguration('use_fake_hardware')
     use_sim_time = LaunchConfiguration('use_sim_time')
     world = LaunchConfiguration('world')
     use_rviz = LaunchConfiguration('use_rviz')
@@ -46,10 +51,21 @@ def launch_setup(context, *args, **kwargs):
     
     launch_actions = []
     
+    # Validate logic: if use_gazebo=true, force use_fake_hardware=false
+    use_gazebo_val = use_gazebo.perform(context).lower() == 'true'
+    use_fake_hardware_val = use_fake_hardware.perform(context).lower() == 'true'
+    
+    if use_gazebo_val and use_fake_hardware_val:
+        print("[WARNING] use_gazebo=true and use_fake_hardware=true is invalid. Forcing use_fake_hardware=false.")
+        use_fake_hardware_val = False
+    
+    # Convert back to string for passing to launch arguments
+    use_fake_hardware_str = 'true' if use_fake_hardware_val else 'false'
+    
     # Note: map_frame_publisher is now conditionally launched based on use_localization
     # (see below after MoveIt launch)
     
-    if use_gazebo.perform(context).lower() == 'true':
+    if use_gazebo_val:
         # Launch Gazebo with the selected world using the general gazebo.launch.py
         gazebo_launch = IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
@@ -60,30 +76,51 @@ def launch_setup(context, *args, **kwargs):
             }.items()
         )
         launch_actions.append(gazebo_launch)
-    
-    # Launch ros2_control after a delay to ensure Gazebo is ready
-    # This prevents the gz_ros2_control plugin from auto-spawning before we're ready
-    control_launch = TimerAction(
-        period=3.0,  # 3 second delay
-        actions=[
-            IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(
-                    os.path.join(control_pkg, 'launch', 'ros2_control.launch.py')
-                ),
-                launch_arguments={
-                    'use_gazebo': use_gazebo,
-                    'use_sim_time': use_sim_time,
-                    'manipulator_prefix': manipulator_prefix,
-                    'manipulator_ns': manipulator_ns,
-                    'platform_prefix': platform_prefix,
-                    'platform_ns': platform_ns,
-                    'robot_ip': robot_ip,
-                    'report_type': report_type,
-                }.items()
-            )
-        ]
-    )
-    launch_actions.append(control_launch)
+        
+        # Launch ros2_control after a delay to ensure Gazebo is ready
+        # This prevents the gz_ros2_control plugin from auto-spawning before we're ready
+        control_launch = TimerAction(
+            period=3.0,  # 3 second delay
+            actions=[
+                IncludeLaunchDescription(
+                    PythonLaunchDescriptionSource(
+                        os.path.join(control_pkg, 'launch', 'ros2_control.launch.py')
+                    ),
+                    launch_arguments={
+                        'use_gazebo': use_gazebo,
+                        'use_fake_hardware': use_fake_hardware_str,
+                        'use_sim_time': use_sim_time,
+                        'manipulator_prefix': manipulator_prefix,
+                        'manipulator_ns': manipulator_ns,
+                        'platform_prefix': platform_prefix,
+                        'platform_ns': platform_ns,
+                        'robot_ip': robot_ip,
+                        'report_type': report_type,
+                    }.items()
+                )
+            ]
+        )
+        launch_actions.append(control_launch)
+
+    # No Gazebo - launch ros2_control immediately without delay
+    else:
+        control_launch = IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(control_pkg, 'launch', 'ros2_control.launch.py')
+            ),
+            launch_arguments={
+                'use_gazebo': use_gazebo,
+                'use_fake_hardware': use_fake_hardware_str,
+                'use_sim_time': use_sim_time,
+                'manipulator_prefix': manipulator_prefix,
+                'manipulator_ns': manipulator_ns,
+                'platform_prefix': platform_prefix,
+                'platform_ns': platform_ns,
+                'robot_ip': robot_ip,
+                'report_type': report_type,
+            }.items()
+        )
+        launch_actions.append(control_launch)
     
     # # Launch MoveIt move_group
     # moveit_launch = IncludeLaunchDescription(
@@ -175,6 +212,11 @@ def generate_launch_description():
             'use_gazebo',
             default_value='false',
             description='Whether to use Gazebo simulation'
+        ),
+        DeclareLaunchArgument(
+            'use_fake_hardware',
+            default_value='false',
+            description='Use fake hardware interface if true'
         ),
         DeclareLaunchArgument(
             'use_sim_time',

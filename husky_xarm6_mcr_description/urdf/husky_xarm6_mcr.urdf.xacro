@@ -3,6 +3,7 @@
 
     <!-- Arguments -->
     <xacro:arg name="use_gazebo" default="false"/>
+    <xacro:arg name="use_fake_hardware" default="false"/>
     <xacro:arg name="config_file" default="$(find husky_xarm6_mcr_control)/config/controllers.yaml"/>
     <xacro:arg name="manipulator_ns" default="xarm6"/>
     <xacro:arg name="manipulator_prefix" default=""/>
@@ -29,10 +30,20 @@
 
     <!-- ROS2_CONTROL -->
     <xacro:include filename="$(find husky_xarm6_mcr_description)/urdf/husky/husky_ros2_control.xacro"/>
-    <xacro:husky_ros2_control namespace="$(arg platform_ns)" prefix="$(arg platform_prefix)" use_gazebo="$(arg use_gazebo)"/>
+    <xacro:husky_ros2_control 
+        namespace="$(arg platform_ns)" 
+        prefix="$(arg platform_prefix)" 
+        use_gazebo="$(arg use_gazebo)" 
+        use_fake_hardware="$(arg use_fake_hardware)"/>
     <xacro:include filename="$(find husky_xarm6_mcr_description)/urdf/xarm6/xarm6_ros2_control.xacro"/>
-    <xacro:xarm6_ros2_control namespace="$(arg manipulator_ns)" prefix="$(arg manipulator_prefix)" use_gazebo="$(arg use_gazebo)" robot_ip="$(arg robot_ip)" report_type="$(arg report_type)"/>
-    
+    <xacro:xarm6_ros2_control 
+        namespace="$(arg manipulator_ns)" 
+        prefix="$(arg manipulator_prefix)" 
+        use_gazebo="$(arg use_gazebo)" 
+        use_fake_hardware="$(arg use_fake_hardware)"
+        robot_ip="$(arg robot_ip)" 
+        report_type="$(arg report_type)"/>
+
     <!-- Gazebo plugin for controller manager (only needed once for whole robot) -->
     <xacro:if value="$(arg use_gazebo)">
         <gazebo>

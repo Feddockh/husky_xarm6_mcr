@@ -34,6 +34,7 @@ def get_xacro_content(context, xacro_file, **kwargs):
 
 def launch_setup(context, *args, **kwargs):
     use_gazebo = LaunchConfiguration('use_gazebo')
+    use_fake_hardware = LaunchConfiguration('use_fake_hardware')
     use_sim_time = LaunchConfiguration('use_sim_time')
     manipulator_prefix = LaunchConfiguration('manipulator_prefix')
     manipulator_ns = LaunchConfiguration('manipulator_ns')
@@ -41,6 +42,17 @@ def launch_setup(context, *args, **kwargs):
     platform_ns = LaunchConfiguration('platform_ns')
     robot_ip = LaunchConfiguration('robot_ip')
     report_type = LaunchConfiguration('report_type')
+
+    # Validate logic: if use_gazebo=true, force use_fake_hardware=false
+    use_gazebo_val = use_gazebo.perform(context).lower() == 'true'
+    use_fake_hardware_val = use_fake_hardware.perform(context).lower() == 'true'
+    
+    if use_gazebo_val and use_fake_hardware_val:
+        print("[WARNING] use_gazebo=true and use_fake_hardware=true is invalid. Forcing use_fake_hardware=false.")
+        use_fake_hardware_val = False
+    
+    # Convert back to string for xacro processing
+    use_fake_hardware_str = 'true' if use_fake_hardware_val else 'false'
 
     description_pkg = get_package_share_directory('husky_xarm6_mcr_description')
     xacro_file = Path(description_pkg) / 'urdf' / 'husky_xarm6_mcr.urdf.xacro'
@@ -69,6 +81,7 @@ def launch_setup(context, *args, **kwargs):
         context,
         xacro_file=xacro_file,
         use_gazebo=use_gazebo,
+        use_fake_hardware=use_fake_hardware_str,
         config_file=controllers_yaml_path,
         manipulator_prefix=manipulator_prefix,
         manipulator_ns=manipulator_ns,
@@ -92,6 +105,23 @@ def launch_setup(context, *args, **kwargs):
 
     # Fake controllers for simulation
     if use_gazebo.perform(context).lower() == 'true':
+
+        # Use ros_gz_sim entity creation for Ignition Fortress
+        spawn_entity = Node(
+            package='ros_gz_sim',
+            executable='create',
+            output='screen',
+            arguments=[
+                '-topic', 'robot_description',
+                '-name', 'husky_xarm6_mcr',
+                '-z', '0.3', # slight z offset to avoid collision with ground plane
+                # Initial joint positions to avoid collision
+                '-j', 'xarm6_joint1', '0.0',
+                '-j', 'xarm6_joint2', '-0.5',
+                '-j', 'xarm6_joint3', '0.5',
+            ],
+            parameters=[{'use_sim_time': use_sim_time}],
+        )
 
         joint_state_broadcaster = Node(
             package='controller_manager',
@@ -126,23 +156,6 @@ def launch_setup(context, *args, **kwargs):
             OnProcessExit(target_action=joint_state_broadcaster, on_exit=[platform_velocity_controller, xarm6_traj_controller])
         )
 
-        # Use ros_gz_sim entity creation for Ignition Fortress
-        spawn_entity = Node(
-            package='ros_gz_sim',
-            executable='create',
-            output='screen',
-            arguments=[
-                '-topic', 'robot_description',
-                '-name', 'husky_xarm6_mcr',
-                '-z', '0.3', # slight z offset to avoid collision with ground plane
-                # Initial joint positions to avoid collision
-                '-j', 'xarm6_joint1', '0.0',
-                '-j', 'xarm6_joint2', '-0.5',
-                '-j', 'xarm6_joint3', '0.5',
-            ],
-            parameters=[{'use_sim_time': use_sim_time}],
-        )
-
         # Control bridge - handles robot control topics only
         # Clock is now handled by the gazebo.launch.py file
         # Example: /cmd_vel@geometry_msgs/msg/Twist means the bridge will expose a ROS topic /cmd_vel with type geometry_msgs/msg/Twist.
@@ -161,18 +174,19 @@ def launch_setup(context, *args, **kwargs):
         return [
             robot_state_publisher,
             spawn_entity,
+            joint_state_broadcaster,
             jsb_then_base,
             control_bridge,
         ]
     
+    # Real hardware - need to explicitly start controller_manager
     else:
-        # Real hardware - need to explicitly start controller_manager
         ros2_control_node = Node(
             package='controller_manager',
             executable='ros2_control_node',
             parameters=[
                 {'robot_description': robot_description},
-                str(controllers_yaml),
+                controllers_yaml_path,
                 {'use_sim_time': use_sim_time}
             ],
             output='screen',
@@ -182,16 +196,22 @@ def launch_setup(context, *args, **kwargs):
         #     ('follow_joint_trajectory', 'xarm6_traj_controller/follow_joint_trajectory'),
         # ]
 
-        joint_state_publisher_node = Node(
-            package='joint_state_publisher',
-            executable='joint_state_publisher',
-            name='joint_state_publisher',
-            output='screen',
-            parameters=[{'source_list': ['{}xarm/joint_states'.format(manipulator_prefix.perform(context))]}],
-            # remappings=remappings,
-        )
+        # Unnecessary because of joint state broadcaster in ros2_control_node
+        # joint_state_publisher_node = Node(
+        #     package='joint_state_publisher',
+        #     executable='joint_state_publisher',
+        #     name='joint_state_publisher',
+        #     output='screen',
+        #     parameters=[{'source_list': ['{}xarm/joint_states'.format(manipulator_prefix.perform(context))]}],
+        #     # remappings=remappings,
+        # )
 
-        controllers = ['xarm6_traj_controller']
+        controllers = [
+            'joint_state_broadcaster',
+            'platform_velocity_controller',
+            'xarm6_traj_controller'
+        ]
+
         controller_nodes = []
         for controller in controllers:
             controller_nodes.append(Node(
@@ -206,7 +226,7 @@ def launch_setup(context, *args, **kwargs):
 
         return [
             robot_state_publisher,
-            joint_state_publisher_node,
+            # joint_state_publisher_node,
             ros2_control_node,
         ] + controller_nodes
 
@@ -214,6 +234,7 @@ def launch_setup(context, *args, **kwargs):
 def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('use_gazebo', default_value='false', description='Enable simulation mode'),
+        DeclareLaunchArgument('use_fake_hardware', default_value='false', description='Use fake hardware interface if true'),
         DeclareLaunchArgument('use_sim_time', default_value='false', description='Use simulated time if true'),
         DeclareLaunchArgument('manipulator_prefix', default_value='xarm6_', description='Prefix for manipulator joint names'),
         DeclareLaunchArgument('manipulator_ns', default_value='xarm', description='Namespace for manipulator'),

@@ -24,18 +24,22 @@
         </link>
 
         <!-- Gazebo simulation settings -->
-        <xacro:if value="${use_gazebo}">
+        <!-- <xacro:if value="${use_gazebo}"> -->
             <!-- Wheel settings -->
-            <gazebo reference="${wheel_prefix}_wheel">
-                <mu1 value="1.0"/> <!-- Vertical friction coefficient -->
-                <mu2 value="0.5"/> <!-- Lateral and longitudinal friction coefficients -->
-                <kp value="100000000000000000000.0" /> <!-- Stiffness coefficient -->
-                <kd value="1.0" /> <!-- Damping coefficient -->
-                <fdir1 value="1 0 0"/> <!-- Direction of the friction/wheel axis -->
-            </gazebo>
+            <!-- <gazebo reference="${wheel_prefix}_wheel"> -->
+            <!-- Vertical friction coefficient -->
+                <!-- <mu1 value="1.0"/>  -->
+                <!-- Lateral and longitudinal friction coefficients -->
+                <!-- <mu2 value="0.5"/>  -->
+                <!-- Stiffness coefficient -->
+                <!-- <kp value="100000000000000000000.0" />  -->
+                <!-- Damping coefficient -->
+                <!-- <kd value="1.0" />  -->
+                <!-- Direction of the friction/wheel axis -->
+                <!-- <fdir1 value="1 0 0"/>  -->
+            <!-- </gazebo> -->
             <!-- Wheel slip plugin (Ignition/Gazebo) -->
-            <gazebo>
-                <!-- Use the installed Ignition plugin library name and fully-qualified system name -->
+            <!-- <gazebo>
                 <plugin filename="libignition-gazebo-wheel-slip-system.so" name="ignition::gazebo::systems::WheelSlip">
                     <wheel link_name="${wheel_prefix}_wheel">
                         <slip_compliance_lateral>1.0</slip_compliance_lateral>
@@ -45,7 +49,7 @@
                     </wheel>
                 </plugin>
             </gazebo>
-        </xacro:if>
+        </xacro:if> -->
 
         <!-- Parent joint is handled by the caller -->
         <!-- <joint name="${wheel_prefix}_wheel_joint" type="continuous">

@@ -1,7 +1,8 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://ros.org/wiki/xacro">
-    <xacro:macro name="husky_ros2_control" params="namespace:='' prefix:='' use_gazebo:=true">
-        <!-- Build namespace prefix -->
+    
+    <xacro:macro name="husky_ros2_control" params="namespace:='' prefix:='' use_gazebo:=true use_fake_hardware:=false">
+        
         <xacro:property name="ns_prefix" value="${namespace}/${prefix}"/>
         
         <xacro:if value="${use_gazebo}">
@@ -9,33 +10,61 @@
                 <hardware>
                     <plugin>gz_ros2_control/GazeboSimSystem</plugin>
                 </hardware>
-                <joint name="${ns_prefix}front_left_wheel_joint">
-                    <command_interface name="velocity">
-                        <param name="min">-1</param>
-                        <param name="max">1</param>
-                    </command_interface>
-                    <state_interface name="position"/>
-                    <state_interface name="velocity"/>
-                </joint>
-                <joint name="${ns_prefix}rear_left_wheel_joint">
-                    <command_interface name="velocity">
-                    </command_interface>
-                    <state_interface name="position"/>
-                    <state_interface name="velocity"/>
-                </joint>
-                <joint name="${ns_prefix}front_right_wheel_joint">
-                    <command_interface name="velocity">
-                    </command_interface>
-                    <state_interface name="position"/>
-                    <state_interface name="velocity"/>
-                </joint>
-                <joint name="${ns_prefix}rear_right_wheel_joint">
-                    <command_interface name="velocity">
-                    </command_interface>
-                    <state_interface name="position"/>
-                    <state_interface name="velocity"/>
-                </joint>
+                <xacro:husky_system_joints prefix="${ns_prefix}"/>
             </ros2_control>
         </xacro:if>
+
+        <xacro:unless value="${use_gazebo}">
+            <ros2_control name="a200_hardware" type="system">
+                <hardware>
+                    <xacro:if value="${use_fake_hardware}">
+                        <plugin>mock_components/GenericSystem</plugin>
+                        <param name="calculate_dynamics">true</param>
+                    </xacro:if>
+
+                    <xacro:unless value="${use_fake_hardware}">
+                        <!-- Replace later with correct plugin -->
+                        <plugin>mock_components/GenericSystem</plugin> 
+                    </xacro:unless>
+                </hardware>
+                <xacro:husky_system_joints prefix="${ns_prefix}"/>
+            </ros2_control>
+        </xacro:unless>
+
+    </xacro:macro>
+
+    <xacro:macro name="husky_system_joints" params="prefix">
+        <joint name="${prefix}front_left_wheel_joint">
+            <command_interface name="velocity">
+                <param name="min">-1</param>
+                <param name="max">1</param>
+            </command_interface>
+            <state_interface name="position"/>
+            <state_interface name="velocity"/>
+        </joint>
+        <joint name="${prefix}rear_left_wheel_joint">
+            <command_interface name="velocity">
+                <param name="min">-1</param>
+                <param name="max">1</param>
+            </command_interface>
+            <state_interface name="position"/>
+            <state_interface name="velocity"/>
+        </joint>
+        <joint name="${prefix}front_right_wheel_joint">
+            <command_interface name="velocity">
+                <param name="min">-1</param>
+                <param name="max">1</param>
+            </command_interface>
+            <state_interface name="position"/>
+            <state_interface name="velocity"/>
+        </joint>
+        <joint name="${prefix}rear_right_wheel_joint">
+            <command_interface name="velocity">
+                <param name="min">-1</param>
+                <param name="max">1</param>
+            </command_interface>
+            <state_interface name="position"/>
+            <state_interface name="velocity"/>
+        </joint>
     </xacro:macro>
 </robot>
