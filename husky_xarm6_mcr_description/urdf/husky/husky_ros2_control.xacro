@@ -1,35 +1,15 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://ros.org/wiki/xacro">
-    <xacro:macro name="husky_ros2_control" params="prefix:='' use_gazebo:=true">
-
+    <xacro:macro name="husky_ros2_control" params="namespace:='' prefix:='' use_gazebo:=true">
+        <!-- Build namespace prefix -->
+        <xacro:property name="ns_prefix" value="${namespace}/${prefix}"/>
+        
         <xacro:if value="${use_gazebo}">
             <ros2_control name="a200_hardware" type="system">
                 <hardware>
-                    <!-- Enable ros2_control plugin depending on simulator -->
-                    <xacro:if value="${use_gazebo}">
-                        <plugin>gz_ros2_control/GazeboSimSystem</plugin>
-
-                        <!-- <param name="velocity_proportional_gain">5.0</param>
-                        <param name="velocity_integral_gain">0.0</param>
-                        <param name="velocity_derivative_gain">0.0</param>
-
-                        <param name="position_proportional_gain">0.0</param>
-                        <param name="position_integral_gain">0.0</param>
-                        <param name="position_derivative_gain">0.0</param> -->
-                    </xacro:if>
-
-                    <!-- <xacro:unless value="$(arg use_gazebo)">
-                        <plugin>clearpath_hardware_interfaces/A200Hardware</plugin>
-                        <param name="wheel_diameter">0.3302</param>
-                        <param name="max_accel">5.0</param>
-                        <param name="max_speed">1.0</param>
-                        <param name="polling_timeout">0.1</param>
-                        <param name="serial_port">$(arg serial_port)</param>
-                    </xacro:unless> -->
+                    <plugin>gz_ros2_control/GazeboSimSystem</plugin>
                 </hardware>
-
-                <!-- Wheels provide velocity command & position/velocity state -->
-                <joint name="${prefix}front_left_wheel_joint">
+                <joint name="${ns_prefix}front_left_wheel_joint">
                     <command_interface name="velocity">
                         <param name="min">-1</param>
                         <param name="max">1</param>
@@ -37,33 +17,25 @@
                     <state_interface name="position"/>
                     <state_interface name="velocity"/>
                 </joint>
-                <joint name="${prefix}rear_left_wheel_joint">
+                <joint name="${ns_prefix}rear_left_wheel_joint">
                     <command_interface name="velocity">
-                        <param name="min">-1</param>
-                        <param name="max">1</param>
                     </command_interface>
                     <state_interface name="position"/>
                     <state_interface name="velocity"/>
                 </joint>
-                <joint name="${prefix}front_right_wheel_joint">
+                <joint name="${ns_prefix}front_right_wheel_joint">
                     <command_interface name="velocity">
-                        <param name="min">-1</param>
-                        <param name="max">1</param>
                     </command_interface>
                     <state_interface name="position"/>
                     <state_interface name="velocity"/>
                 </joint>
-                <joint name="${prefix}rear_right_wheel_joint">
+                <joint name="${ns_prefix}rear_right_wheel_joint">
                     <command_interface name="velocity">
-                        <param name="min">-1</param>
-                        <param name="max">1</param>
                     </command_interface>
                     <state_interface name="position"/>
                     <state_interface name="velocity"/>
                 </joint>
             </ros2_control>
         </xacro:if>
-        
-
     </xacro:macro>
 </robot>

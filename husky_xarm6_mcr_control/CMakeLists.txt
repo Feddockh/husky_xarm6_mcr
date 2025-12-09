@@ -7,12 +7,16 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_python REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(ros2_control REQUIRED)
 
-install(DIRECTORY launch config
+install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME}/
 )
+
+# Install the Python module
+ament_python_install_package(${PROJECT_NAME})
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

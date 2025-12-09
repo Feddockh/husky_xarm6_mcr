@@ -23,9 +23,11 @@ def get_xacro_content(context, xacro_file, **kwargs):
     return load_xacro(xacro_file, mappings=mappings)
 
 def launch_setup(context, *args, **kwargs):
-    use_gazebo = LaunchConfiguration('use_gazebo', default='false')
-    manipulator_prefix = LaunchConfiguration('manipulator_prefix', default='xarm6_')
-    platform_prefix = LaunchConfiguration('platform_prefix', default='a200_')
+    use_gazebo = LaunchConfiguration('use_gazebo')
+    manipulator_prefix = LaunchConfiguration('manipulator_prefix')
+    manipulator_ns = LaunchConfiguration('manipulator_ns')
+    platform_prefix = LaunchConfiguration('platform_prefix')
+    platform_ns = LaunchConfiguration('platform_ns')
 
     description_pkg = get_package_share_directory('husky_xarm6_mcr_description')
     urdf_file = Path(description_pkg) / 'urdf' / 'husky_xarm6_mcr.urdf.xacro'
@@ -35,7 +37,9 @@ def launch_setup(context, *args, **kwargs):
         xacro_file=urdf_file,
         use_gazebo=use_gazebo,
         manipulator_prefix=manipulator_prefix,
-        platform_prefix=platform_prefix
+        manipulator_ns=manipulator_ns,
+        platform_prefix=platform_prefix,
+        platform_ns=platform_ns
     )
     
     robot_state_publisher_node = Node(
@@ -69,5 +73,10 @@ def launch_setup(context, *args, **kwargs):
 
 def generate_launch_description():
     return LaunchDescription([
+        DeclareLaunchArgument('use_gazebo', default_value='false', description='Whether to launch in Gazebo simulation mode'),
+        DeclareLaunchArgument('manipulator_prefix', default_value='xarm6_', description='Prefix for manipulator joint names'),
+        DeclareLaunchArgument('manipulator_ns', default_value='xarm', description='Namespace for manipulator'),
+        DeclareLaunchArgument('platform_prefix', default_value='a200_', description='Prefix for platform joint names or frames'),
+        DeclareLaunchArgument('platform_ns', default_value='husky', description='Namespace for platform'),
         OpaqueFunction(function=launch_setup)
     ])

@@ -1,3 +1,8 @@
+import os
+import yaml
+from pathlib import Path
+import tempfile
+
 from launch import LaunchDescription
 from launch_ros.actions import Node
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction
@@ -6,12 +11,12 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from ament_index_python.packages import get_package_share_directory
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_param_builder import load_xacro
-import os
-from pathlib import Path
 from launch.actions import OpaqueFunction
 from launch.actions import RegisterEventHandler
 from launch.event_handlers import OnProcessExit
 from launch.actions import SetEnvironmentVariable
+
+from husky_xarm6_mcr_control.generate_controllers_yaml import generate_controllers_yaml
 
 
 # From xarm packages
@@ -29,9 +34,11 @@ def get_xacro_content(context, xacro_file, **kwargs):
 
 def launch_setup(context, *args, **kwargs):
     use_gazebo = LaunchConfiguration('use_gazebo')
-    platform_prefix = LaunchConfiguration('platform_prefix')
-    manipulator_prefix = LaunchConfiguration('manipulator_prefix')
     use_sim_time = LaunchConfiguration('use_sim_time')
+    manipulator_prefix = LaunchConfiguration('manipulator_prefix')
+    manipulator_ns = LaunchConfiguration('manipulator_ns')
+    platform_prefix = LaunchConfiguration('platform_prefix')
+    platform_ns = LaunchConfiguration('platform_ns')
     robot_ip = LaunchConfiguration('robot_ip')
     report_type = LaunchConfiguration('report_type')
 
@@ -40,21 +47,33 @@ def launch_setup(context, *args, **kwargs):
     control_pkg = get_package_share_directory('husky_xarm6_mcr_control')
     controllers_yaml = Path(control_pkg) / 'config' / 'controllers.yaml'
 
-    # gazebo_launch = IncludeLaunchDescription(
-    #     PythonLaunchDescriptionSource(
-    #         os.path.join(get_package_share_directory('ros_gz_sim'), 'launch', 'gz_sim.launch.py')
-    #     ),
-    #     # run (-r), verbose, load empty.sdf
-    #     launch_arguments={'gz_args': '-r empty.sdf'}.items()
-    # )
+    # Generate the controllers.yaml file
+    # 1. Generate the config dictionary
+    config = generate_controllers_yaml(
+        platform_ns=platform_ns.perform(context),
+        platform_prefix=platform_prefix.perform(context),
+        manipulator_ns=manipulator_ns.perform(context),
+        manipulator_prefix=manipulator_prefix.perform(context)
+    )
+    # 2. Create a temporary file to hold the YAML
+    # We use NamedTemporaryFile so it persists long enough for the nodes to read it
+    # We typically do not delete it immediately so the spawner can read it. 
+    # OS cleans /tmp automatically on reboot, or you can manage cleanup.
+    controllers_yaml_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.yaml')
+    yaml.dump(config, controllers_yaml_file, default_flow_style=False, sort_keys=False)
+    controllers_yaml_file.close() # Close so other processes can read it
+    controllers_yaml_path = controllers_yaml_file.name
 
-    # Process the xacro file
+    # Process the xacro files
     robot_description = get_xacro_content(
         context,
         xacro_file=xacro_file,
         use_gazebo=use_gazebo,
+        config_file=controllers_yaml_path,
         manipulator_prefix=manipulator_prefix,
+        manipulator_ns=manipulator_ns,
         platform_prefix=platform_prefix,
+        platform_ns=platform_ns,
         robot_ip=robot_ip,
         report_type=report_type
     )
@@ -71,40 +90,42 @@ def launch_setup(context, *args, **kwargs):
         ]
     )
 
-    joint_state_broadcaster = Node(
-        package='controller_manager',
-        executable='spawner',
-        arguments=['joint_state_broadcaster'],
-        parameters=[{'use_sim_time': use_sim_time}]
-    )
-
-    platform_velocity_controller = Node(
-        package='controller_manager',
-        executable='spawner',
-        arguments=[
-            'platform_velocity_controller',
-            '--controller-manager', '/controller_manager',
-            '--param-file', str(controllers_yaml)
-            ],
-        parameters=[{'use_sim_time': use_sim_time}]
-    )
-
-    xarm6_traj_controller = Node(
-        package='controller_manager',
-        executable='spawner',
-        arguments=[
-            'xarm6_traj_controller',
-            '--controller-manager', '/controller_manager',
-            '--param-file', str(controllers_yaml)
-            ],
-        parameters=[{'use_sim_time': use_sim_time}]
-    )
-
-    jsb_then_base = RegisterEventHandler(
-        OnProcessExit(target_action=joint_state_broadcaster, on_exit=[platform_velocity_controller, xarm6_traj_controller])
-    )
-
+    # Fake controllers for simulation
     if use_gazebo.perform(context).lower() == 'true':
+
+        joint_state_broadcaster = Node(
+            package='controller_manager',
+            executable='spawner',
+            arguments=['joint_state_broadcaster'],
+            parameters=[{'use_sim_time': use_sim_time}]
+        )
+
+        platform_velocity_controller = Node(
+            package='controller_manager',
+            executable='spawner',
+            arguments=[
+                'platform_velocity_controller',
+                '--controller-manager', '/controller_manager',
+                '--param-file', str(controllers_yaml_path)
+                ],
+            parameters=[{'use_sim_time': use_sim_time}]
+        )
+
+        xarm6_traj_controller = Node(
+            package='controller_manager',
+            executable='spawner',
+            arguments=[
+                'xarm6_traj_controller',
+                '--controller-manager', '/controller_manager',
+                '--param-file', str(controllers_yaml_path)
+                ],
+            parameters=[{'use_sim_time': use_sim_time}]
+        )
+
+        jsb_then_base = RegisterEventHandler(
+            OnProcessExit(target_action=joint_state_broadcaster, on_exit=[platform_velocity_controller, xarm6_traj_controller])
+        )
+
         # Use ros_gz_sim entity creation for Ignition Fortress
         spawn_entity = Node(
             package='ros_gz_sim',
@@ -137,21 +158,16 @@ def launch_setup(context, *args, **kwargs):
             parameters=[{'use_sim_time': use_sim_time}]
         )
 
-        spawn_then_jsb = RegisterEventHandler(
-            OnProcessExit(target_action=spawn_entity, on_exit=[joint_state_broadcaster])
-        )
-
         return [
             robot_state_publisher,
             spawn_entity,
-            spawn_then_jsb,
             jsb_then_base,
             control_bridge,
         ]
     
     else:
         # Real hardware - need to explicitly start controller_manager
-        controller_manager_node = Node(
+        ros2_control_node = Node(
             package='controller_manager',
             executable='ros2_control_node',
             parameters=[
@@ -161,25 +177,48 @@ def launch_setup(context, *args, **kwargs):
             ],
             output='screen',
         )
-        
-        # For real hardware, start controller_manager first, then controllers
-        cm_then_jsb = RegisterEventHandler(
-            OnProcessExit(target_action=controller_manager_node, on_exit=[joint_state_broadcaster])
+
+        # remappings = [
+        #     ('follow_joint_trajectory', 'xarm6_traj_controller/follow_joint_trajectory'),
+        # ]
+
+        joint_state_publisher_node = Node(
+            package='joint_state_publisher',
+            executable='joint_state_publisher',
+            name='joint_state_publisher',
+            output='screen',
+            parameters=[{'source_list': ['{}xarm/joint_states'.format(manipulator_prefix.perform(context))]}],
+            # remappings=remappings,
         )
-        
+
+        controllers = ['xarm6_traj_controller']
+        controller_nodes = []
+        for controller in controllers:
+            controller_nodes.append(Node(
+                package='controller_manager',
+                executable='spawner',
+                output='screen',
+                arguments=[
+                    controller,
+                    '--controller-manager', '/controller_manager'
+                ],
+            ))
+
         return [
             robot_state_publisher,
-            controller_manager_node,
-            cm_then_jsb,
-            jsb_then_base,
-        ]
+            joint_state_publisher_node,
+            ros2_control_node,
+        ] + controller_nodes
+
 
 def generate_launch_description():
     return LaunchDescription([
-        DeclareLaunchArgument('manipulator_prefix', default_value='xarm6_', description='Prefix for manipulator joint names'),
-        DeclareLaunchArgument('platform_prefix', default_value='a200_', description='Prefix for platform joint names or frames'),
         DeclareLaunchArgument('use_gazebo', default_value='false', description='Enable simulation mode'),
         DeclareLaunchArgument('use_sim_time', default_value='false', description='Use simulated time if true'),
+        DeclareLaunchArgument('manipulator_prefix', default_value='xarm6_', description='Prefix for manipulator joint names'),
+        DeclareLaunchArgument('manipulator_ns', default_value='xarm', description='Namespace for manipulator'),
+        DeclareLaunchArgument('platform_prefix', default_value='a200_', description='Prefix for platform joint names or frames'),
+        DeclareLaunchArgument('platform_ns', default_value='husky', description='Namespace for platform'),
         DeclareLaunchArgument('robot_ip', default_value='192.168.1.205', description='IP address of the xArm6 robot'),
         DeclareLaunchArgument('report_type', default_value='normal', description='Report type for xArm (normal, rich, dev)'),
         OpaqueFunction(function=launch_setup)

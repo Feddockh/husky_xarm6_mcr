@@ -8,6 +8,7 @@
   <license>MIT</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
   <build_depend>controller_manager</build_depend>
   <build_depend>ros2_controllers</build_depend>
   <build_depend>joint_state_broadcaster</build_depend>

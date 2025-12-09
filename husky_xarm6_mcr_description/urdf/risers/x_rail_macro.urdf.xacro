@@ -2,10 +2,12 @@
 <robot xmlns:xacro="http://ros.org/wiki/xacro">
 
     <!-- X-Rail Riser Macro -->
-    <xacro:macro name="x_rail_riser" params="prefix parent_link *origin">
+    <xacro:macro name="x_rail_riser" params="namespace:='' prefix:='' parent_link *origin">
+        <!-- Build namespace prefix -->
+        <xacro:property name="ns_prefix" value="${namespace}/${prefix}"/>
 
         <!-- X-Rail Riser Link -->
-        <link name="${prefix}x_rail_riser_link">
+        <link name="${ns_prefix}x_rail_riser_link">
             <visual>
                 <origin xyz="0 0 0" rpy="0 0 0"/>
                 <geometry>
@@ -31,9 +33,9 @@
         </link>
 
         <!-- Joint connecting X-Rail riser to parent -->
-        <joint name="${prefix}x_rail_riser_joint" type="fixed">
+        <joint name="${ns_prefix}x_rail_riser_joint" type="fixed">
             <parent link="${parent_link}"/>
-            <child link="${prefix}x_rail_riser_link"/>
+            <child link="${ns_prefix}x_rail_riser_link"/>
             <xacro:insert_block name="origin"/>
         </joint>
 

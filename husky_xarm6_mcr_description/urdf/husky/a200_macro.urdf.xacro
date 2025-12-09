@@ -1,28 +1,28 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://ros.org/wiki/xacro">
-    <xacro:macro name="a200" params="prefix:='' use_gazebo:=true">
+    <xacro:macro name="a200" params="namespace:='' prefix:='' use_gazebo:=true">
+        <!-- Build namespace prefix -->
+        <xacro:property name="ns_prefix" value="${namespace}/${prefix}"/>
 
         <!-- Base Size -->
         <xacro:property name="base_x_size" value="0.98740000" />
         <xacro:property name="base_y_size" value="0.57090000" />
         <xacro:property name="base_z_size" value="0.24750000" />
-
         <!-- Wheel Mounting Positions -->
         <xacro:property name="wheelbase" value="0.5120" />
         <xacro:property name="track" value="0.555" />
         <xacro:property name="wheel_vertical_offset" value="0.03282" />
-
         <!-- Wheel Properties -->
         <xacro:property name="wheel_length" value="0.1143" />
         <xacro:property name="wheel_radius" value="0.1651" />
-
         <!-- Base link is the center of the robot's bottom plate -->
-        <link name="${prefix}base_link">
+        <link name="${ns_prefix}base_link">
             <visual>
                 <origin xyz="0 0 0" rpy="0 0 0" />
                 <geometry>
                     <!-- <mesh filename="package://clearpath_platform_description/meshes/a200/base_link.dae" /> -->
-                    <mesh filename="file://$(find clearpath_platform_description)/meshes/a200/base_link.dae" /> <!-- Use this for Gazebo -->
+                    <mesh filename="file://$(find clearpath_platform_description)/meshes/a200/base_link.dae" />
+                    <!-- Use this for Gazebo -->
                 </geometry>
             </visual>
             <collision>
@@ -38,122 +38,113 @@
                 </geometry>
             </collision>
         </link>
-
         <!-- Base footprint is on the ground under the robot -->
-        <link name="${prefix}base_footprint"/>
-        <joint name="${prefix}base_footprint_joint" type="fixed">
+        <link name="${ns_prefix}base_footprint"/>
+        <joint name="${ns_prefix}base_footprint_joint" type="fixed">
             <!-- <origin xyz="0 0 ${wheel_vertical_offset - wheel_radius}" rpy="0 0 0" />
-            <parent link="${prefix}base_link" />
-            <child link="${prefix}base_footprint" /> -->
+            <parent link="${namespace}/base_link" />
+            <child link="${namespace}/base_footprint" /> -->
             <origin xyz="0 0 ${wheel_radius - wheel_vertical_offset}" rpy="0 0 0"/>
-            <parent link="${prefix}base_footprint"/>
-            <child link="${prefix}base_link"/>
+            <parent link="${ns_prefix}base_footprint"/>
+            <child link="${ns_prefix}base_link"/>
         </joint>
-
         <!-- Spawn A200 chassis -->
-        <link name="${prefix}top_chassis_link">
+        <link name="${ns_prefix}top_chassis_link">
             <visual>
                 <origin xyz="0 0 0" rpy="0 0 0" />
                 <geometry>
                     <!-- <mesh filename="package://clearpath_platform_description/meshes/a200/top_chassis.dae" /> -->
-                    <mesh filename="file://$(find clearpath_platform_description)/meshes/a200/top_chassis.dae" /> <!-- Use this for Gazebo -->
+                    <mesh filename="file://$(find clearpath_platform_description)/meshes/a200/top_chassis.dae" />
+                    <!-- Use this for Gazebo -->
                 </geometry>
             </visual>
         </link>
-
         <!-- Attach chassis to the robot -->
-        <joint name="${prefix}top_chassis_joint" type="fixed">
-            <parent link="${prefix}base_link" />
-            <child link="${prefix}top_chassis_link" />
+        <joint name="${ns_prefix}top_chassis_joint" type="fixed">
+            <parent link="${ns_prefix}base_link" />
+            <child link="${ns_prefix}top_chassis_link" />
         </joint>
-
         <!-- Inertial link stores the robot's inertial information -->
-        <link name="${prefix}inertial_link">
+        <link name="${ns_prefix}inertial_link">
             <inertial>
                 <mass value="46.034" />
                 <origin xyz="-0.00065 -0.085 0.062" />
                 <inertia ixx="0.6022" ixy="-0.02364" ixz="-0.1197" iyy="1.7386" iyz="-0.001544" izz="2.0296" />
             </inertial>
         </link>
-        <joint name="${prefix}inertial_joint" type="fixed">
+        <joint name="${ns_prefix}inertial_joint" type="fixed">
             <origin xyz="0 0 0" rpy="0 0 0" />
-            <parent link="${prefix}base_link" />
-            <child link="${prefix}inertial_link" />
+            <parent link="${ns_prefix}base_link" />
+            <child link="${ns_prefix}inertial_link" />
         </joint>
-        
         <!-- A200 wheel macros -->
         <xacro:include filename="$(find husky_xarm6_mcr_description)/urdf/husky/a200_wheel_macro.urdf.xacro" />
-        <xacro:a200_wheel wheel_prefix="${prefix}front_left" use_gazebo="${use_gazebo}" wheel_length="${wheel_length}" wheel_radius="${wheel_radius}">
+        <xacro:a200_wheel wheel_prefix="${ns_prefix}front_left" use_gazebo="${use_gazebo}" wheel_length="${wheel_length}" wheel_radius="${wheel_radius}">
             <origin xyz="${wheelbase/2} ${track/2} ${wheel_vertical_offset}" rpy="0 0 0" />
         </xacro:a200_wheel>
-        <xacro:a200_wheel wheel_prefix="${prefix}front_right" use_gazebo="${use_gazebo}" wheel_length="${wheel_length}" wheel_radius="${wheel_radius}">
+        <xacro:a200_wheel wheel_prefix="${ns_prefix}front_right" use_gazebo="${use_gazebo}" wheel_length="${wheel_length}" wheel_radius="${wheel_radius}">
             <origin xyz="${wheelbase/2} ${-track/2} ${wheel_vertical_offset}" rpy="0 0 0" />
         </xacro:a200_wheel>
-        <xacro:a200_wheel wheel_prefix="${prefix}rear_left" use_gazebo="${use_gazebo}" wheel_length="${wheel_length}" wheel_radius="${wheel_radius}">
+        <xacro:a200_wheel wheel_prefix="${ns_prefix}rear_left" use_gazebo="${use_gazebo}" wheel_length="${wheel_length}" wheel_radius="${wheel_radius}">
             <origin xyz="${-wheelbase/2} ${track/2} ${wheel_vertical_offset}" rpy="0 0 0" />
         </xacro:a200_wheel>
-        <xacro:a200_wheel wheel_prefix="${prefix}rear_right" use_gazebo="${use_gazebo}" wheel_length="${wheel_length}" wheel_radius="${wheel_radius}">
+        <xacro:a200_wheel wheel_prefix="${ns_prefix}rear_right" use_gazebo="${use_gazebo}" wheel_length="${wheel_length}" wheel_radius="${wheel_radius}">
             <origin xyz="${-wheelbase/2} ${-track/2} ${wheel_vertical_offset}" rpy="0 0 0" />
         </xacro:a200_wheel>
-
         <!-- Define wheel joints to use prefixed base_link -->
-        <joint name="${prefix}front_left_wheel_joint" type="continuous">
-            <parent link="${prefix}base_link"/>
-            <child link="${prefix}front_left_wheel"/>
+        <joint name="${ns_prefix}front_left_wheel_joint" type="continuous">
+            <parent link="${ns_prefix}base_link"/>
+            <child link="${ns_prefix}front_left_wheel"/>
             <origin xyz="${wheelbase/2} ${track/2} ${wheel_vertical_offset}" rpy="0 0 0" />
             <axis xyz="0 1 0" rpy="0 0 0" />
             <!-- <limit effort="10000.0" velocity="100.0"/>
             <dynamics damping="0.0" friction="0.0"/> -->
         </joint>
-        <joint name="${prefix}front_right_wheel_joint" type="continuous">
-            <parent link="${prefix}base_link"/>
-            <child link="${prefix}front_right_wheel"/>
+        <joint name="${ns_prefix}front_right_wheel_joint" type="continuous">
+            <parent link="${ns_prefix}base_link"/>
+            <child link="${ns_prefix}front_right_wheel"/>
             <origin xyz="${wheelbase/2} ${-track/2} ${wheel_vertical_offset}" rpy="0 0 0" />
             <axis xyz="0 1 0" rpy="0 0 0" />
             <!-- <limit effort="10000.0" velocity="100.0"/>
             <dynamics damping="0.0" friction="0.0"/> -->
         </joint>
-        <joint name="${prefix}rear_left_wheel_joint" type="continuous">
-            <parent link="${prefix}base_link"/>
-            <child link="${prefix}rear_left_wheel"/>
+        <joint name="${ns_prefix}rear_left_wheel_joint" type="continuous">
+            <parent link="${ns_prefix}base_link"/>
+            <child link="${ns_prefix}rear_left_wheel"/>
             <origin xyz="${-wheelbase/2} ${track/2} ${wheel_vertical_offset}" rpy="0 0 0" />
             <axis xyz="0 1 0" rpy="0 0 0" />
             <!-- <limit effort="10000.0" velocity="100.0"/>
             <dynamics damping="0.0" friction="0.0"/> -->
         </joint>
-        <joint name="${prefix}rear_right_wheel_joint" type="continuous">
-            <parent link="${prefix}base_link"/>
-            <child link="${prefix}rear_right_wheel"/>
+        <joint name="${ns_prefix}rear_right_wheel_joint" type="continuous">
+            <parent link="${ns_prefix}base_link"/>
+            <child link="${ns_prefix}rear_right_wheel"/>
             <origin xyz="${-wheelbase/2} ${-track/2} ${wheel_vertical_offset}" rpy="0 0 0" />
             <axis xyz="0 1 0" rpy="0 0 0" />
             <!-- <limit effort="10000.0" velocity="100.0"/>
             <dynamics damping="0.0" friction="0.0"/> -->
         </joint>
-
         <!-- Front bumper mount -->
-        <link name="${prefix}front_bumper_mount"/>
-        <joint name="${prefix}front_bumper_mount_joint" type="fixed">
+        <link name="${ns_prefix}front_bumper_mount"/>
+        <joint name="${ns_prefix}front_bumper_mount_joint" type="fixed">
             <origin xyz="0.406 0 0.091" rpy="0 0 0" />
-            <parent link="${prefix}base_link" />
-            <child link="${prefix}front_bumper_mount" />
+            <parent link="${ns_prefix}base_link" />
+            <child link="${ns_prefix}front_bumper_mount" />
         </joint>
-
         <!-- Rear bumper mount -->
-        <link name="${prefix}rear_bumper_mount"/>
-        <joint name="${prefix}rear_bumper_mount_joint" type="fixed">
+        <link name="${ns_prefix}rear_bumper_mount"/>
+        <joint name="${ns_prefix}rear_bumper_mount_joint" type="fixed">
             <origin xyz="-0.406 0 0.091" rpy="0 0 ${pi}" />
-            <parent link="${prefix}base_link" />
-            <child link="${prefix}rear_bumper_mount" />
+            <parent link="${ns_prefix}base_link" />
+            <child link="${ns_prefix}rear_bumper_mount" />
         </joint>
-
         <!-- Default mount -->
-        <link name="${prefix}default_mount"/>
-        <joint name="${prefix}default_mount_joint" type="fixed">
-            <child link="${prefix}default_mount"/>
-            <parent link="${prefix}base_link"/>
+        <link name="${ns_prefix}default_mount"/>
+        <joint name="${ns_prefix}default_mount_joint" type="fixed">
+            <child link="${ns_prefix}default_mount"/>
+            <parent link="${ns_prefix}base_link"/>
             <origin xyz="0.0 0.0 0.224"/>
         </joint>
-
         <!-- front & rear bumper -->
         <!-- <xacro:include filename="$(find clearpath_platform_description)/urdf/a200/attachments/bumper.urdf.xacro"/>
         <xacro:bumper name="front_bumper"
