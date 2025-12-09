@@ -15,6 +15,11 @@ install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME}/
 )
 
+install(PROGRAMS
+  husky_xarm6_mcr_control/xbox_teleop.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 # Install the Python module
 ament_python_install_package(${PROJECT_NAME})
 
