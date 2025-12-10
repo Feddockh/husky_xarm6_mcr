@@ -57,7 +57,6 @@ def launch_setup(context, *args, **kwargs):
     description_pkg = get_package_share_directory('husky_xarm6_mcr_description')
     xacro_file = Path(description_pkg) / 'urdf' / 'husky_xarm6_mcr.urdf.xacro'
     control_pkg = get_package_share_directory('husky_xarm6_mcr_control')
-    controllers_yaml = Path(control_pkg) / 'config' / 'controllers.yaml'
 
     # Generate the controllers.yaml file
     # 1. Generate the config dictionary

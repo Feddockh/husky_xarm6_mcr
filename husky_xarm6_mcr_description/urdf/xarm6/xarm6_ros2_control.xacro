@@ -41,7 +41,7 @@
 
                     <xacro:unless value="${use_fake_hardware}">
                         <plugin>uf_robot_hardware/UFRobotSystemHardware</plugin>
-                        <param name="robot_ip">${robot_ip}</param>
+                        <param name="robot_ip">R${robot_ip}</param>
                         <param name="report_type">${report_type}</param>
                         <param name="baud_checkset">${baud_checkset}</param>
                         <param name="hw_ns">${namespace}</param> 

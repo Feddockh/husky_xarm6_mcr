@@ -1,109 +1,71 @@
-<?xml version='1.0' encoding='utf-8'?>
-<robot xmlns:xacro="http://ros.org/wiki/xacro" name="husky_xarm6_mcr">
+<?xml version="1.0" encoding="UTF-8"?>
+<robot xmlns:xacro="http://wiki.ros.org/xacro" name="husky_xarm6_mcr">
+  
+  <xacro:arg name="manipulator_ns" default="xarm"/>
+  <xacro:arg name="manipulator_prefix" default="xarm6_"/>
+  <xacro:arg name="platform_ns" default="husky"/>
+  <xacro:arg name="platform_prefix" default="a200_"/>
 
-    <!-- parameters -->
-    <xacro:arg name="manipulator_prefix" default="xarm6_"/>
-    <xacro:arg name="platform_prefix" default="a200_"/>
+  <xacro:property name="arm_prefix" value="$(arg manipulator_ns)/$(arg manipulator_prefix)"/>
+  <xacro:property name="base_prefix" value="$(arg platform_ns)/$(arg platform_prefix)"/>
 
-    <!-- Import multi camera rig SRDF -->
-    <xacro:include filename="$(find multi_camera_rig_description)/srdf/multi_cam_rig.srdf.xacro"/>
+  <xacro:include filename="$(find multi_camera_rig_description)/srdf/multi_cam_rig.srdf.xacro"/>
 
-    <!--GROUPS: Representation of a set of joints and links. This can be useful for specifying DOF to plan for, defining arms, end effectors, etc-->
-    <group name="$(arg platform_prefix)platform">
-        <joint name="$(arg platform_prefix)front_left_wheel_joint" />
-        <joint name="$(arg platform_prefix)front_right_wheel_joint" />
-        <joint name="$(arg platform_prefix)rear_left_wheel_joint" />
-        <joint name="$(arg platform_prefix)rear_right_wheel_joint" />
-    </group>
-    <group name="$(arg manipulator_prefix)manipulator"> <!--Has to match in the kinematics and ompl_planning config files-->
-        <joint name="$(arg manipulator_prefix)joint_base_fixed" />
-        <joint name="$(arg manipulator_prefix)joint1" />
-        <joint name="$(arg manipulator_prefix)joint2" />
-        <joint name="$(arg manipulator_prefix)joint3" />
-        <joint name="$(arg manipulator_prefix)joint4" />
-        <joint name="$(arg manipulator_prefix)joint5" />
-        <joint name="$(arg manipulator_prefix)joint6" />
-    </group>
-    <group name="camera_rig">
-        <link name="zed2i_camera_center"/>
-        <link name="ximea_camera_link"/>
-        <link name="firefly_camera_link"/>
-        <link name="multi_camera_rig_link"/>
-    </group>
+  <group name="xarm6">
+    <joint name="${arm_prefix}joint1"/>
+    <joint name="${arm_prefix}joint2"/>
+    <joint name="${arm_prefix}joint3"/>
+    <joint name="${arm_prefix}joint4"/>
+    <joint name="${arm_prefix}joint5"/>
+    <joint name="${arm_prefix}joint6"/>
+    <joint name="${arm_prefix}joint_eef"/>
+  </group>
 
-    <!--LINKS: When a link is specified, the parent joint of that link (if it exists) is automatically included-->
-    <!--JOINTS: When a joint is specified, the child link of that joint (which will always exist) is automatically included-->
-    <!--CHAINS: When a chain is specified, all the links along the chain (including endpoints) are included in the group. Additionally, all the joints that are parents to included links are also included. This means that joints along the chain and the parent joint of the base link are included in the group-->
-    <!--SUBGROUPS: Groups can also be formed by referencing to already defined group names-->
-    <!-- GROUP STATES, Purpose, Define a named state for a particular group, in terms of joint values. This is useful to define states like 'folded arms' -->
-    <group_state name="home" group="$(arg manipulator_prefix)manipulator">
-        <joint name="$(arg manipulator_prefix)joint1" value="0" />
-        <joint name="$(arg manipulator_prefix)joint2" value="0" />
-        <joint name="$(arg manipulator_prefix)joint3" value="0" />
-        <joint name="$(arg manipulator_prefix)joint4" value="0" />
-        <joint name="$(arg manipulator_prefix)joint5" value="0" />
-        <joint name="$(arg manipulator_prefix)joint6" value="0" />
-    </group_state>
+  <group_state name="home" group="xarm6">
+    <joint name="${arm_prefix}joint1" value="0"/>
+    <joint name="${arm_prefix}joint2" value="0"/>
+    <joint name="${arm_prefix}joint3" value="0"/>
+    <joint name="${arm_prefix}joint4" value="0"/>
+    <joint name="${arm_prefix}joint5" value="0"/>
+    <joint name="${arm_prefix}joint6" value="0"/>
+  </group_state>
 
-    <!--END EFFECTOR: Purpose: Represent information about an end effector.-->
-    <!-- <end_effector name="camera_rig" parent_link="xarm_link6" group="camera_rig"/> -->
+  <group_state name="hold-up" group="xarm6">
+    <joint name="${arm_prefix}joint1" value="0"/>
+    <joint name="${arm_prefix}joint2" value="0"/>
+    <joint name="${arm_prefix}joint3" value="0"/>
+    <joint name="${arm_prefix}joint4" value="0"/>
+    <joint name="${arm_prefix}joint5" value="-1.5708"/>
+    <joint name="${arm_prefix}joint6" value="0"/>
+  </group_state>
 
-    <!--DISABLE COLLISIONS: By default it is assumed that any link of the robot could potentially come into collision with any other link in the robot. This tag disables collision checking between a specified pair of links. -->
-    <!-- Platform collisions -->
-    <disable_collisions link1="$(arg platform_prefix)base_link" link2="$(arg platform_prefix)front_left_wheel" reason="Adjacent"/>
-    <disable_collisions link1="$(arg platform_prefix)base_link" link2="$(arg platform_prefix)front_right_wheel" reason="Adjacent"/>
-    <disable_collisions link1="$(arg platform_prefix)base_link" link2="$(arg platform_prefix)rear_left_wheel" reason="Adjacent"/>
-    <disable_collisions link1="$(arg platform_prefix)base_link" link2="$(arg platform_prefix)rear_right_wheel" reason="Adjacent"/>
-    <disable_collisions link1="$(arg platform_prefix)base_link" link2="x_rail_riser_link" reason="Adjacent"/>
+  <disable_collisions link1="${arm_prefix}link1" link2="${arm_prefix}link2" reason="Adjacent"/>
+  <disable_collisions link1="${arm_prefix}link1" link2="${arm_prefix}link3" reason="Never"/>
+  <disable_collisions link1="${arm_prefix}link1" link2="${arm_prefix}base_link" reason="Adjacent"/>
+  <disable_collisions link1="${arm_prefix}link2" link2="${arm_prefix}link3" reason="Adjacent"/>
+  <disable_collisions link1="${arm_prefix}link2" link2="${arm_prefix}base_link" reason="Never"/>
+  <disable_collisions link1="${arm_prefix}link3" link2="${arm_prefix}link4" reason="Adjacent"/>
+  <disable_collisions link1="${arm_prefix}link4" link2="${arm_prefix}link5" reason="Adjacent"/>
+  <disable_collisions link1="${arm_prefix}link5" link2="${arm_prefix}link6" reason="Adjacent"/>
+  
+  <disable_collisions link1="${arm_prefix}base_link" link2="${base_prefix}base_link" reason="Never"/>
+  <disable_collisions link1="${arm_prefix}base_link" link2="${base_prefix}top_chassis_link" reason="Default"/>
+  <disable_collisions link1="${arm_prefix}base_link" link2="${base_prefix}front_left_wheel" reason="Never"/>
+  <disable_collisions link1="${arm_prefix}base_link" link2="${base_prefix}front_right_wheel" reason="Never"/>
+  <disable_collisions link1="${arm_prefix}base_link" link2="${base_prefix}rear_left_wheel" reason="Never"/>
+  <disable_collisions link1="${arm_prefix}base_link" link2="${base_prefix}rear_right_wheel" reason="Never"/>
+  
+  <disable_collisions link1="${arm_prefix}base_link" link2="${base_prefix}x_rail_riser_link" reason="Adjacent"/>
+  <disable_collisions link1="${arm_prefix}link1" link2="${base_prefix}x_rail_riser_link" reason="Never"/>
+  
+  <disable_collisions link1="${base_prefix}base_link" link2="${base_prefix}front_left_wheel" reason="Adjacent"/>
+  <disable_collisions link1="${base_prefix}base_link" link2="${base_prefix}front_right_wheel" reason="Adjacent"/>
+  <disable_collisions link1="${base_prefix}base_link" link2="${base_prefix}rear_left_wheel" reason="Adjacent"/>
+  <disable_collisions link1="${base_prefix}base_link" link2="${base_prefix}rear_right_wheel" reason="Adjacent"/>
+  <disable_collisions link1="${base_prefix}base_link" link2="${base_prefix}x_rail_riser_link" reason="Adjacent"/>
 
-    <!-- Manipulator base link collisions -->
-    <disable_collisions link1="$(arg manipulator_prefix)base_link" link2="$(arg platform_prefix)front_left_wheel" reason="Never"/>
-    <disable_collisions link1="$(arg manipulator_prefix)base_link" link2="$(arg platform_prefix)front_right_wheel" reason="Never"/>
-    <disable_collisions link1="$(arg manipulator_prefix)base_link" link2="$(arg platform_prefix)rear_left_wheel" reason="Never"/>
-    <disable_collisions link1="$(arg manipulator_prefix)base_link" link2="$(arg platform_prefix)rear_right_wheel" reason="Never"/>
-    <disable_collisions link1="$(arg manipulator_prefix)base_link" link2="$(arg platform_prefix)base_link" reason="Never"/>
-    <disable_collisions link1="$(arg manipulator_prefix)base_link" link2="x_rail_riser_link" reason="Adjacent"/>
-    <disable_collisions link1="$(arg manipulator_prefix)base_link" link2="$(arg manipulator_prefix)link1" reason="Adjacent"/>
-    <disable_collisions link1="$(arg manipulator_prefix)base_link" link2="$(arg manipulator_prefix)link2" reason="Never"/>
-
-    <!-- Manipulator link1 collisions -->
-    <disable_collisions link1="$(arg manipulator_prefix)link1" link2="$(arg platform_prefix)front_left_wheel" reason="Never"/>
-    <disable_collisions link1="$(arg manipulator_prefix)link1" link2="$(arg platform_prefix)front_right_wheel" reason="Never"/>
-    <disable_collisions link1="$(arg manipulator_prefix)link1" link2="$(arg platform_prefix)rear_left_wheel" reason="Never"/>
-    <disable_collisions link1="$(arg manipulator_prefix)link1" link2="$(arg platform_prefix)rear_right_wheel" reason="Never"/>
-    <disable_collisions link1="$(arg manipulator_prefix)link1" link2="$(arg platform_prefix)base_link" reason="Never"/>
-    <disable_collisions link1="$(arg manipulator_prefix)link1" link2="x_rail_riser_link" reason="Never"/>
-    <disable_collisions link1="$(arg manipulator_prefix)link1" link2="$(arg manipulator_prefix)link2" reason="Adjacent"/>
-    <disable_collisions link1="$(arg manipulator_prefix)link1" link2="$(arg manipulator_prefix)link3" reason="Never"/>
-
-    <!-- Manipulator link2 collisions -->
-    <disable_collisions link1="$(arg manipulator_prefix)link2" link2="$(arg platform_prefix)front_left_wheel" reason="Never"/>
-    <disable_collisions link1="$(arg manipulator_prefix)link2" link2="$(arg platform_prefix)front_right_wheel" reason="Never"/>
-    <disable_collisions link1="$(arg manipulator_prefix)link2" link2="$(arg platform_prefix)rear_left_wheel" reason="Never"/>
-    <disable_collisions link1="$(arg manipulator_prefix)link2" link2="$(arg platform_prefix)rear_right_wheel" reason="Never"/>
-    <disable_collisions link1="$(arg manipulator_prefix)link2" link2="$(arg platform_prefix)base_link" reason="Never"/>
-    <disable_collisions link1="$(arg manipulator_prefix)link2" link2="x_rail_riser_link" reason="Never"/>
-    <disable_collisions link1="$(arg manipulator_prefix)link2" link2="$(arg manipulator_prefix)link3" reason="Adjacent"/>
-    <disable_collisions link1="$(arg manipulator_prefix)link2" link2="$(arg manipulator_prefix)link4" reason="Never"/>
-    <!-- Manipulator link3 collisions -->
-    <disable_collisions link1="$(arg manipulator_prefix)link3" link2="$(arg platform_prefix)front_left_wheel" reason="Never"/>
-    <disable_collisions link1="$(arg manipulator_prefix)link3" link2="$(arg platform_prefix)front_right_wheel" reason="Never"/>
-    <disable_collisions link1="$(arg manipulator_prefix)link3" link2="$(arg platform_prefix)rear_left_wheel" reason="Never"/>
-    <disable_collisions link1="$(arg manipulator_prefix)link3" link2="$(arg platform_prefix)rear_right_wheel" reason="Never"/>
-    <disable_collisions link1="$(arg manipulator_prefix)link3" link2="$(arg platform_prefix)base_link" reason="Never"/>
-    <disable_collisions link1="$(arg manipulator_prefix)link3" link2="$(arg manipulator_prefix)link4" reason="Adjacent"/>
-    <disable_collisions link1="$(arg manipulator_prefix)link3" link2="$(arg manipulator_prefix)link5" reason="Never"/>
-
-    <!-- Manipulator link4 collisions -->
-    <disable_collisions link1="$(arg manipulator_prefix)link4" link2="$(arg manipulator_prefix)link5" reason="Adjacent"/>
-    <disable_collisions link1="$(arg manipulator_prefix)link4" link2="$(arg manipulator_prefix)link6" reason="Never"/>
-    <!-- Manipulator link5 collisions -->
-    <disable_collisions link1="$(arg manipulator_prefix)link5" link2="$(arg manipulator_prefix)link6" reason="Adjacent"/>
-
-    <!-- Manipulator link6 collisions -->
-    <disable_collisions link1="$(arg manipulator_prefix)link6" link2="multi_camera_rig_link" reason="Adjacent"/>
-
-    <!-- Multi camera rig collision settings -->
-    <xacro:multi_camera_rig/>
+  <disable_collisions link1="${arm_prefix}link6" link2="multi_camera_rig_link" reason="Adjacent"/>
+  
+  <xacro:multi_camera_rig/>
 
 </robot>

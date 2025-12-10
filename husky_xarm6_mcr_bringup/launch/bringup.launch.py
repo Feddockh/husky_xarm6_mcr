@@ -122,19 +122,19 @@ def launch_setup(context, *args, **kwargs):
         )
         launch_actions.append(control_launch)
     
-    # # Launch MoveIt move_group
-    # moveit_launch = IncludeLaunchDescription(
-    #     PythonLaunchDescriptionSource(
-    #         os.path.join(moveit_pkg, 'launch', 'move_group.launch.py')
-    #     ),
-    #     launch_arguments={
-    #         'use_sim_time': use_sim_time,
-    #         'use_gazebo': use_gazebo,
-    #         'manipulator_prefix': manipulator_prefix,
-    #         'platform_prefix': platform_prefix,
-    #     }.items()
-    # )
-    # launch_actions.append(moveit_launch)
+    # Launch MoveIt move_group
+    moveit_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(moveit_pkg, 'launch', 'move_group.launch.py')
+        ),
+        launch_arguments={
+            'use_sim_time': use_sim_time,
+            'use_gazebo': use_gazebo,
+            'manipulator_prefix': manipulator_prefix,
+            'platform_prefix': platform_prefix,
+        }.items()
+    )
+    launch_actions.append(moveit_launch)
     
     # # Launch Robot Localization (GPS + IMU + Odometry fusion)
     # if use_localization.perform(context).lower() == 'true':
