@@ -64,7 +64,9 @@ def launch_setup(context, *args, **kwargs):
         platform_ns=platform_ns.perform(context),
         platform_prefix=platform_prefix.perform(context),
         manipulator_ns=manipulator_ns.perform(context),
-        manipulator_prefix=manipulator_prefix.perform(context)
+        manipulator_prefix=manipulator_prefix.perform(context),
+        use_gazebo=use_gazebo_val,
+        use_fake_hardware=use_fake_hardware_val
     )
     # 2. Create a temporary file to hold the YAML
     # We use NamedTemporaryFile so it persists long enough for the nodes to read it
@@ -151,7 +153,8 @@ def launch_setup(context, *args, **kwargs):
             parameters=[{'use_sim_time': use_sim_time}]
         )
 
-        jsb_then_base = RegisterEventHandler(
+        # Start platform controller and arm controller after joint state broadcaster
+        jsb_then_controllers = RegisterEventHandler(
             OnProcessExit(target_action=joint_state_broadcaster, on_exit=[platform_velocity_controller, xarm6_traj_controller])
         )
 
@@ -174,7 +177,7 @@ def launch_setup(context, *args, **kwargs):
             robot_state_publisher,
             spawn_entity,
             joint_state_broadcaster,
-            jsb_then_base,
+            jsb_then_controllers,
             control_bridge,
         ]
     
@@ -205,11 +208,11 @@ def launch_setup(context, *args, **kwargs):
         #     # remappings=remappings,
         # )
 
-        controllers = [
-            'joint_state_broadcaster',
-            'platform_velocity_controller',
-            'xarm6_traj_controller'
-        ]
+        # Build controller list based on configuration
+        controllers = ['joint_state_broadcaster', 'xarm6_traj_controller']
+        # Only include platform controller if using simulation modes
+        if use_gazebo_val or use_fake_hardware_val:
+            controllers.insert(1, 'platform_velocity_controller')
 
         controller_nodes = []
         for controller in controllers:

@@ -9,7 +9,8 @@ from pathlib import Path
 
 
 def generate_controllers_yaml(platform_ns='husky', platform_prefix='a200_', 
-                              manipulator_ns='xarm', manipulator_prefix='xarm6_'):
+                              manipulator_ns='xarm', manipulator_prefix='xarm6_',
+                              use_gazebo=False, use_fake_hardware=False):
     """
     Generate controller configuration with proper namespacing.
     
@@ -18,6 +19,8 @@ def generate_controllers_yaml(platform_ns='husky', platform_prefix='a200_',
         platform_prefix: Prefix for platform joint/link names
         manipulator_ns: Namespace for the manipulator
         manipulator_prefix: Prefix for manipulator joint names
+        use_gazebo: Whether using Gazebo simulation
+        use_fake_hardware: Whether using fake hardware interface
     
     Returns:
         dict: Controller configuration dictionary
@@ -26,22 +29,36 @@ def generate_controllers_yaml(platform_ns='husky', platform_prefix='a200_',
     platform_ns_prefix = f"{platform_ns}/{platform_prefix}"
     manipulator_ns_prefix = f"{manipulator_ns}/{manipulator_prefix}"
     
+    # Determine if we should include platform velocity controller
+    # Only include if using gazebo or fake hardware (simulation modes)
+    include_platform_controller = use_gazebo or use_fake_hardware
+    
+    # Start with base controller manager config
+    controller_manager_params = {
+        'update_rate': 100,
+        'joint_state_broadcaster': {
+            'type': 'joint_state_broadcaster/JointStateBroadcaster'
+        },
+        'xarm6_traj_controller': {
+            'type': 'joint_trajectory_controller/JointTrajectoryController'
+        }
+    }
+    
+    # Add platform controller only if needed
+    if include_platform_controller:
+        controller_manager_params['platform_velocity_controller'] = {
+            'type': 'diff_drive_controller/DiffDriveController'
+        }
+    
     config = {
         'controller_manager': {
-            'ros__parameters': {
-                'update_rate': 100,
-                'joint_state_broadcaster': {
-                    'type': 'joint_state_broadcaster/JointStateBroadcaster'
-                },
-                'platform_velocity_controller': {
-                    'type': 'diff_drive_controller/DiffDriveController'
-                },
-                'xarm6_traj_controller': {
-                    'type': 'joint_trajectory_controller/JointTrajectoryController'
-                }
-            }
-        },
-        'platform_velocity_controller': {
+            'ros__parameters': controller_manager_params
+        }
+    }
+    
+    # Add platform velocity controller config if needed
+    if include_platform_controller:
+        config['platform_velocity_controller'] = {
             'ros__parameters': {
                 'left_wheel_names': [
                     f'{platform_ns_prefix}front_left_wheel_joint',
@@ -66,26 +83,27 @@ def generate_controllers_yaml(platform_ns='husky', platform_prefix='a200_',
                 'angular.z.has_acceleration_limits': True,
                 'angular.z.max_acceleration': 1.5
             }
-        },
-        'xarm6_traj_controller': {
-            'ros__parameters': {
-                'joints': [
-                    f'{manipulator_ns_prefix}joint1',
-                    f'{manipulator_ns_prefix}joint2',
-                    f'{manipulator_ns_prefix}joint3',
-                    f'{manipulator_ns_prefix}joint4',
-                    f'{manipulator_ns_prefix}joint5',
-                    f'{manipulator_ns_prefix}joint6'
-                ],
-                'command_interfaces': ['position'],
-                'state_interfaces': ['position', 'velocity'],
-                'state_publish_rate': 100.0,
-                'action_monitor_rate': 20.0,
-                'allow_partial_joints_goal': False,
-                'constraints': {
-                    'stopped_velocity_tolerance': 0.01,
-                    'goal_time': 0.0
-                }
+        }
+    
+    # Always add xarm6 trajectory controller
+    config['xarm6_traj_controller'] = {
+        'ros__parameters': {
+            'joints': [
+                f'{manipulator_ns_prefix}joint1',
+                f'{manipulator_ns_prefix}joint2',
+                f'{manipulator_ns_prefix}joint3',
+                f'{manipulator_ns_prefix}joint4',
+                f'{manipulator_ns_prefix}joint5',
+                f'{manipulator_ns_prefix}joint6'
+            ],
+            'command_interfaces': ['position'],
+            'state_interfaces': ['position', 'velocity'],
+            'state_publish_rate': 100.0,
+            'action_monitor_rate': 20.0,
+            'allow_partial_joints_goal': False,
+            'constraints': {
+                'stopped_velocity_tolerance': 0.01,
+                'goal_time': 0.0
             }
         }
     }
@@ -102,6 +120,8 @@ def main():
     parser.add_argument('--platform-prefix', default='a200_', help='Platform prefix')
     parser.add_argument('--manipulator-ns', default='xarm', help='Manipulator namespace')
     parser.add_argument('--manipulator-prefix', default='xarm6_', help='Manipulator prefix')
+    parser.add_argument('--use-gazebo', action='store_true', help='Using Gazebo simulation')
+    parser.add_argument('--use-fake-hardware', action='store_true', help='Using fake hardware interface')
     parser.add_argument('--output', '-o', type=str, help='Output file path (optional)')
     
     args = parser.parse_args()
@@ -111,7 +131,9 @@ def main():
         platform_ns=args.platform_ns,
         platform_prefix=args.platform_prefix,
         manipulator_ns=args.manipulator_ns,
-        manipulator_prefix=args.manipulator_prefix
+        manipulator_prefix=args.manipulator_prefix,
+        use_gazebo=args.use_gazebo,
+        use_fake_hardware=args.use_fake_hardware
     )
     
     # Output YAML
