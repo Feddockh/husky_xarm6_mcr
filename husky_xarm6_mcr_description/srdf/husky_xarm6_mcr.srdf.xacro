@@ -11,7 +11,7 @@
 
   <xacro:include filename="$(find multi_camera_rig_description)/srdf/multi_cam_rig.srdf.xacro"/>
 
-  <group name="xarm6">
+  <group name="xarm6_manipulator">
     <joint name="${arm_prefix}joint1"/>
     <joint name="${arm_prefix}joint2"/>
     <joint name="${arm_prefix}joint3"/>
