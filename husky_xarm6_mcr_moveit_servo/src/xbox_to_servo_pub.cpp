@@ -169,8 +169,8 @@ private:
     // Map:
     //   X = left/right  (left stick left/right)
     //   Y = forward/back  (left stick up/down)
-    twist.twist.linear.x = lin_scale_ * (-lx);   // up -> +x
-    twist.twist.linear.y = lin_scale_ * ( ly);
+    twist.twist.linear.x = lin_scale_ * (-ly);
+    twist.twist.linear.y = lin_scale_ * ( lx);
 
     // ---- Triggers -> Z translation ----
     // Many drivers: trigger at rest = 1.0, pressed = -1.0
