@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>husky_xarm6_mcr_control</name>
+  <name>husky_xarm6_mcr_moveit_servo</name>
   <version>0.0.0</version>
   <description>TODO: Package description</description>
   <maintainer email="hayden4feddock@gmail.com">hayden</maintainer>
@@ -9,14 +9,20 @@
 
   <buildtool_depend>ament_cmake</buildtool_depend>
   <buildtool_depend>ament_cmake_python</buildtool_depend>
-  <build_depend>controller_manager</build_depend>
-  <build_depend>ros2_controllers</build_depend>
-  <build_depend>joint_state_broadcaster</build_depend>
-  <build_depend>joint_trajectory_controller</build_depend>
 
+  <depend>moveit_servo</depend>
+  <depend>moveit_ros_planning_interface</depend>
+  <depend>husky_xarm6_mcr_description</depend>
+  <depend>husky_xarm6_mcr_moveit_config</depend>
+  <depend>launch</depend>
+  <depend>launch_ros</depend>
   <depend>rclcpp</depend>
-  <depend>ros2_control</depend>
-  <depend>controller_manager_msgs</depend>
+  <depend>rclcpp_components</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>control_msgs</depend>
+  <depend>std_srvs</depend>
+
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

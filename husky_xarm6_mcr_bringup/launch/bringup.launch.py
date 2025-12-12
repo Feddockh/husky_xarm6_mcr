@@ -121,6 +121,8 @@ def launch_setup(context, *args, **kwargs):
             }.items()
         )
         launch_actions.append(control_launch)
+
+    # Simple odometry publisher could be added here
     
     # Launch MoveIt move_group
     moveit_launch = IncludeLaunchDescription(
@@ -136,7 +138,7 @@ def launch_setup(context, *args, **kwargs):
     )
     launch_actions.append(moveit_launch)
     
-    # # Launch Robot Localization (GPS + IMU + Odometry fusion)
+    # Launch Robot Localization (GPS + IMU + Odometry fusion)
     # if use_localization.perform(context).lower() == 'true':
     #     localization_launch = IncludeLaunchDescription(
     #         PythonLaunchDescriptionSource(

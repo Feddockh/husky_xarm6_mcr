@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(husky_xarm6_mcr_control)
+project(husky_xarm6_mcr_moveit_servo)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -9,10 +9,40 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_python REQUIRED)
 find_package(rclcpp REQUIRED)
-find_package(ros2_control REQUIRED)
+find_package(rclcpp_components REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(control_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 
-install(DIRECTORY launch
-  DESTINATION share/${PROJECT_NAME}/
+add_library(xbox_to_servo_pub SHARED
+  src/xbox_to_servo_pub.cpp
+)
+
+ament_target_dependencies(xbox_to_servo_pub
+  rclcpp rclcpp_components sensor_msgs geometry_msgs control_msgs std_srvs
+)
+
+rclcpp_components_register_nodes(xbox_to_servo_pub
+  "husky_xarm6_mcr_moveit_servo::XboxToServoPub"
+)
+
+install(TARGETS xbox_to_servo_pub
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
+)
+
+ament_export_libraries(xbox_to_servo_pub)
+ament_export_dependencies(rclcpp rclcpp_components)
+
+install(DIRECTORY config launch
+  DESTINATION share/${PROJECT_NAME}
+)
+
+install(PROGRAMS
+  husky_xarm6_mcr_moveit_servo/generate_servo_yaml.py
+  DESTINATION lib/${PROJECT_NAME}
 )
 
 # Install the Python module
