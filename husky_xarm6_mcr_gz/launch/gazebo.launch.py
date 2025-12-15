@@ -40,7 +40,7 @@ def launch_setup(context, *args, **kwargs):
     )
     
     # Determine the world file to load
-    if world_value in ['apple_orchard', 'empty']:
+    if world_value in ['apple_orchard', 'empty', 'fb_tree']:
         # Use one of our custom worlds
         world_file = PathJoinSubstitution([pkg_gz, 'worlds', f'{world_value}.sdf'])
     elif os.path.isabs(world_value):

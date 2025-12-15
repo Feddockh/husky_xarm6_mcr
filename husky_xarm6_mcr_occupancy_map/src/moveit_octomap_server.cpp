@@ -39,12 +39,12 @@ int main(int argc, char **argv)
     params.clamp_min = node->get_parameter_or("clamp_min", 0.12);
     params.clamp_max = node->get_parameter_or("clamp_max", 0.97);
     params.occupancy_threshold = node->get_parameter_or("occupancy_threshold", 0.5);
-    params.map_frame = node->get_parameter_or<std::string>("map_frame", "odom");
+    params.map_frame = node->get_parameter_or<std::string>("map_frame", "map");
     params.filter_ground_plane = node->get_parameter_or("filter_ground_plane", true);
     params.ground_distance_threshold = node->get_parameter_or("ground_distance_threshold", 0.04);
 
     std::string pointcloud_topic = node->get_parameter_or<std::string>(
-        "pointcloud_topic", "/firefly_camera/points");
+        "pointcloud_topic", "/firefly_left/points2");
 
     std::string octomap_topic = node->get_parameter_or<std::string>(
         "octomap_topic", "/octomap_binary");

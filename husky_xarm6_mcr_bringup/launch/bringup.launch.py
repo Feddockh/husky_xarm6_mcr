@@ -137,31 +137,17 @@ def launch_setup(context, *args, **kwargs):
         }.items()
     )
     launch_actions.append(moveit_launch)
-    
-    # Launch Robot Localization (GPS + IMU + Odometry fusion)
-    # if use_localization.perform(context).lower() == 'true':
-    #     localization_launch = IncludeLaunchDescription(
-    #         PythonLaunchDescriptionSource(
-    #             os.path.join(bringup_pkg, 'launch', 'localization.launch.py')
-    #         ),
-    #         launch_arguments={
-    #             'use_sim_time': use_sim_time,
-    #         }.items()
-    #     )
-    #     launch_actions.append(localization_launch)
-    # else:
-    #     # If not using localization, still publish static map->odom for grounding TF
-    #     map_frame_publisher = Node(
-    #         package='husky_xarm6_mcr_bringup',
-    #         executable='map_frame_publisher',
-    #         name='map_frame_publisher',
-    #         output='screen',
-    #         parameters=[{
-    #             'map_frame': 'map',
-    #             'odom_frame': 'odom'
-    #         }]
-    #     )
-    #     launch_actions.append(map_frame_publisher)
+
+    # Republish odom to map if localization
+    # TODO: Better approach would be to launch robot_localization package here and fuse odom+GPS+IMU
+    if use_localization.perform(context).lower() == 'true':
+        map_frame_publisher = Node(
+            package='tf2_ros',
+            executable='static_transform_publisher',
+            arguments=['0', '0', '0', '0', '0', '0', 'map', 'odom'],
+            output='screen'
+        )
+        launch_actions.append(map_frame_publisher)
     
     # Optionally launch RViz
     if use_rviz.perform(context).lower() == 'true':
@@ -237,7 +223,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'use_localization',
-            default_value='false',
+            default_value='true',
             description='Whether to use robot_localization for GPS+IMU+Odom fusion'
         ),
         DeclareLaunchArgument(
