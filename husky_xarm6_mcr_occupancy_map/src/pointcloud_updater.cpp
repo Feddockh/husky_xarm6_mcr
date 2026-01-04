@@ -103,8 +103,8 @@ namespace husky_xarm6_mcr_occupancy_map
             transform.transform.translation.z);
 
         // 3. Parse point cloud and transform to map frame
-        std::vector<octomap::point3d> points;
-        points.reserve(msg->width * msg->height);
+        octomap::Pointcloud octomap_cloud;
+        octomap_cloud.reserve(msg->width * msg->height);
 
         sensor_msgs::PointCloud2ConstIterator<float> iter_x(*msg, "x");
         sensor_msgs::PointCloud2ConstIterator<float> iter_y(*msg, "y");
@@ -114,7 +114,7 @@ namespace husky_xarm6_mcr_occupancy_map
         const auto &t = transform.transform.translation;
         const auto &r = transform.transform.rotation;
 
-        // Convert quaternion to rotation matrix (simplified)
+        // Convert quaternion to rotation matrix
         double qx = r.x, qy = r.y, qz = r.z, qw = r.w;
         double xx = qx * qx, yy = qy * qy, zz = qz * qz;
         double xy = qx * qy, xz = qx * qz, yz = qy * qz;
@@ -129,6 +129,8 @@ namespace husky_xarm6_mcr_occupancy_map
         double r20 = 2.0 * (xz - wy);
         double r21 = 2.0 * (yz + wx);
         double r22 = 1.0 - 2.0 * (xx + yy);
+
+        size_t valid_points = 0;
 
         for (; iter_x != iter_x.end(); ++iter_x, ++iter_y, ++iter_z)
         {
@@ -149,7 +151,7 @@ namespace husky_xarm6_mcr_occupancy_map
 
             octomap::point3d point(x_map, y_map, z_map);
 
-            // Filter by range
+            // Filter by range (relative to sensor origin)
             if (!isInRange(point, sensor_origin))
             {
                 continue;
@@ -161,35 +163,41 @@ namespace husky_xarm6_mcr_occupancy_map
                 continue;
             }
 
-            points.push_back(point);
+            octomap_cloud.push_back(point);
+            valid_points++;
         }
 
-        if (points.empty())
+        if (octomap_cloud.size() == 0)
         {
+            RCLCPP_DEBUG(
+                logger_,
+                "No valid points in point cloud from %s",
+                sensor_frame.c_str());
             return;
         }
-
-        // 4. Update octree with ray casting (thread-safe)
+        
+        // 4. Insert point cloud into octree
         tree_->lockWrite();
 
-        for (const auto &point : points)
-        {
-            // insertRay marks voxels along ray as free and endpoint as occupied
-            tree_->insertRay(sensor_origin, point, params_.max_range);
-        }
-
+        // insertPointCloud with discretize=true automatically handles:
+        // - Ray casting from sensor_origin to each point
+        // - Marking free space along rays
+        // - Marking occupied space at endpoints
+        // - Voxel discretization (prevents duplicate updates)
+        tree_->insertPointCloud(octomap_cloud, sensor_origin, params_.max_range, false, true);
+        
         tree_->unlockWrite();
 
         // 5. Trigger update callback
         tree_->triggerUpdateCallback();
 
         // Statistics
-        points_processed_ += points.size();
+        points_processed_ += valid_points;
 
         RCLCPP_DEBUG(
             logger_,
             "Processed %zu points from %s (total: %zu)",
-            points.size(),
+            valid_points,
             sensor_frame.c_str(),
             points_processed_);
     }

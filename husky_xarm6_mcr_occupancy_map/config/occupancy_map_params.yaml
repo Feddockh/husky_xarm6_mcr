@@ -8,8 +8,8 @@ occupancy_map_server:
     map_frame: "map"         # Reference frame for the map
     
     # Sensor range filtering
-    max_range: 5.0            # Maximum sensor range in meters
-    min_range: 0.3            # Minimum sensor range in meters
+    max_range: 3.0            # Maximum sensor range in meters
+    min_range: 0.0            # Minimum sensor range in meters
     
     # Octomap probability parameters
     prob_hit: 0.7             # Probability for hit (occupied)
@@ -27,15 +27,15 @@ occupancy_map_server:
     
     # Visualization
     publish_free_voxels: false  # Set to true to visualize free space
-    visualization_rate: 2.0     # Hz
+    visualization_rate: 1.0     # Hz
 
 moveit_octomap_server:
   ros__parameters:
     resolution: 0.02
     map_frame: "map"
     
-    max_range: 5.0
-    min_range: 0.3
+    max_range: 3.0
+    min_range: 0.0
 
     prob_hit: 0.7
     prob_miss: 0.4
@@ -50,5 +50,5 @@ moveit_octomap_server:
     octomap_topic: "/octomap_binary"
     
     publish_free_voxels: false
-    visualization_rate: 2.0
+    visualization_rate: 1.0
     octomap_publish_rate: 1.0   # Moveit octomap publish rate in Hz

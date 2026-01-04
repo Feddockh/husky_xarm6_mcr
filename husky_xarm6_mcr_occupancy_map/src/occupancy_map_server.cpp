@@ -25,6 +25,22 @@ int main(int argc, char **argv)
     auto tf_buffer = std::make_shared<tf2_ros::Buffer>(node->get_clock());
     auto tf_listener = std::make_shared<tf2_ros::TransformListener>(*tf_buffer);
 
+    // Declare all parameters (YAML will override these defaults)
+    node->declare_parameter("resolution", 0.1);
+    node->declare_parameter("map_frame", "map");
+    node->declare_parameter("max_range", 5.0);
+    node->declare_parameter("min_range", 0.0);
+    node->declare_parameter("prob_hit", 0.7);
+    node->declare_parameter("prob_miss", 0.4);
+    node->declare_parameter("clamp_min", 0.1192);
+    node->declare_parameter("clamp_max", 0.971);
+    node->declare_parameter("occupancy_threshold", 0.5);
+    node->declare_parameter("filter_ground_plane", true);
+    node->declare_parameter("ground_distance_threshold", 0.04);
+    node->declare_parameter("pointcloud_topic", "/camera/depth/points");
+    node->declare_parameter("publish_free_voxels", false);
+    node->declare_parameter("visualization_rate", 1.0);
+
     // Get parameters (already declared by automatically_declare_parameters_from_overrides)
     OccupancyMapParameters params;
     params.resolution = node->get_parameter("resolution").as_double();
