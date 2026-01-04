@@ -21,6 +21,15 @@ occupancy_map_server:
     # Ground plane filtering
     filter_ground_plane: true
     ground_distance_threshold: 0.04  # Distance in meters
+
+    # Bounding box (limits octomap updates to this region)
+    use_bounding_box: true
+    bbx_min_x: -1.0
+    bbx_min_y: -2.0
+    bbx_min_z: 0.0
+    bbx_max_x: 1.0
+    bbx_max_y: -0.5
+    bbx_max_z: 2.0
     
     # Input topics
     pointcloud_topic: "/firefly_left/points2"
@@ -45,6 +54,15 @@ moveit_octomap_server:
     
     filter_ground_plane: true
     ground_distance_threshold: 0.04
+
+    # Bounding box (limits octomap updates to this region)
+    use_bounding_box: true
+    bbx_min_x: -1.0
+    bbx_min_y: -2.0
+    bbx_min_z: 0.0
+    bbx_max_x: 1.0
+    bbx_max_y: -0.5
+    bbx_max_z: 2.0
     
     pointcloud_topic: "/firefly_left/points2"
     octomap_topic: "/octomap_binary"

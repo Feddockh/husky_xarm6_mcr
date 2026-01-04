@@ -50,6 +50,13 @@ namespace husky_xarm6_mcr_occupancy_map
 
     private:
         /**
+         * @brief Publish bounding box marker
+         */
+        void publishBoundingBox(
+            visualization_msgs::msg::MarkerArray &marker_array,
+            const rclcpp::Time &stamp);
+
+        /**
          * @brief Create marker for voxels
          */
         visualization_msgs::msg::Marker createVoxelMarker(

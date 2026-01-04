@@ -23,6 +23,20 @@ namespace husky_xarm6_mcr_occupancy_map
         tree_->setProbMiss(params_.prob_miss);
         tree_->setClampingThresMin(params_.clamp_min);
         tree_->setClampingThresMax(params_.clamp_max);
+        tree_->setOccupancyThres(params_.occupancy_threshold);
+
+        // Apply bounding box if enabled
+        if (params_.use_bounding_box) {
+            tree_->setBBXMin(params_.bbx_min);
+            tree_->setBBXMax(params_.bbx_max);
+            tree_->useBBXLimit(true);
+            
+            RCLCPP_INFO(logger_, "Bounding box enabled:");
+            RCLCPP_INFO(logger_, "  Min: [%.2f, %.2f, %.2f]", 
+                        params_.bbx_min.x(), params_.bbx_min.y(), params_.bbx_min.z());
+            RCLCPP_INFO(logger_, "  Max: [%.2f, %.2f, %.2f]", 
+                        params_.bbx_max.x(), params_.bbx_max.y(), params_.bbx_max.z());
+        }
 
         RCLCPP_INFO(logger_, "OccupancyMapMonitor created (resolution: %.3f m)", params_.resolution);
     }
@@ -41,6 +55,20 @@ namespace husky_xarm6_mcr_occupancy_map
         tree_->setProbMiss(params_.prob_miss);
         tree_->setClampingThresMin(params_.clamp_min);
         tree_->setClampingThresMax(params_.clamp_max);
+        tree_->setOccupancyThres(params_.occupancy_threshold);
+
+        // Apply bounding box if enabled
+        if (params_.use_bounding_box) {
+            tree_->setBBXMin(params_.bbx_min);
+            tree_->setBBXMax(params_.bbx_max);
+            tree_->useBBXLimit(true);
+            
+            RCLCPP_INFO(logger_, "Bounding box enabled:");
+            RCLCPP_INFO(logger_, "  Min: [%.2f, %.2f, %.2f]", 
+                        params_.bbx_min.x(), params_.bbx_min.y(), params_.bbx_min.z());
+            RCLCPP_INFO(logger_, "  Max: [%.2f, %.2f, %.2f]", 
+                        params_.bbx_max.x(), params_.bbx_max.y(), params_.bbx_max.z());
+        }
 
         RCLCPP_INFO(logger_, "OccupancyMapMonitor created (resolution: %.3f m)", params_.resolution);
     }

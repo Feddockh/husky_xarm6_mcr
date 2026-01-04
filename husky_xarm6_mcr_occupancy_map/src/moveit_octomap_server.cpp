@@ -44,6 +44,14 @@ int main(int argc, char **argv)
     node->declare_parameter("publish_free_voxels", false);
     node->declare_parameter("visualization_rate", 1.0);
     node->declare_parameter("octomap_publish_rate", 1.0);
+    // Bounding box parameters
+    node->declare_parameter("use_bounding_box", false);
+    node->declare_parameter("bbx_min_x", -1.0);
+    node->declare_parameter("bbx_min_y", -1.0);
+    node->declare_parameter("bbx_min_z", -1.0);
+    node->declare_parameter("bbx_max_x", 1.0);
+    node->declare_parameter("bbx_max_y", 1.0);
+    node->declare_parameter("bbx_max_z", 1.0);
 
     // Get parameters (already declared by automatically_declare_parameters_from_overrides)
     OccupancyMapParameters params;
@@ -66,6 +74,20 @@ int main(int argc, char **argv)
     bool publish_free = node->get_parameter("publish_free_voxels").as_bool();
     double viz_rate = node->get_parameter("visualization_rate").as_double();
     double octomap_publish_rate = node->get_parameter("octomap_publish_rate").as_double();
+
+    params.use_bounding_box = node->get_parameter("use_bounding_box").as_bool();
+    if (params.use_bounding_box) {
+        params.bbx_min = octomap::point3d(
+            node->get_parameter("bbx_min_x").as_double(),
+            node->get_parameter("bbx_min_y").as_double(),
+            node->get_parameter("bbx_min_z").as_double()
+        );
+        params.bbx_max = octomap::point3d(
+            node->get_parameter("bbx_max_x").as_double(),
+            node->get_parameter("bbx_max_y").as_double(),
+            node->get_parameter("bbx_max_z").as_double()
+        );
+    }
 
     // Create occupancy map monitor
     auto monitor = std::make_shared<OccupancyMapMonitor>(node, params);
@@ -106,31 +128,31 @@ int main(int argc, char **argv)
     auto now = node->now();
     if ((now - last_octomap_publish).seconds() >= (1.0 / octomap_publish_rate))
     {
-      // Serialize octree to binary message
-      octomap_msgs::msg::Octomap octomap_msg;
-      octomap_msg.header.frame_id = params.map_frame;
-      octomap_msg.header.stamp = now;
+        // Serialize octree to binary message
+        octomap_msgs::msg::Octomap octomap_msg;
+        octomap_msg.header.frame_id = params.map_frame;
+        octomap_msg.header.stamp = now;
 
-      monitor->getMapTree()->lockRead();
-      
-      // Convert OcTree to message (binary format)
-      if (octomap_msgs::binaryMapToMsg(*monitor->getMapTree(), octomap_msg))
-      {
-        octomap_pub->publish(octomap_msg);
-        RCLCPP_DEBUG(
-            node->get_logger(),
-            "Published octomap to %s",
-            octomap_pub->get_topic_name());
-      }
-      else
-      {
-        RCLCPP_WARN(node->get_logger(), "Failed to serialize octomap");
-      }
+        monitor->getMapTree()->lockRead();
+        
+        // Convert OcTree to message (binary format)
+        if (octomap_msgs::binaryMapToMsg(*monitor->getMapTree(), octomap_msg))
+        {
+            octomap_pub->publish(octomap_msg);
+            RCLCPP_DEBUG(
+                node->get_logger(),
+                "Published octomap to %s",
+                octomap_pub->get_topic_name());
+        }
+        else
+        {
+            RCLCPP_WARN(node->get_logger(), "Failed to serialize octomap");
+        }
 
-      monitor->getMapTree()->unlockRead();
+        monitor->getMapTree()->unlockRead();
 
-      last_octomap_publish = now;
-    } });
+        last_octomap_publish = now;
+    }});
 
     // Start monitoring
     monitor->startMonitor();

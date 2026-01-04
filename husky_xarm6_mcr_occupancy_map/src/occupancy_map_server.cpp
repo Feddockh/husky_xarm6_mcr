@@ -40,6 +40,14 @@ int main(int argc, char **argv)
     node->declare_parameter("pointcloud_topic", "/camera/depth/points");
     node->declare_parameter("publish_free_voxels", false);
     node->declare_parameter("visualization_rate", 1.0);
+    // Bounding box parameters
+    node->declare_parameter("use_bounding_box", false);
+    node->declare_parameter("bbx_min_x", -1.0);
+    node->declare_parameter("bbx_min_y", -1.0);
+    node->declare_parameter("bbx_min_z", -1.0);
+    node->declare_parameter("bbx_max_x", 1.0);
+    node->declare_parameter("bbx_max_y", 1.0);
+    node->declare_parameter("bbx_max_z", 1.0);
 
     // Get parameters (already declared by automatically_declare_parameters_from_overrides)
     OccupancyMapParameters params;
@@ -58,6 +66,20 @@ int main(int argc, char **argv)
     std::string pointcloud_topic = node->get_parameter("pointcloud_topic").as_string();
     bool publish_free = node->get_parameter("publish_free_voxels").as_bool();
     double viz_rate = node->get_parameter("visualization_rate").as_double();
+
+    params.use_bounding_box = node->get_parameter("use_bounding_box").as_bool();
+    if (params.use_bounding_box) {
+        params.bbx_min = octomap::point3d(
+            node->get_parameter("bbx_min_x").as_double(),
+            node->get_parameter("bbx_min_y").as_double(),
+            node->get_parameter("bbx_min_z").as_double()
+        );
+        params.bbx_max = octomap::point3d(
+            node->get_parameter("bbx_max_x").as_double(),
+            node->get_parameter("bbx_max_y").as_double(),
+            node->get_parameter("bbx_max_z").as_double()
+        );
+    }
 
     // Create occupancy map monitor
     auto monitor = std::make_shared<OccupancyMapMonitor>(node, params);

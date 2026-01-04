@@ -36,8 +36,11 @@ namespace husky_xarm6_mcr_occupancy_map
         double occupancy_threshold;          ///< Threshold for considering voxel occupied
         bool filter_ground_plane;            ///< Remove ground plane
         double ground_distance_threshold;    ///< Distance to ground (m)
-        double ground_filter_angle;          ///< Tolerance angle (rad)
-        double ground_filter_plane_distance; ///< Plane distance tolerance (m)
+
+        // Bounding box parameters (optional)
+        bool use_bounding_box;
+        octomap::point3d bbx_min;
+        octomap::point3d bbx_max;
     };
 
     /**
