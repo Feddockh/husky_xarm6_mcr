@@ -36,9 +36,6 @@ def generate_launch_description():
         parameters=[
             LaunchConfiguration('config_file'),
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
-        ],
-        remappings=[
-            # Add any topic remappings here if needed
         ]
     )
 
