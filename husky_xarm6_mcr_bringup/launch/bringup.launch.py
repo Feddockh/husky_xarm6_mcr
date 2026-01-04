@@ -35,7 +35,6 @@ def launch_setup(context, *args, **kwargs):
     use_sim_time = LaunchConfiguration('use_sim_time')
     world = LaunchConfiguration('world')
     use_rviz = LaunchConfiguration('use_rviz')
-    use_localization = LaunchConfiguration('use_localization')
     manipulator_prefix = LaunchConfiguration('manipulator_prefix')
     manipulator_ns = LaunchConfiguration('manipulator_ns')
     platform_prefix = LaunchConfiguration('platform_prefix')
@@ -139,8 +138,8 @@ def launch_setup(context, *args, **kwargs):
     launch_actions.append(moveit_launch)
 
     # Republish odom to map if localization
-    # TODO: Better approach would be to launch robot_localization package here and fuse odom+GPS+IMU
-    if use_localization.perform(context).lower() == 'true':
+    # Only bringup the map if the gazebo is used because odom is only being grabbed from the gazebo simulation
+    if use_gazebo_val:
         map_frame_publisher = Node(
             package='tf2_ros',
             executable='static_transform_publisher',
@@ -220,11 +219,6 @@ def generate_launch_description():
             'use_rviz',
             default_value='true',
             description='Whether to launch RViz'
-        ),
-        DeclareLaunchArgument(
-            'use_localization',
-            default_value='true',
-            description='Whether to use robot_localization for GPS+IMU+Odom fusion'
         ),
         DeclareLaunchArgument(
             'manipulator_prefix',

@@ -18,9 +18,7 @@ int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
 
-    auto node = std::make_shared<rclcpp::Node>(
-        "moveit_octomap_server",
-        rclcpp::NodeOptions().automatically_declare_parameters_from_overrides(true));
+    auto node = std::make_shared<rclcpp::Node>("moveit_octomap_server");
 
     auto logger = node->get_logger();
     RCLCPP_INFO(logger, "Starting MoveIt octomap server...");
@@ -31,22 +29,21 @@ int main(int argc, char **argv)
 
     // Get parameters (already declared by automatically_declare_parameters_from_overrides)
     OccupancyMapParameters params;
-    params.resolution = node->get_parameter_or("resolution", 0.05);
-    params.max_range = node->get_parameter_or("max_range", 5.0);
-    params.min_range = node->get_parameter_or("min_range", 0.3);
-    params.prob_hit = node->get_parameter_or("prob_hit", 0.7);
-    params.prob_miss = node->get_parameter_or("prob_miss", 0.4);
-    params.clamp_min = node->get_parameter_or("clamp_min", 0.12);
-    params.clamp_max = node->get_parameter_or("clamp_max", 0.97);
-    params.occupancy_threshold = node->get_parameter_or("occupancy_threshold", 0.5);
-    params.map_frame = node->get_parameter_or<std::string>("map_frame", "map");
-    params.filter_ground_plane = node->get_parameter_or("filter_ground_plane", true);
-    params.ground_distance_threshold = node->get_parameter_or("ground_distance_threshold", 0.04);
+    params.resolution = node->get_parameter("resolution").as_double();
+    params.max_range = node->get_parameter("max_range").as_double();
+    params.min_range = node->get_parameter("min_range").as_double();
+    params.prob_hit = node->get_parameter("prob_hit").as_double();
+    params.prob_miss = node->get_parameter("prob_miss").as_double();
+    params.clamp_min = node->get_parameter("clamp_min").as_double();
+    params.clamp_max = node->get_parameter("clamp_max").as_double();
+    params.occupancy_threshold = node->get_parameter("occupancy_threshold").as_double();
+    params.map_frame = node->get_parameter("map_frame").as_string();
+    params.filter_ground_plane = node->get_parameter("filter_ground_plane").as_bool();
+    params.ground_distance_threshold = node->get_parameter("ground_distance_threshold").as_double();
 
-    std::string pointcloud_topic = node->get_parameter_or<std::string>(
-        "pointcloud_topic", "/firefly_left/points2");
+    std::string pointcloud_topic = node->get_parameter("pointcloud_topic").as_string();
 
-    std::string octomap_topic = node->get_parameter_or<std::string>(
+    std::string octomap_topic = node->get_parameter("octomap_topic").as_string();
         "octomap_topic", "/octomap_binary");
 
     bool publish_free = node->get_parameter_or("publish_free_voxels", false);

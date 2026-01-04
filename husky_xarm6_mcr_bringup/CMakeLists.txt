@@ -17,18 +17,18 @@ find_package(tf2_ros REQUIRED)
 find_package(geometry_msgs REQUIRED)
 
 # Build map_frame_publisher executable
-add_executable(map_frame_publisher src/map_frame_publisher.cpp)
-ament_target_dependencies(map_frame_publisher
-  rclcpp
-  tf2_ros
-  geometry_msgs
-)
+# add_executable(map_frame_publisher src/map_frame_publisher.cpp)
+# ament_target_dependencies(map_frame_publisher
+#   rclcpp
+#   tf2_ros
+#   geometry_msgs
+# )
 
-# Install executables
-install(TARGETS
-  map_frame_publisher
-  DESTINATION lib/${PROJECT_NAME}
-)
+# # Install executables
+# install(TARGETS
+#   map_frame_publisher
+#   DESTINATION lib/${PROJECT_NAME}
+# )
 
 # Install launch files
 install(DIRECTORY launch
