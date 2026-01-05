@@ -43,7 +43,7 @@ int main(int argc, char **argv)
     node->declare_parameter("occupancy_threshold", 0.5);
     node->declare_parameter("filter_ground_plane", true);
     node->declare_parameter("ground_distance_threshold", 0.04);
-    
+
     node->declare_parameter("pointcloud_topic", "/camera/depth/points");
     node->declare_parameter("voxel_grid_topic", "/voxel_grid");
     node->declare_parameter("planning_scene_world_topic", "/planning_scene_world");
@@ -150,15 +150,6 @@ int main(int argc, char **argv)
         // Convert OcTree to message (binary format)
         if (octomap_msgs::binaryMapToMsg(*monitor->getMapTree(), octomap_msg))
         {
-            // octomap_pub->publish(octomap_msg);
-            RCLCPP_DEBUG(
-                node->get_logger(),
-                "Published octomap to %s",
-                octomap_pub->get_topic_name());
-
-            // (optional) keep your existing debug publisher
-            // octomap_pub->publish(octomap_msg);
-
             // Wrap into OctomapWithPose
             octomap_msgs::msg::OctomapWithPose octomap_with_pose;
             octomap_with_pose.header = octomap_msg.header;
@@ -200,9 +191,7 @@ int main(int argc, char **argv)
     RCLCPP_INFO(logger, "  Resolution: %.3f m", params.resolution);
     RCLCPP_INFO(logger, "  Max range: %.2f m", params.max_range);
     RCLCPP_INFO(logger, "  PointCloud topic: %s", pointcloud_topic.c_str());
-    RCLCPP_INFO(logger, "  Octomap topic: %s", octomap_topic.c_str());
     RCLCPP_INFO(logger, "  Voxel grid topic: %s", voxel_grid_topic.c_str());
-    RCLCPP_INFO(logger, "MoveIt planning scene will subscribe to: %s", octomap_topic.c_str());
 
     rclcpp::spin(node);
 
