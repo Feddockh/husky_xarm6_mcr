@@ -23,6 +23,13 @@ find_package(tf2_geometry_msgs REQUIRED)
 find_package(octomap REQUIRED)
 find_package(octomap_msgs REQUIRED)
 find_package(moveit_msgs REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+
+# Generate messages
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/VoxelGrid.msg"
+  DEPENDENCIES std_msgs geometry_msgs
+)
 
 # Include directories
 include_directories(
@@ -93,6 +100,30 @@ ament_target_dependencies(${PROJECT_NAME}_visualization
 )
 
 # ============================================================================
+# Voxel Grid Publisher Library (for NBV planner)
+# ============================================================================
+add_library(${PROJECT_NAME}_voxel_grid
+  src/voxel_grid_publisher.cpp
+)
+target_include_directories(${PROJECT_NAME}_voxel_grid PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+target_link_libraries(${PROJECT_NAME}_voxel_grid
+  ${PROJECT_NAME}_core
+  ${OCTOMAP_LIBRARIES}
+)
+ament_target_dependencies(${PROJECT_NAME}_voxel_grid
+  rclcpp
+  std_msgs
+)
+
+# Link against our own generated messages
+rosidl_get_typesupport_target(cpp_typesupport_target
+  ${PROJECT_NAME} "rosidl_typesupport_cpp")
+target_link_libraries(${PROJECT_NAME}_voxel_grid "${cpp_typesupport_target}")
+
+# ============================================================================
 # Executables
 # ============================================================================
 
@@ -123,6 +154,7 @@ target_link_libraries(moveit_octomap_server
   ${PROJECT_NAME}_core
   ${PROJECT_NAME}_monitor
   ${PROJECT_NAME}_visualization
+  ${PROJECT_NAME}_voxel_grid
   ${OCTOMAP_LIBRARIES}
 )
 ament_target_dependencies(moveit_octomap_server
@@ -134,6 +166,9 @@ ament_target_dependencies(moveit_octomap_server
   visualization_msgs
 )
 
+# Link against our own generated messages
+target_link_libraries(moveit_octomap_server "${cpp_typesupport_target}")
+
 # ============================================================================
 # Install
 # ============================================================================
@@ -143,6 +178,7 @@ install(TARGETS
   ${PROJECT_NAME}_core
   ${PROJECT_NAME}_monitor
   ${PROJECT_NAME}_visualization
+  ${PROJECT_NAME}_voxel_grid
   EXPORT ${PROJECT_NAME}Targets
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib

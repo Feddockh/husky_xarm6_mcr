@@ -6,11 +6,15 @@
 #include "husky_xarm6_mcr_occupancy_map/occupancy_map_monitor.hpp"
 #include "husky_xarm6_mcr_occupancy_map/pointcloud_updater.hpp"
 #include "husky_xarm6_mcr_occupancy_map/occupancy_map_visualizer.hpp"
+#include "husky_xarm6_mcr_occupancy_map/voxel_grid_publisher.hpp"
 #include <rclcpp/rclcpp.hpp>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 #include <octomap_msgs/msg/octomap.hpp>
 #include <octomap_msgs/conversions.h>
+#include <moveit_msgs/msg/planning_scene_world.hpp>
+#include <octomap_msgs/msg/octomap_with_pose.hpp>
+
 
 using namespace husky_xarm6_mcr_occupancy_map;
 
@@ -39,8 +43,11 @@ int main(int argc, char **argv)
     node->declare_parameter("occupancy_threshold", 0.5);
     node->declare_parameter("filter_ground_plane", true);
     node->declare_parameter("ground_distance_threshold", 0.04);
+    
     node->declare_parameter("pointcloud_topic", "/camera/depth/points");
-    node->declare_parameter("octomap_topic", "/octomap_binary");
+    node->declare_parameter("voxel_grid_topic", "/voxel_grid");
+    node->declare_parameter("planning_scene_world_topic", "/planning_scene_world");
+
     node->declare_parameter("publish_free_voxels", false);
     node->declare_parameter("visualization_rate", 1.0);
     node->declare_parameter("octomap_publish_rate", 1.0);
@@ -68,8 +75,9 @@ int main(int argc, char **argv)
     params.ground_distance_threshold = node->get_parameter("ground_distance_threshold").as_double();
 
     std::string pointcloud_topic = node->get_parameter("pointcloud_topic").as_string();
-
-    std::string octomap_topic = node->get_parameter("octomap_topic").as_string();
+    std::string voxel_grid_topic = node->get_parameter("voxel_grid_topic").as_string();
+    std::string planning_scene_world_topic =
+        node->get_parameter("planning_scene_world_topic").as_string();
 
     bool publish_free = node->get_parameter("publish_free_voxels").as_bool();
     double viz_rate = node->get_parameter("visualization_rate").as_double();
@@ -105,16 +113,20 @@ int main(int argc, char **argv)
 
     visualizer->setUpdateRate(viz_rate);
 
-    // Create octomap publisher for MoveIt planning scene
-    auto octomap_pub = node->create_publisher<octomap_msgs::msg::Octomap>(
-        octomap_topic, rclcpp::QoS(1).transient_local());
+    // Create voxel grid publisher for NBV planner
+    auto voxel_grid_pub = std::make_shared<VoxelGridPublisher>(node, voxel_grid_topic);
+
+    // Octomap publisher for planning scene world updates
+    auto psw_pub = node->create_publisher<moveit_msgs::msg::PlanningSceneWorld>(
+        planning_scene_world_topic, rclcpp::QoS(1).transient_local());
 
     rclcpp::Time last_octomap_publish = node->now();
 
     // Connect update callback to visualizer AND octomap publisher
     monitor->setUpdateCallback([node,
                                 visualizer,
-                                octomap_pub,
+                                voxel_grid_pub,
+                                psw_pub,
                                 &last_octomap_publish,
                                 octomap_publish_rate,
                                 publish_free,
@@ -138,16 +150,42 @@ int main(int argc, char **argv)
         // Convert OcTree to message (binary format)
         if (octomap_msgs::binaryMapToMsg(*monitor->getMapTree(), octomap_msg))
         {
-            octomap_pub->publish(octomap_msg);
+            // octomap_pub->publish(octomap_msg);
             RCLCPP_DEBUG(
                 node->get_logger(),
                 "Published octomap to %s",
                 octomap_pub->get_topic_name());
+
+            // (optional) keep your existing debug publisher
+            // octomap_pub->publish(octomap_msg);
+
+            // Wrap into OctomapWithPose
+            octomap_msgs::msg::OctomapWithPose octomap_with_pose;
+            octomap_with_pose.header = octomap_msg.header;
+            octomap_with_pose.octomap = octomap_msg;
+
+            // origin pose: identity means "map is expressed in frame_id directly"
+            octomap_with_pose.origin.position.x = 0.0;
+            octomap_with_pose.origin.position.y = 0.0;
+            octomap_with_pose.origin.position.z = 0.0;
+            octomap_with_pose.origin.orientation.x = 0.0;
+            octomap_with_pose.origin.orientation.y = 0.0;
+            octomap_with_pose.origin.orientation.z = 0.0;
+            octomap_with_pose.origin.orientation.w = 1.0;
+
+            // NEW: publish to planning_scene_world
+            moveit_msgs::msg::PlanningSceneWorld world_msg;
+            world_msg.octomap = octomap_with_pose;
+
+            psw_pub->publish(world_msg);
         }
         else
         {
             RCLCPP_WARN(node->get_logger(), "Failed to serialize octomap");
         }
+
+        // Also publish simple voxel grid for NBV planner
+        voxel_grid_pub->publishVoxelGrid(monitor->getMapTree(), params.map_frame);
 
         monitor->getMapTree()->unlockRead();
 
@@ -163,6 +201,7 @@ int main(int argc, char **argv)
     RCLCPP_INFO(logger, "  Max range: %.2f m", params.max_range);
     RCLCPP_INFO(logger, "  PointCloud topic: %s", pointcloud_topic.c_str());
     RCLCPP_INFO(logger, "  Octomap topic: %s", octomap_topic.c_str());
+    RCLCPP_INFO(logger, "  Voxel grid topic: %s", voxel_grid_topic.c_str());
     RCLCPP_INFO(logger, "MoveIt planning scene will subscribe to: %s", octomap_topic.c_str());
 
     rclcpp::spin(node);

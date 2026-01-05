@@ -33,6 +33,8 @@ occupancy_map_server:
     
     # Input topics
     pointcloud_topic: "/firefly_left/points2"
+    voxel_grid_topic: "/nbv_voxel_grid"
+    planning_scene_world_topic: "/planning_scene_world"
     
     # Visualization
     publish_free_voxels: false  # Set to true to visualize free space
@@ -65,7 +67,8 @@ moveit_octomap_server:
     bbx_max_z: 2.0
     
     pointcloud_topic: "/firefly_left/points2"
-    octomap_topic: "/octomap_binary"
+    voxel_grid_topic: "/nbv_voxel_grid"
+    planning_scene_world_topic: "/planning_scene_world"
     
     publish_free_voxels: false
     visualization_rate: 1.0
