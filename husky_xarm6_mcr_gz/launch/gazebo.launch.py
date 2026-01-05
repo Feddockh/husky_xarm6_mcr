@@ -39,8 +39,9 @@ def launch_setup(context, *args, **kwargs):
         ([gz_existing] if gz_existing else [])
     )
     
-    # Determine the world file to load
-    if world_value in ['apple_orchard', 'empty', 'fb_tree']:
+    # Determine the .sdf world files available
+    worlds = {f[:-4] for f in os.listdir(worlds_dir) if f.endswith('.sdf')}
+    if world_value in worlds:
         # Use one of our custom worlds
         world_file = PathJoinSubstitution([pkg_gz, 'worlds', f'{world_value}.sdf'])
     elif os.path.isabs(world_value):
