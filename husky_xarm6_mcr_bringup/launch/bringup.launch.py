@@ -139,7 +139,7 @@ def launch_setup(context, *args, **kwargs):
 
     # Republish odom to map if localization
     # Only bringup the map if the gazebo is used because odom is only being grabbed from the gazebo simulation
-    if use_gazebo_val:
+    if use_gazebo_val or use_fake_hardware_val:
         map_frame_publisher = Node(
             package='tf2_ros',
             executable='static_transform_publisher',
