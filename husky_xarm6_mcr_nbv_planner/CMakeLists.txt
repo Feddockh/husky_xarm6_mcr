@@ -12,8 +12,12 @@ find_package(moveit_ros_planning_interface REQUIRED)
 find_package(moveit_ros_planning REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(octomap REQUIRED)
+find_package(octomap_msgs REQUIRED)
 
-# Define the shared library
+# Define the MoveIt interface library
 add_library(moveit_interface SHARED
   src/moveit_interface.cpp
 )
@@ -28,15 +32,95 @@ ament_target_dependencies(moveit_interface
   geometry_msgs
 )
 
-# Define the node executable
+# Define the OctoMap interface library
+add_library(octomap_interface SHARED
+  src/octomap_interface.cpp
+)
+target_include_directories(octomap_interface PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+target_link_libraries(octomap_interface ${OCTOMAP_LIBRARIES})
+ament_target_dependencies(octomap_interface
+  rclcpp
+  octomap_msgs
+  visualization_msgs
+)
+
+# Define the NBV visualizer library
+add_library(nbv_visualizer SHARED
+  src/nbv_visualizer.cpp
+)
+target_include_directories(nbv_visualizer PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+target_link_libraries(nbv_visualizer ${OCTOMAP_LIBRARIES})
+ament_target_dependencies(nbv_visualizer
+  rclcpp
+  visualization_msgs
+  geometry_msgs
+  std_msgs
+)
+
+# Define the Manipulation Workspace library
+add_library(manipulation_workspace SHARED
+  src/manipulation_workspace.cpp
+)
+target_include_directories(manipulation_workspace PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+target_link_libraries(manipulation_workspace 
+  moveit_interface 
+  nbv_visualizer
+)
+ament_target_dependencies(manipulation_workspace
+  rclcpp
+  moveit_ros_planning_interface
+  moveit_ros_planning
+  geometry_msgs
+)
+
+# Define the MoveIt interface demo executable
 add_executable(moveit_interface_demo src/moveit_interface_demo.cpp)
 target_link_libraries(moveit_interface_demo moveit_interface)
 ament_target_dependencies(moveit_interface_demo
   rclcpp
 )
 
+# Define the OctoMap interface demo executable
+add_executable(octomap_interface_demo src/octomap_interface_demo.cpp)
+target_link_libraries(octomap_interface_demo octomap_interface nbv_visualizer)
+ament_target_dependencies(octomap_interface_demo
+  rclcpp
+  visualization_msgs
+  std_msgs
+  geometry_msgs
+)
+
+# Define the NBV Volumetric Planner demo executable
+add_executable(nbv_volumetric_planner_demo src/nbv_volumetric_planner_demo.cpp)
+target_link_libraries(nbv_volumetric_planner_demo 
+  moveit_interface 
+  manipulation_workspace
+)
+ament_target_dependencies(nbv_volumetric_planner_demo
+  rclcpp
+  moveit_ros_planning_interface
+  moveit_ros_planning
+  geometry_msgs
+)
+
 # Install rules
-install(TARGETS moveit_interface moveit_interface_demo
+install(TARGETS 
+  moveit_interface 
+  octomap_interface
+  nbv_visualizer
+  manipulation_workspace
+  moveit_interface_demo
+  octomap_interface_demo
+  nbv_volumetric_planner_demo
   DESTINATION lib/${PROJECT_NAME})
 
 install(DIRECTORY include/
@@ -44,6 +128,12 @@ install(DIRECTORY include/
 
 install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME})
+
+# Install data directory for runtime workspace storage
+install(DIRECTORY
+  data
+  DESTINATION share/${PROJECT_NAME}/
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

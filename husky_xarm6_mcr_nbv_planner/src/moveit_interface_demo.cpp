@@ -3,6 +3,8 @@
 #include <geometry_msgs/msg/pose.hpp>
 #include "husky_xarm6_mcr_nbv_planner/moveit_interface.hpp"
 
+using namespace husky_xarm6_mcr_nbv_planner;
+
 void waitForSimClock(const std::shared_ptr<rclcpp::Node> &node)
 {
     RCLCPP_INFO(node->get_logger(), "Waiting for /clock...");

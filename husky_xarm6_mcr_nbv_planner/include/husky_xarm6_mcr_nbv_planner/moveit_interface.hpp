@@ -1,5 +1,4 @@
-#ifndef HUSKY_XARM6_MCR_NBV_PLANNER_MOVEIT_INTERFACE_HPP
-#define HUSKY_XARM6_MCR_NBV_PLANNER_MOVEIT_INTERFACE_HPP
+#pragma once
 
 #include <rclcpp/rclcpp.hpp>
 #include <moveit/move_group_interface/move_group_interface.h>
@@ -8,107 +7,113 @@
 #include <Eigen/Geometry>
 #include <vector>
 
-class MoveItInterface
+namespace husky_xarm6_mcr_nbv_planner
 {
-public:
-    MoveItInterface(const std::shared_ptr<rclcpp::Node> &node, const std::string &group_name);
 
-    // Validation methods
-    bool isPSMValid(bool verbose = true) const;
-    bool isMoveGroupValid(bool verbose = true) const;
-
-    // Joint model group retrieval
-    bool getJointModelGroup(moveit::core::JointModelGroupConstPtr &jmg_out)
+    class MoveItInterface
     {
-        planning_scene_monitor::LockedPlanningSceneRO scene(psm_);
-        const moveit::core::RobotModelConstPtr &robot_model = scene->getRobotModel();
-        return getJointModelGroup(jmg_out, robot_model);
-    }
+    public:
+        MoveItInterface(const std::shared_ptr<rclcpp::Node> &node, const std::string &group_name);
 
-    bool getJointModelGroup(moveit::core::JointModelGroupConstPtr &jmg_out,
-                            const moveit::core::RobotModelConstPtr &robot_model);
+        // Validation methods
+        bool isPSMValid(bool verbose = true) const;
+        bool isMoveGroupValid(bool verbose = true) const;
 
-    // Joint state retrieval
-    bool getCurrentJointAngles(std::vector<double> &joints_out,
-                               const moveit::core::JointModelGroupConstPtr &jmg);
+        // Joint model group retrieval
+        bool getJointModelGroup(moveit::core::JointModelGroupConstPtr &jmg_out)
+        {
+            planning_scene_monitor::LockedPlanningSceneRO scene(psm_);
+            const moveit::core::RobotModelConstPtr &robot_model = scene->getRobotModel();
+            return getJointModelGroup(jmg_out, robot_model);
+        }
 
-    // Joint position validation
-    bool validateJointPositions(const std::vector<double> &joint_positions);
+        bool getJointModelGroup(moveit::core::JointModelGroupConstPtr &jmg_out,
+                                const moveit::core::RobotModelConstPtr &robot_model);
 
-    // Collision checking
-    bool isStateValid(const std::vector<double> &joint_positions)
-    {
-        planning_scene_monitor::LockedPlanningSceneRO scene(psm_);
-        moveit::core::RobotState state = scene->getCurrentState();
-        return isStateValid(joint_positions, scene, state);
-    }
+        // Joint state retrieval
+        bool getCurrentJointAngles(std::vector<double> &joints_out,
+                                   const moveit::core::JointModelGroupConstPtr &jmg);
 
-    bool isStateValid(const std::vector<double> &joint_positions,
-                      planning_scene_monitor::LockedPlanningSceneRO &scene,
-                      moveit::core::RobotState &state);
+        // Joint position validation
+        bool validateJointPositions(const std::vector<double> &joint_positions);
 
-    // Motion planning
-    bool planToJointGoal(const std::vector<double> &joint_positions,
-                         moveit::planning_interface::MoveGroupInterface::Plan &plan);
+        // Collision checking
+        bool isStateValid(const std::vector<double> &joint_positions)
+        {
+            planning_scene_monitor::LockedPlanningSceneRO scene(psm_);
+            moveit::core::RobotState state = scene->getCurrentState();
+            return isStateValid(joint_positions, scene, state);
+        }
 
-    // Trajectory execution
-    bool execute(const moveit::planning_interface::MoveGroupInterface::Plan &plan);
+        bool isStateValid(const std::vector<double> &joint_positions,
+                          planning_scene_monitor::LockedPlanningSceneRO &scene,
+                          moveit::core::RobotState &state);
 
-    // Combined plan and execute
-    bool planAndExecute(const std::vector<double> &joint_positions);
+        // Motion planning
+        bool planToJointGoal(const std::vector<double> &joint_positions,
+                             moveit::planning_interface::MoveGroupInterface::Plan &plan);
 
-    // Inverse kinematics
-    std::vector<double> computeIK(const std::vector<double> &seed_positions,
-                                  const geometry_msgs::msg::Pose &target_pose,
-                                  double timeout = 0.1, int attempts = 5);
+        // Trajectory execution
+        bool execute(const moveit::planning_interface::MoveGroupInterface::Plan &plan);
 
-    // IK configuration
-    double getIKTimeout() const;
-    void setIKTimeout(double timeout);
+        // Combined plan and execute
+        bool planAndExecute(const std::vector<double> &joint_positions);
 
-    // Planning configuration
-    std::string getPlanningPipelineId() const;
-    void setPlanningPipelineId(const std::string &pipeline_id);
-    std::string getPlannerId() const;
-    void setPlannerId(const std::string &planner_id);
-    double getPlanningTime() const;
-    void setPlanningTime(double seconds);
-    int getNumPlanningAttempts() const;
-    void setNumPlanningAttempts(int num_attempts);
+        // Inverse kinematics
+        std::vector<double> computeIK(const std::vector<double> &seed_positions,
+                                      const geometry_msgs::msg::Pose &target_pose,
+                                      double timeout = 0.1, int attempts = 5);
 
-    // Frame configuration
-    std::string getPoseReferenceFrame() const;
-    void setPoseReferenceFrame(const std::string &frame);
-    std::string getEndEffectorLink() const;
-    void setEndEffectorLink(const std::string &link);
+        // IK configuration
+        double getIKTimeout() const;
+        void setIKTimeout(double timeout);
 
-    // Robot structure queries
-    std::vector<std::string> getManipulatorLinks() const;
-    std::vector<std::string> getManipulatorJointNames() const;
-    std::vector<std::string> getAllRobotLinkNames() const;
-    std::vector<std::string> getAllRobotJointNames() const;
+        // Planning configuration
+        std::string getPlanningPipelineId() const;
+        void setPlanningPipelineId(const std::string &pipeline_id);
+        std::string getPlannerId() const;
+        void setPlannerId(const std::string &planner_id);
+        double getPlanningTime() const;
+        void setPlanningTime(double seconds);
+        int getNumPlanningAttempts() const;
+        void setNumPlanningAttempts(int num_attempts);
 
-    // Transform queries
-    bool getTransformBetweenLinks(const std::string &from_link,
-                                  const std::string &to_link,
-                                  Eigen::Isometry3d &transform) const;
-    bool getLinkPose(const std::string &link_name,
-                     geometry_msgs::msg::Pose &pose) const;
+        // Frame configuration
+        std::string getPoseReferenceFrame() const;
+        void setPoseReferenceFrame(const std::string &frame);
+        std::string getEndEffectorLink() const;
+        void setEndEffectorLink(const std::string &link);
 
-private:
-    std::shared_ptr<rclcpp::Node> node_;
-    std::string group_name_;
-    std::unique_ptr<moveit::planning_interface::MoveGroupInterface> move_group_;
-    std::shared_ptr<planning_scene_monitor::PlanningSceneMonitor> psm_;
-    
-    // Cached configuration values (MoveGroupInterface doesn't provide getters)
-    double ik_timeout_{0.1};
-    std::string planning_pipeline_id_;
-    std::string planner_id_;
-    double planning_time_{5.0};
-    int num_planning_attempts_{10};
-    std::string pose_reference_frame_;
-    std::string end_effector_link_;
-};
+        // Robot structure queries
+        std::vector<std::string> getManipulatorLinks() const;
+        std::vector<std::string> getManipulatorJointNames() const;
+        std::vector<std::string> getAllRobotLinkNames() const;
+        std::vector<std::string> getAllRobotJointNames() const;
 
-#endif
+        // Transform queries
+        bool getTransformBetweenLinks(const std::string &from_link,
+                                      const std::string &to_link,
+                                      Eigen::Isometry3d &transform) const;
+        bool getLinkPose(const std::string &link_name,
+                         geometry_msgs::msg::Pose &pose) const;
+
+        // Allow access to PSM for workspace computation
+        std::shared_ptr<planning_scene_monitor::PlanningSceneMonitor> getPlanningSceneMonitor() const { return psm_; }
+
+    private:
+        std::shared_ptr<rclcpp::Node> node_;
+        std::string group_name_;
+        std::unique_ptr<moveit::planning_interface::MoveGroupInterface> move_group_;
+        std::shared_ptr<planning_scene_monitor::PlanningSceneMonitor> psm_;
+
+        // Cached configuration values (MoveGroupInterface doesn't provide getters)
+        double ik_timeout_{0.1};
+        std::string planning_pipeline_id_;
+        std::string planner_id_;
+        double planning_time_{5.0};
+        int num_planning_attempts_{10};
+        std::string pose_reference_frame_;
+        std::string end_effector_link_;
+    };
+
+} // namespace husky_xarm6_mcr_nbv_planner
