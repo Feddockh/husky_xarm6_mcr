@@ -31,11 +31,13 @@ namespace husky_xarm6_mcr_occupancy_map
          * @param node ROS2 node
          * @param tree Octree to visualize
          * @param map_frame Frame ID for markers
+         * @param topic Marker topic to publish on
          */
         OccupancyMapVisualizer(
             const rclcpp::Node::SharedPtr &node,
             const OccupancyMapTreePtr &tree,
-            const std::string &map_frame);
+            const std::string &map_frame,
+            const std::string &topic = "occupancy_map_markers");
 
         /**
          * @brief Publish marker visualization

@@ -151,17 +151,23 @@ namespace husky_xarm6_mcr_occupancy_map
 
             octomap::point3d point(x_map, y_map, z_map);
 
-            // Filter by range (relative to sensor origin)
-            if (!isInRange(point, sensor_origin))
-            {
-                continue;
-            }
+            // Don't filter ground plane or by range becuase we need to preserve free space along rays
+            // // Filter by range (relative to sensor origin)
+            // if (!isInRange(point, sensor_origin))
+            // {
+            //     continue;
+            // }
 
-            // Optional: filter ground plane
-            if (params_.filter_ground_plane && isGroundPlane(point))
-            {
+            // // Optional: filter ground plane
+            // if (params_.filter_ground_plane && isGroundPlane(point))
+            // {
+            //     continue;
+            // }
+
+            // Perform a min filter
+            double distance = (point - sensor_origin).norm();
+            if (distance < params_.min_range)
                 continue;
-            }
 
             octomap_cloud.push_back(point);
             valid_points++;

@@ -1,0 +1,3 @@
+# Runtime data directory for octomap files
+# Files are saved as: octomap_YYYYMMDD_HHMMSS.bt
+# The load launcher automatically selects the most recent timestamped file

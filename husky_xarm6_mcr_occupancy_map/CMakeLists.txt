@@ -1,14 +1,14 @@
-cmake_minimum_required(VERSION 3.22)
+cmake_minimum_required(VERSION 3.8)
 project(husky_xarm6_mcr_occupancy_map)
-
-# Default to C++17
-if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 17)
-  set(CMAKE_CXX_STANDARD_REQUIRED ON)
-endif()
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
+# Default to C++17 for semantic_octomap compatibility
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 17)
+  set(CMAKE_CXX_STANDARD_REQUIRED ON)
 endif()
 
 # Find dependencies
@@ -23,13 +23,8 @@ find_package(tf2_geometry_msgs REQUIRED)
 find_package(octomap REQUIRED)
 find_package(octomap_msgs REQUIRED)
 find_package(moveit_msgs REQUIRED)
-find_package(rosidl_default_generators REQUIRED)
-
-# Generate messages
-rosidl_generate_interfaces(${PROJECT_NAME}
-  "msg/VoxelGrid.msg"
-  DEPENDENCIES std_msgs geometry_msgs
-)
+find_package(semantic_octomap REQUIRED)
+find_package(vision_msgs REQUIRED)
 
 # Include directories
 include_directories(
@@ -61,6 +56,8 @@ add_library(${PROJECT_NAME}_monitor
   src/occupancy_map_monitor.cpp
   src/occupancy_map_updater.cpp
   src/pointcloud_updater.cpp
+  src/semantic_occupancy_map_monitor.cpp
+  src/semantic_pointcloud_updater.cpp
 )
 target_include_directories(${PROJECT_NAME}_monitor PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -77,6 +74,8 @@ ament_target_dependencies(${PROJECT_NAME}_monitor
   std_msgs
   tf2_ros
   tf2_geometry_msgs
+  semantic_octomap
+  vision_msgs
 )
 
 # ============================================================================
@@ -100,51 +99,8 @@ ament_target_dependencies(${PROJECT_NAME}_visualization
 )
 
 # ============================================================================
-# Voxel Grid Publisher Library (for NBV planner)
-# ============================================================================
-add_library(${PROJECT_NAME}_voxel_grid
-  src/voxel_grid_publisher.cpp
-)
-target_include_directories(${PROJECT_NAME}_voxel_grid PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-)
-target_link_libraries(${PROJECT_NAME}_voxel_grid
-  ${PROJECT_NAME}_core
-  ${OCTOMAP_LIBRARIES}
-)
-ament_target_dependencies(${PROJECT_NAME}_voxel_grid
-  rclcpp
-  std_msgs
-)
-
-# Link against our own generated messages
-rosidl_get_typesupport_target(cpp_typesupport_target
-  ${PROJECT_NAME} "rosidl_typesupport_cpp")
-target_link_libraries(${PROJECT_NAME}_voxel_grid "${cpp_typesupport_target}")
-
-# ============================================================================
 # Executables
 # ============================================================================
-
-# Standalone occupancy map server (publishes octomap_msgs)
-add_executable(occupancy_map_server
-  src/occupancy_map_server.cpp
-)
-target_link_libraries(occupancy_map_server
-  ${PROJECT_NAME}_core
-  ${PROJECT_NAME}_monitor
-  ${PROJECT_NAME}_visualization
-  ${OCTOMAP_LIBRARIES}
-)
-ament_target_dependencies(occupancy_map_server
-  rclcpp
-  sensor_msgs
-  tf2_ros
-  octomap_msgs
-  moveit_msgs
-  visualization_msgs
-)
 
 # MoveIt integration node
 add_executable(moveit_octomap_server
@@ -154,7 +110,6 @@ target_link_libraries(moveit_octomap_server
   ${PROJECT_NAME}_core
   ${PROJECT_NAME}_monitor
   ${PROJECT_NAME}_visualization
-  ${PROJECT_NAME}_voxel_grid
   ${OCTOMAP_LIBRARIES}
 )
 ament_target_dependencies(moveit_octomap_server
@@ -166,8 +121,33 @@ ament_target_dependencies(moveit_octomap_server
   visualization_msgs
 )
 
-# Link against our own generated messages
-target_link_libraries(moveit_octomap_server "${cpp_typesupport_target}")
+# ============================================================================
+# Octomap Save/Load Utilities
+# ============================================================================
+add_executable(octomap_saver
+  src/octomap_saver.cpp
+)
+target_link_libraries(octomap_saver
+  ${OCTOMAP_LIBRARIES}
+)
+ament_target_dependencies(octomap_saver
+  rclcpp
+  octomap_msgs
+)
+
+add_executable(octomap_loader
+  src/octomap_loader.cpp
+)
+target_link_libraries(octomap_loader
+  ${OCTOMAP_LIBRARIES}
+)
+ament_target_dependencies(octomap_loader
+  rclcpp
+  octomap_msgs
+  visualization_msgs
+  geometry_msgs
+  std_msgs
+)
 
 # ============================================================================
 # Install
@@ -178,7 +158,6 @@ install(TARGETS
   ${PROJECT_NAME}_core
   ${PROJECT_NAME}_monitor
   ${PROJECT_NAME}_visualization
-  ${PROJECT_NAME}_voxel_grid
   EXPORT ${PROJECT_NAME}Targets
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
@@ -188,8 +167,9 @@ install(TARGETS
 
 # Install executables
 install(TARGETS
-  occupancy_map_server
   moveit_octomap_server
+  octomap_saver
+  octomap_loader
   DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -201,7 +181,12 @@ install(DIRECTORY include/
 # Install launch files
 install(DIRECTORY
   launch
-  config
+  DESTINATION share/${PROJECT_NAME}/
+)
+
+# Install data directory for runtime octomap storage
+install(DIRECTORY
+  data
   DESTINATION share/${PROJECT_NAME}/
 )
 

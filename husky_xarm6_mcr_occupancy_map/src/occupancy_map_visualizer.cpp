@@ -12,15 +12,16 @@ namespace husky_xarm6_mcr_occupancy_map
     OccupancyMapVisualizer::OccupancyMapVisualizer(
         const rclcpp::Node::SharedPtr &node,
         const OccupancyMapTreePtr &tree,
-        const std::string &map_frame)
+        const std::string &map_frame,
+        const std::string &topic)
         : node_(node), tree_(tree), map_frame_(map_frame), logger_(node_->get_logger()),
           last_publish_time_(node_->now()), update_rate_(1.0)
     {
         // Create marker publisher
         marker_pub_ = node_->create_publisher<visualization_msgs::msg::MarkerArray>(
-            "occupancy_map_markers", 10);
+            topic, 10);
 
-        RCLCPP_INFO(logger_, "OccupancyMapVisualizer created");
+        RCLCPP_INFO(logger_, "OccupancyMapVisualizer created on topic: %s", topic.c_str());
     }
 
     void OccupancyMapVisualizer::setUpdateRate(double rate)
