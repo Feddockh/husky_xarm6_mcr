@@ -115,6 +115,14 @@ namespace husky_xarm6_mcr_nbv_planner
         return true;
     }
 
+    bool MoveItInterface::getCurrentJointAngles(std::vector<double> &joints_out)
+    {
+        moveit::core::JointModelGroupConstPtr jmg;
+        if (!getJointModelGroup(jmg))
+            return false;
+        return getCurrentJointAngles(joints_out, jmg);
+    }
+
     bool MoveItInterface::validateJointPositions(const std::vector<double> &joint_positions)
     {
         moveit::core::JointModelGroupConstPtr jmg;
@@ -259,6 +267,184 @@ namespace husky_xarm6_mcr_nbv_planner
         }
 
         return ik_solution;
+    }
+
+    std::vector<double> MoveItInterface::computeIK(const std::vector<double> &seed_positions,
+                                                   const Eigen::Vector3d &target_position,
+                                                   const std::array<double, 4> &target_orientation,
+                                                   double timeout, int attempts)
+    {
+        // Convert Eigen types to geometry_msgs::Pose
+        geometry_msgs::msg::Pose target_pose;
+        target_pose.position.x = target_position.x();
+        target_pose.position.y = target_position.y();
+        target_pose.position.z = target_position.z();
+        target_pose.orientation.x = target_orientation[0];
+        target_pose.orientation.y = target_orientation[1];
+        target_pose.orientation.z = target_orientation[2];
+        target_pose.orientation.w = target_orientation[3];
+        
+        return computeIK(seed_positions, target_pose, timeout, attempts);
+    }
+
+    bool MoveItInterface::getEndEffectorPose(const std::vector<double> &joint_positions,
+                                             Eigen::Isometry3d &ee_pose_out) const
+    {
+        if (!isMoveGroupValid(false))
+        {
+            RCLCPP_WARN(node_->get_logger(), "MoveGroup not initialized");
+            return false;
+        }
+
+        auto current_state = move_group_->getCurrentState();
+        auto jmg = current_state->getJointModelGroup(group_name_);
+
+        if (!jmg)
+        {
+            RCLCPP_ERROR(node_->get_logger(), "Joint model group not found");
+            return false;
+        }
+
+        current_state->setJointGroupPositions(jmg, joint_positions);
+        const Eigen::Isometry3d &pose = current_state->getGlobalLinkTransform(move_group_->getEndEffectorLink());
+        ee_pose_out = pose;
+
+        return true;
+    }
+
+    bool MoveItInterface::getEndEffectorPose(const std::vector<double> &joint_positions,
+                                             geometry_msgs::msg::Pose &ee_pose_out) const
+    {
+        Eigen::Isometry3d pose_eigen;
+        if (!getEndEffectorPose(joint_positions, pose_eigen))
+        {
+            return false;
+        }
+
+        ee_pose_out.position.x = pose_eigen.translation().x();
+        ee_pose_out.position.y = pose_eigen.translation().y();
+        ee_pose_out.position.z = pose_eigen.translation().z();
+
+        Eigen::Quaterniond quat(pose_eigen.rotation());
+        ee_pose_out.orientation.x = quat.x();
+        ee_pose_out.orientation.y = quat.y();
+        ee_pose_out.orientation.z = quat.z();
+        ee_pose_out.orientation.w = quat.w();
+
+        return true;
+    }
+
+    bool MoveItInterface::validateIKSolution(const std::vector<double> &joint_angles,
+                                             const Eigen::Isometry3d &target_pose,
+                                             double &pos_error_out,
+                                             double &angular_error_out,
+                                             double pos_threshold,
+                                             double angular_threshold) const
+    {
+        Eigen::Isometry3d computed_pose;
+        if (!getEndEffectorPose(joint_angles, computed_pose))
+        {
+            return false;
+        }
+
+        // Position error
+        Eigen::Vector3d pos_error = computed_pose.translation() - target_pose.translation();
+        pos_error_out = pos_error.norm();
+
+        // Angular error (rotation difference)
+        Eigen::Quaterniond q1(computed_pose.rotation());
+        Eigen::Quaterniond q2(target_pose.rotation());
+        angular_error_out = q1.angularDistance(q2);
+
+        return (pos_error_out < pos_threshold && angular_error_out < angular_threshold);
+    }
+
+    bool MoveItInterface::getEEToCameraTransform(const std::string &camera_link,
+                                                 Eigen::Isometry3d &T_ee_cam_out) const
+    {
+        if (!isPSMValid(false))
+            return false;
+
+        const std::string ee_link = getEndEffectorLink();
+        if (ee_link.empty())
+        {
+            RCLCPP_ERROR(node_->get_logger(), "End effector link is empty. Did MoveGroupInterface initialize correctly?");
+            return false;
+        }
+
+        planning_scene_monitor::LockedPlanningSceneRO scene(psm_);
+        const moveit::core::RobotState &state = scene->getCurrentState();
+
+        if (!state.knowsFrameTransform(ee_link))
+        {
+            RCLCPP_ERROR(node_->get_logger(), "Unknown EE frame: %s", ee_link.c_str());
+            return false;
+        }
+        if (!state.knowsFrameTransform(camera_link))
+        {
+            RCLCPP_ERROR(node_->get_logger(), "Unknown camera frame: %s", camera_link.c_str());
+            return false;
+        }
+
+        // Global transforms
+        const Eigen::Isometry3d T_world_ee = state.getGlobalLinkTransform(ee_link);
+        const Eigen::Isometry3d T_world_cam = state.getGlobalLinkTransform(camera_link);
+
+        // Relative EE->camera
+        T_ee_cam_out = T_world_ee.inverse() * T_world_cam;
+        return true;
+    }
+
+    bool MoveItInterface::cameraPoseToEEPose(const geometry_msgs::msg::Pose &cam_pose_in_world,
+                                             const std::string &camera_link,
+                                             geometry_msgs::msg::Pose &ee_pose_out_world) const
+    {
+        Eigen::Isometry3d T_ee_cam;
+        if (!getEEToCameraTransform(camera_link, T_ee_cam))
+        {
+            return false;
+        }
+
+        Eigen::Isometry3d T_world_cam;
+        tf2::fromMsg(cam_pose_in_world, T_world_cam);
+
+        const Eigen::Isometry3d T_world_ee = T_world_cam * T_ee_cam.inverse();
+        ee_pose_out_world = tf2::toMsg(T_world_ee);
+        return true;
+    }
+
+    bool MoveItInterface::cameraPoseToEEPose(const Eigen::Vector3d &cam_position,
+                                             const std::array<double, 4> &cam_orientation,
+                                             const std::string &camera_link,
+                                             Eigen::Vector3d &ee_position_out,
+                                             std::array<double, 4> &ee_orientation_out) const
+    {
+        // Convert Eigen types to geometry_msgs::Pose
+        geometry_msgs::msg::Pose cam_pose;
+        cam_pose.position.x = cam_position.x();
+        cam_pose.position.y = cam_position.y();
+        cam_pose.position.z = cam_position.z();
+        cam_pose.orientation.x = cam_orientation[0];
+        cam_pose.orientation.y = cam_orientation[1];
+        cam_pose.orientation.z = cam_orientation[2];
+        cam_pose.orientation.w = cam_orientation[3];
+        
+        geometry_msgs::msg::Pose ee_pose;
+        if (!cameraPoseToEEPose(cam_pose, camera_link, ee_pose))
+        {
+            return false;
+        }
+        
+        // Convert back to Eigen types
+        ee_position_out.x() = ee_pose.position.x;
+        ee_position_out.y() = ee_pose.position.y;
+        ee_position_out.z() = ee_pose.position.z;
+        ee_orientation_out[0] = ee_pose.orientation.x;
+        ee_orientation_out[1] = ee_pose.orientation.y;
+        ee_orientation_out[2] = ee_pose.orientation.z;
+        ee_orientation_out[3] = ee_pose.orientation.w;
+        
+        return true;
     }
 
     // IK configuration
@@ -465,6 +651,28 @@ namespace husky_xarm6_mcr_nbv_planner
         const Eigen::Isometry3d &transform = state.getGlobalLinkTransform(link_name);
         pose = tf2::toMsg(transform);
 
+        return true;
+    }
+
+    bool MoveItInterface::getLinkPose(const std::string &link_name,
+                                      Eigen::Vector3d &position,
+                                      std::array<double, 4> &orientation) const
+    {
+        geometry_msgs::msg::Pose pose;
+        if (!getLinkPose(link_name, pose))
+        {
+            return false;
+        }
+        
+        // Convert to Eigen types
+        position.x() = pose.position.x;
+        position.y() = pose.position.y;
+        position.z() = pose.position.z;
+        orientation[0] = pose.orientation.x;
+        orientation[1] = pose.orientation.y;
+        orientation[2] = pose.orientation.z;
+        orientation[3] = pose.orientation.w;
+        
         return true;
     }
 

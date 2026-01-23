@@ -104,23 +104,11 @@ private:
             logOctomapStats(tree);
         }
 
-        // Get bounding box if requested
-        octomap::point3d bbox_min(0, 0, 0);
-        octomap::point3d bbox_max(0, 0, 0);
-        if (use_bbox_)
-        {
-            double min_x, min_y, min_z, max_x, max_y, max_z;
-            tree->getMetricMin(min_x, min_y, min_z);
-            tree->getMetricMax(max_x, max_y, max_z);
-            bbox_min = octomap::point3d(min_x, min_y, min_z);
-            bbox_max = octomap::point3d(max_x, max_y, max_z);
-        }
-
         // Find frontiers
         auto start = std::chrono::high_resolution_clock::now();
         std::vector<octomap::point3d> frontiers;
         if (use_bbox_)
-            frontiers = octomap_interface_->findFrontiers(min_unknown_neighbors_, true, bbox_min, bbox_max);
+            frontiers = octomap_interface_->findFrontiers(min_unknown_neighbors_, true);
         else
             frontiers = octomap_interface_->findFrontiers(min_unknown_neighbors_, false);
         

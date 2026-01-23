@@ -36,9 +36,6 @@ def launch_setup(context, *args, **kwargs):
     platform_ns = LaunchConfiguration('platform_ns')
     manipulator_group_name = LaunchConfiguration('manipulator_group_name')
     learn_workspace = LaunchConfiguration('learn_workspace')
-    num_samples = LaunchConfiguration('num_samples')
-    visualize_learning = LaunchConfiguration('visualize_learning')
-    visualization_topic = LaunchConfiguration('visualization_topic')
     
     # Get package share directory and setup data directory
     package_share_dir = get_package_share_directory('husky_xarm6_mcr_nbv_planner')
@@ -145,9 +142,23 @@ def launch_setup(context, *args, **kwargs):
             {'manipulator_group_name': manipulator_group_name},
             {'learn_workspace': learn_workspace},
             {'manipulation_workspace_file': workspace_file_path},
-            {'num_samples': num_samples},
-            {'visualize_learning': visualize_learning},
-            {'visualization_topic': visualization_topic},
+            {'num_samples': LaunchConfiguration('num_samples')},
+            {'visualize': LaunchConfiguration('visualize')},
+            {'visualization_topic': LaunchConfiguration('visualization_topic')},
+            # NBV Planner Parameters
+            {'max_iterations': LaunchConfiguration('max_iterations')},
+            {'min_information_gain': LaunchConfiguration('min_information_gain')},
+            {'alpha_cost_weight': LaunchConfiguration('alpha_cost_weight')},
+            {'num_viewpoints_per_frontier': LaunchConfiguration('num_viewpoints_per_frontier')},
+            {'octomap_topic': LaunchConfiguration('octomap_topic')},
+            # Camera Parameters
+            {'camera_optical_link': LaunchConfiguration('camera_optical_link')},
+            {'camera_horizontal_fov': LaunchConfiguration('camera_horizontal_fov')},
+            {'camera_vertical_fov': LaunchConfiguration('camera_vertical_fov')},
+            {'camera_width': LaunchConfiguration('camera_width')},
+            {'camera_height': LaunchConfiguration('camera_height')},
+            {'camera_max_range': LaunchConfiguration('camera_max_range')},
+            {'num_camera_rays': LaunchConfiguration('num_camera_rays')},
         ],
     )
 
@@ -156,21 +167,47 @@ def launch_setup(context, *args, **kwargs):
 
 def generate_launch_description():
     return LaunchDescription([
-        DeclareLaunchArgument('use_sim_time', default_value='false'),
-        DeclareLaunchArgument('use_gazebo', default_value='false'),
-        DeclareLaunchArgument('use_fake_hardware', default_value='true'),
+        DeclareLaunchArgument('use_sim_time', default_value='true'),
+        DeclareLaunchArgument('use_gazebo', default_value='true'),
+        DeclareLaunchArgument('use_fake_hardware', default_value='false'),
         DeclareLaunchArgument('manipulator_prefix', default_value='xarm6_'),
         DeclareLaunchArgument('manipulator_ns', default_value='xarm'),
         DeclareLaunchArgument('platform_prefix', default_value='a200_'),
         DeclareLaunchArgument('platform_ns', default_value='husky'),
         DeclareLaunchArgument('manipulator_group_name', default_value='xarm6_manipulator'),
-        DeclareLaunchArgument('learn_workspace', default_value='true', 
+        DeclareLaunchArgument('learn_workspace', default_value='false', 
                             description='True to learn new workspace, False to load existing'),
         DeclareLaunchArgument('num_samples', default_value='1000000',
                             description='Number of samples for workspace learning'),
-        DeclareLaunchArgument('visualize_learning', default_value='true',
-                            description='Visualize end-effector positions during learning'),
-        DeclareLaunchArgument('visualization_topic', default_value='workspace_visualization',
+        DeclareLaunchArgument('visualize', default_value='true',
+                            description='Visualize nbv planner operation in RViz'),
+        DeclareLaunchArgument('visualization_topic', default_value='nbv_planner_visualization',
                             description='Topic for workspace visualization markers'),
+        # NBV Planner Parameters
+        DeclareLaunchArgument('max_iterations', default_value='5',
+                            description='Maximum number of NBV planning iterations'),
+        DeclareLaunchArgument('min_information_gain', default_value='0.1',
+                            description='Minimum information gain threshold for termination'),
+        DeclareLaunchArgument('alpha_cost_weight', default_value='0.05',
+                            description='Weight for cost in utility function (IG - alpha*cost)'),
+        DeclareLaunchArgument('num_viewpoints_per_frontier', default_value='10',
+                            description='Number of viewpoint candidates per frontier cluster'),
+        DeclareLaunchArgument('octomap_topic', default_value='/octomap_binary',
+                            description='Topic for receiving octomap updates'),
+        # Camera Parameters
+        DeclareLaunchArgument('camera_optical_link', default_value='firefly_left_camera_optical_frame',
+                            description='TF frame of the camera optical link'),
+        DeclareLaunchArgument('camera_horizontal_fov', default_value='90.0',
+                            description='Camera horizontal field of view (degrees, 90 deg default)'),
+        DeclareLaunchArgument('camera_vertical_fov', default_value='60.0',
+                            description='Camera vertical field of view (degrees, 60 deg default)'),
+        DeclareLaunchArgument('camera_width', default_value='640',
+                            description='Camera image width (pixels)'),
+        DeclareLaunchArgument('camera_height', default_value='480',
+                            description='Camera image height (pixels)'),
+        DeclareLaunchArgument('camera_max_range', default_value='5.0',
+                            description='Camera maximum sensing range (meters)'),
+        DeclareLaunchArgument('num_camera_rays', default_value='1000',
+                            description='Number of rays for information gain computation'),
         OpaqueFunction(function=launch_setup),
     ])

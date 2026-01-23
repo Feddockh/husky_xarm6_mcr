@@ -54,6 +54,7 @@ add_library(nbv_visualizer SHARED
 target_include_directories(nbv_visualizer PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
+  ${EIGEN3_INCLUDE_DIRS}
 )
 target_link_libraries(nbv_visualizer ${OCTOMAP_LIBRARIES})
 ament_target_dependencies(nbv_visualizer
@@ -82,6 +83,26 @@ ament_target_dependencies(manipulation_workspace
   geometry_msgs
 )
 
+# Define the Viewpoint Generation library
+add_library(viewpoint_generation SHARED
+  src/viewpoint_generation.cpp
+)
+target_include_directories(viewpoint_generation PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+target_link_libraries(viewpoint_generation 
+  moveit_interface
+  octomap_interface
+  ${OCTOMAP_LIBRARIES}
+)
+ament_target_dependencies(viewpoint_generation
+  rclcpp
+  moveit_ros_planning_interface
+  moveit_ros_planning
+  geometry_msgs
+)
+
 # Define the MoveIt interface demo executable
 add_executable(moveit_interface_demo src/moveit_interface_demo.cpp)
 target_link_libraries(moveit_interface_demo moveit_interface)
@@ -104,6 +125,9 @@ add_executable(nbv_volumetric_planner_demo src/nbv_volumetric_planner_demo.cpp)
 target_link_libraries(nbv_volumetric_planner_demo 
   moveit_interface 
   manipulation_workspace
+  octomap_interface
+  nbv_visualizer
+  viewpoint_generation
 )
 ament_target_dependencies(nbv_volumetric_planner_demo
   rclcpp
@@ -118,6 +142,7 @@ install(TARGETS
   octomap_interface
   nbv_visualizer
   manipulation_workspace
+  viewpoint_generation
   moveit_interface_demo
   octomap_interface_demo
   nbv_volumetric_planner_demo

@@ -40,6 +40,23 @@ namespace husky_xarm6_mcr_nbv_planner
             std::unique_lock lk(mtx_);
             tree_ = new_tree;
             resolution_ = tree_->getResolution();
+            // Store the metric bounding box of the octree
+            double x_min, y_min, z_min, x_max, y_max, z_max;
+            tree_->getMetricMin(x_min, y_min, z_min);
+            tree_->getMetricMax(x_max, y_max, z_max);
+            
+            // Only update bbox if we got valid bounds
+            if (x_min < x_max && y_min < y_max && z_min < z_max) {
+                bbox_min_ = octomap::point3d(x_min, y_min, z_min);
+                bbox_max_ = octomap::point3d(x_max, y_max, z_max);
+                has_valid_bbox_ = true;
+                RCLCPP_DEBUG(node_->get_logger(), "Octomap received: resolution=%.4f, bbox=[%.2f,%.2f,%.2f] to [%.2f,%.2f,%.2f]",
+                            resolution_, bbox_min_.x(), bbox_min_.y(), bbox_min_.z(),
+                            bbox_max_.x(), bbox_max_.y(), bbox_max_.z());
+            } else {
+                has_valid_bbox_ = false;
+                RCLCPP_WARN(node_->get_logger(), "Octomap received but has invalid bounding box");
+            }
         }
     }
 
@@ -50,9 +67,7 @@ namespace husky_xarm6_mcr_nbv_planner
     }
 
     std::vector<octomap::point3d> OctoMapInterface::findFrontiers(int min_unknown_neighbors,
-                                                                  bool use_bbox,
-                                                                  const octomap::point3d &bbox_min,
-                                                                  const octomap::point3d &bbox_max) const
+                                                                  bool use_bbox) const
     {
         std::vector<octomap::point3d> frontiers;
 
@@ -61,10 +76,29 @@ namespace husky_xarm6_mcr_nbv_planner
         if (!tree)
             return frontiers;
         const double res = tree->getResolution();
+        
+        // If using bbox, check if we have valid bounds
+        if (use_bbox && !has_valid_bbox_) {
+            RCLCPP_WARN(node_->get_logger(), "findFrontiers: use_bbox=true but no valid bounding box available");
+            return frontiers;
+        }
+
+        // Lambda to check if point is inside bbox
+        auto is_in_bbox = [&](const octomap::point3d &p) -> bool
+        {
+            if (!use_bbox) return true;
+            return p.x() >= bbox_min_.x() && p.x() <= bbox_max_.x() &&
+                   p.y() >= bbox_min_.y() && p.y() <= bbox_max_.y() &&
+                   p.z() >= bbox_min_.z() && p.z() <= bbox_max_.z();
+        };
 
         // Lambdas for checking unknown neighbors
         auto is_unknown = [&](const octomap::point3d &p) -> bool
         {
+            // If using bbox, don't count voxels outside bbox as unknown
+            if (use_bbox && !is_in_bbox(p)) {
+                return false;
+            }
             return tree->search(p) == nullptr;
         };
 
@@ -95,7 +129,7 @@ namespace husky_xarm6_mcr_nbv_planner
         }
         else
         {
-            for (auto it = tree->begin_leafs_bbx(bbox_min, bbox_max); it != tree->end_leafs_bbx(); ++it)
+            for (auto it = tree->begin_leafs_bbx(bbox_min_, bbox_max_); it != tree->end_leafs_bbx(); ++it)
             {
                 if (tree->isNodeOccupied(*it))
                     continue;
@@ -205,6 +239,67 @@ namespace husky_xarm6_mcr_nbv_planner
         }
 
         return clusters;
+    }
+
+    bool OctoMapInterface::isTreeAvailable() const
+    {
+        std::shared_lock lk(mtx_);
+        return tree_ != nullptr;
+    }
+
+    bool OctoMapInterface::getResolution(double &resolution_out) const
+    {
+        std::shared_lock lk(mtx_);
+        if (!tree_) {
+            return false;
+        }
+        resolution_out = resolution_;
+        return true;
+    }
+
+    bool OctoMapInterface::getBoundingBox(octomap::point3d &min_out,
+                                          octomap::point3d &max_out) const
+    {
+        if (!has_valid_bbox_) {
+            return false;
+        }
+        
+        min_out = bbox_min_;
+        max_out = bbox_max_;
+        return true;
+    }
+
+    bool OctoMapInterface::isVoxelOccupied(const octomap::point3d &point) const
+    {
+        std::shared_lock lk(mtx_);
+        if (!tree_) {
+            return false;
+        }
+
+        octomap::OcTreeNode* node = tree_->search(point);
+        return node != nullptr && tree_->isNodeOccupied(node);
+    }
+
+    bool OctoMapInterface::searchOctree(const octomap::point3d &point,
+                                        octomap::OcTreeNode *&node_out) const
+    {
+        std::shared_lock lk(mtx_);
+        if (!tree_) {
+            node_out = nullptr;
+            return false;
+        }
+
+        node_out = tree_->search(point);
+        return node_out != nullptr;
+    }
+
+    int OctoMapInterface::getOctreeDepth() const
+    {
+        std::shared_lock lk(mtx_);
+        if (!tree_) {
+            return 0;
+        }
+        return static_cast<int>(tree_->getTreeDepth());
     }
 
 }

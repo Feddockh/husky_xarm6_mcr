@@ -34,6 +34,9 @@ namespace husky_xarm6_mcr_nbv_planner
         bool getCurrentJointAngles(std::vector<double> &joints_out,
                                    const moveit::core::JointModelGroupConstPtr &jmg);
 
+        // Simplified joint angle retrieval without requiring JMG
+        bool getCurrentJointAngles(std::vector<double> &joints_out);
+
         // Joint position validation
         bool validateJointPositions(const std::vector<double> &joint_positions);
 
@@ -59,10 +62,45 @@ namespace husky_xarm6_mcr_nbv_planner
         // Combined plan and execute
         bool planAndExecute(const std::vector<double> &joint_positions);
 
+        // Forward kinematics
+        bool getEndEffectorPose(const std::vector<double> &joint_positions,
+                                Eigen::Isometry3d &ee_pose_out) const;
+
+        bool getEndEffectorPose(const std::vector<double> &joint_positions,
+                                geometry_msgs::msg::Pose &ee_pose_out) const;
+
         // Inverse kinematics
         std::vector<double> computeIK(const std::vector<double> &seed_positions,
                                       const geometry_msgs::msg::Pose &target_pose,
                                       double timeout = 0.1, int attempts = 5);
+        
+        std::vector<double> computeIK(const std::vector<double> &seed_positions,
+                                      const Eigen::Vector3d &target_position,
+                                      const std::array<double, 4> &target_orientation,
+                                      double timeout = 0.1, int attempts = 5);
+
+        // Validate IK solution by checking FK error
+        bool validateIKSolution(const std::vector<double> &joint_angles,
+                                const Eigen::Isometry3d &target_pose,
+                                double &pos_error_out,
+                                double &angular_error_out,
+                                double pos_threshold = 0.01,
+                                double angular_threshold = 0.087) const;
+
+        // Transformation from end-effector to camera
+        bool getEEToCameraTransform(const std::string &camera_link,
+                                    Eigen::Isometry3d &T_ee_cam_out) const;
+
+        // Camera pose to end-effector pose
+        bool cameraPoseToEEPose(const geometry_msgs::msg::Pose &cam_pose_in_world,
+                                const std::string &camera_link,
+                                geometry_msgs::msg::Pose &ee_pose_out_world) const;
+        
+        bool cameraPoseToEEPose(const Eigen::Vector3d &cam_position,
+                                const std::array<double, 4> &cam_orientation,
+                                const std::string &camera_link,
+                                Eigen::Vector3d &ee_position_out,
+                                std::array<double, 4> &ee_orientation_out) const;
 
         // IK configuration
         double getIKTimeout() const;
@@ -96,6 +134,10 @@ namespace husky_xarm6_mcr_nbv_planner
                                       Eigen::Isometry3d &transform) const;
         bool getLinkPose(const std::string &link_name,
                          geometry_msgs::msg::Pose &pose) const;
+        
+        bool getLinkPose(const std::string &link_name,
+                         Eigen::Vector3d &position,
+                         std::array<double, 4> &orientation) const;
 
         // Allow access to PSM for workspace computation
         std::shared_ptr<planning_scene_monitor::PlanningSceneMonitor> getPlanningSceneMonitor() const { return psm_; }

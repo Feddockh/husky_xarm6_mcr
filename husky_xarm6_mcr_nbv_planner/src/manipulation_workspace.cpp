@@ -191,7 +191,7 @@ namespace husky_xarm6_mcr_nbv_planner
                     // Publish in batches for better performance
                     if (visualization_points.size() >= batch_size)
                     {
-                        visualizer_->publishPoints(visualization_points, "workspace_learning_" + std::to_string(batch_id), voxel_size_ * 0.5);
+                        visualizer_->publishPoints(visualization_points, voxel_size_ * 0.5, std_msgs::msg::ColorRGBA(), 0.8f, "workspace_learning_" + std::to_string(batch_id));
                         visualization_points.clear();
                         batch_id++;
                     }
@@ -212,7 +212,7 @@ namespace husky_xarm6_mcr_nbv_planner
         // Publish any remaining points
         if (visualize && visualizer_ && !visualization_points.empty())
         {
-            visualizer_->publishPoints(visualization_points, "workspace_learning_" + std::to_string(batch_id), voxel_size_ * 0.5);
+            visualizer_->publishPoints(visualization_points, voxel_size_ * 0.5, std_msgs::msg::ColorRGBA(), 0.8f, "workspace_learning_" + std::to_string(batch_id));
         }
 
         RCLCPP_INFO(rclcpp::get_logger("manipulation_workspace"),
