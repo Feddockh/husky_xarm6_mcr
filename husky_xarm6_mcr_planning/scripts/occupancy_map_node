@@ -1,7 +1,0 @@
-#!/usr/bin/env python3
-"""Occupancy Map Node."""
-
-from husky_xarm6_mcr_planning.perception.occupancy_map import main
-
-if __name__ == '__main__':
-    main()
