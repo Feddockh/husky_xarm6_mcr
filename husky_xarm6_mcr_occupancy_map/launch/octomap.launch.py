@@ -14,7 +14,7 @@ def generate_launch_description():
     # --- Core args ---
     use_sim_time_arg = DeclareLaunchArgument(
         'use_sim_time',
-        default_value='false',  # real-world default
+        default_value='true',  # real-world default
         description='Use simulation time'
     )
 

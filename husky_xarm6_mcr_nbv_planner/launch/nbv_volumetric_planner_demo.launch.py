@@ -159,6 +159,7 @@ def launch_setup(context, *args, **kwargs):
             {'camera_height': LaunchConfiguration('camera_height')},
             {'camera_max_range': LaunchConfiguration('camera_max_range')},
             {'num_camera_rays': LaunchConfiguration('num_camera_rays')},
+            {'map_frame': LaunchConfiguration('map_frame')},
         ],
     )
 
@@ -184,7 +185,7 @@ def generate_launch_description():
         DeclareLaunchArgument('visualization_topic', default_value='nbv_planner_visualization',
                             description='Topic for workspace visualization markers'),
         # NBV Planner Parameters
-        DeclareLaunchArgument('max_iterations', default_value='5',
+        DeclareLaunchArgument('max_iterations', default_value='1',
                             description='Maximum number of NBV planning iterations'),
         DeclareLaunchArgument('min_information_gain', default_value='0.1',
                             description='Minimum information gain threshold for termination'),
@@ -197,17 +198,19 @@ def generate_launch_description():
         # Camera Parameters
         DeclareLaunchArgument('camera_optical_link', default_value='firefly_left_camera_optical_frame',
                             description='TF frame of the camera optical link'),
-        DeclareLaunchArgument('camera_horizontal_fov', default_value='90.0',
+        DeclareLaunchArgument('camera_horizontal_fov', default_value='45.0',
                             description='Camera horizontal field of view (degrees, 90 deg default)'),
-        DeclareLaunchArgument('camera_vertical_fov', default_value='60.0',
+        DeclareLaunchArgument('camera_vertical_fov', default_value='35.0',
                             description='Camera vertical field of view (degrees, 60 deg default)'),
-        DeclareLaunchArgument('camera_width', default_value='640',
+        DeclareLaunchArgument('camera_width', default_value='448',
                             description='Camera image width (pixels)'),
-        DeclareLaunchArgument('camera_height', default_value='480',
+        DeclareLaunchArgument('camera_height', default_value='224',
                             description='Camera image height (pixels)'),
-        DeclareLaunchArgument('camera_max_range', default_value='5.0',
+        DeclareLaunchArgument('camera_max_range', default_value='3.0',
                             description='Camera maximum sensing range (meters)'),
         DeclareLaunchArgument('num_camera_rays', default_value='1000',
                             description='Number of rays for information gain computation'),
+        DeclareLaunchArgument('map_frame', default_value='map',
+                            description='Fixed frame for visualization markers'),
         OpaqueFunction(function=launch_setup),
     ])

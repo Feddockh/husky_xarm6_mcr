@@ -73,6 +73,7 @@ int main(int argc, char **argv)
     int camera_height = node->get_parameter("camera_height").as_int();
     double camera_max_range = node->get_parameter("camera_max_range").as_double();
     int num_camera_rays = node->get_parameter("num_camera_rays").as_int();
+    std::string map_frame = node->get_parameter("map_frame").as_string();
 
     // Print NBV Planner Configuration
     RCLCPP_INFO(node->get_logger(), "\n=== NBV Volumetric Planner Configuration ===");
@@ -90,6 +91,7 @@ int main(int argc, char **argv)
     RCLCPP_INFO(node->get_logger(), "Camera resolution: %dx%d", camera_width, camera_height);
     RCLCPP_INFO(node->get_logger(), "Max sensor range: %.2f m", camera_max_range);
     RCLCPP_INFO(node->get_logger(), "Number of IG rays: %d", num_camera_rays);
+    RCLCPP_INFO(node->get_logger(), "Map frame: %s", map_frame.c_str());
     RCLCPP_INFO(node->get_logger(), "============================================\n");
 
     // Initialize MoveIt interface
@@ -99,7 +101,6 @@ int main(int argc, char **argv)
     std::shared_ptr<NBVVisualizer> visualizer;
     if (visualize)
     {
-        std::string map_frame = "map"; // Could be a parameter
         visualizer = std::make_shared<NBVVisualizer>(node, map_frame, visualization_topic);
         RCLCPP_INFO(node->get_logger(), "Visualizer initialized on topic: %s", visualization_topic.c_str());
     }
