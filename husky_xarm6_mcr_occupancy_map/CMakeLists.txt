@@ -56,6 +56,7 @@ add_library(${PROJECT_NAME}_monitor
   src/occupancy_map_monitor.cpp
   src/occupancy_map_updater.cpp
   src/pointcloud_updater.cpp
+  src/depth_image_updater.cpp
   src/semantic_occupancy_map_monitor.cpp
   src/semantic_pointcloud_updater.cpp
 )
@@ -103,16 +104,16 @@ ament_target_dependencies(${PROJECT_NAME}_visualization
 # ============================================================================
 
 # MoveIt integration node
-add_executable(moveit_octomap_server
-  src/moveit_octomap_server.cpp
+add_executable(octomap_server
+  src/octomap_server.cpp
 )
-target_link_libraries(moveit_octomap_server
+target_link_libraries(octomap_server
   ${PROJECT_NAME}_core
   ${PROJECT_NAME}_monitor
   ${PROJECT_NAME}_visualization
   ${OCTOMAP_LIBRARIES}
 )
-ament_target_dependencies(moveit_octomap_server
+ament_target_dependencies(octomap_server
   rclcpp
   sensor_msgs
   tf2_ros
@@ -167,7 +168,7 @@ install(TARGETS
 
 # Install executables
 install(TARGETS
-  moveit_octomap_server
+  octomap_server
   octomap_saver
   octomap_loader
   DESTINATION lib/${PROJECT_NAME}

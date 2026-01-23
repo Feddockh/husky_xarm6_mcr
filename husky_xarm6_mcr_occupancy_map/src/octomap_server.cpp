@@ -8,6 +8,7 @@
 #include "husky_xarm6_mcr_occupancy_map/pointcloud_updater.hpp"
 #include "husky_xarm6_mcr_occupancy_map/semantic_occupancy_map_monitor.hpp"
 #include "husky_xarm6_mcr_occupancy_map/semantic_pointcloud_updater.hpp"
+#include "husky_xarm6_mcr_occupancy_map/depth_image_updater.hpp"
 #include "husky_xarm6_mcr_occupancy_map/occupancy_map_visualizer.hpp"
 #include <rclcpp/rclcpp.hpp>
 #include <tf2_ros/buffer.h>
@@ -23,19 +24,19 @@ int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
 
-    auto node = std::make_shared<rclcpp::Node>("moveit_octomap_server");
+    auto node = std::make_shared<rclcpp::Node>("octomap_server");
 
     auto logger = node->get_logger();
-    RCLCPP_INFO(logger, "Starting MoveIt octomap server...");
+    RCLCPP_INFO(logger, "Starting octomap server...");
 
     // Create TF buffer and listener
     auto tf_buffer = std::make_shared<tf2_ros::Buffer>(node->get_clock());
     auto tf_listener = std::make_shared<tf2_ros::TransformListener>(*tf_buffer);
 
-    // Declare all parameters (YAML will override these defaults)
+    // Declare all parameters
     node->declare_parameter("resolution", 0.1);
     node->declare_parameter("map_frame", "map");
-    node->declare_parameter("max_range", 5.0);
+    node->declare_parameter("max_range", 3.0);
     node->declare_parameter("min_range", 0.0);
     node->declare_parameter("prob_hit", 0.7);
     node->declare_parameter("prob_miss", 0.4);
@@ -46,6 +47,7 @@ int main(int argc, char **argv)
     node->declare_parameter("ground_distance_threshold", 0.04);
 
     node->declare_parameter("pointcloud_topic", "/camera/depth/points");
+    node->declare_parameter("use_moveit", false);
     node->declare_parameter("planning_scene_world_topic", "/planning_scene_world");
 
     node->declare_parameter("publish_free_voxels", false);
@@ -69,6 +71,10 @@ int main(int argc, char **argv)
     node->declare_parameter("nbv_octomap_topic", "/octomap_binary");
     node->declare_parameter("nbv_octomap_qos_transient_local", true);
 
+    node->declare_parameter("updater_type", "pointcloud"); // "pointcloud" | "depth_image"
+    node->declare_parameter("depth_topic", "/stereo/depth");
+    node->declare_parameter("depth_info_topic", "/camera/camera_info");
+
     // Get parameters (already declared by automatically_declare_parameters_from_overrides)
     OccupancyMapParameters params;
     params.resolution = node->get_parameter("resolution").as_double();
@@ -84,6 +90,7 @@ int main(int argc, char **argv)
     params.ground_distance_threshold = node->get_parameter("ground_distance_threshold").as_double();
 
     std::string pointcloud_topic = node->get_parameter("pointcloud_topic").as_string();
+    bool use_moveit = node->get_parameter("use_moveit").as_bool();
     std::string planning_scene_world_topic =
         node->get_parameter("planning_scene_world_topic").as_string();
 
@@ -107,13 +114,19 @@ int main(int argc, char **argv)
     }
 
     bool use_semantic = node->get_parameter("use_semantic").as_bool();
-    int32_t num_classes = node->get_parameter("num_classes").as_int();
+    // int32_t num_classes = node->get_parameter("num_classes").as_int();
     std::string detections_topic = node->get_parameter("detections_topic").as_string();
 
     std::string nbv_octomap_topic = node->get_parameter("nbv_octomap_topic").as_string();
     bool nbv_transient = node->get_parameter("nbv_octomap_qos_transient_local").as_bool();
 
     RCLCPP_INFO(logger, "Server mode: %s", use_semantic ? "SEMANTIC" : "STANDARD");
+
+    std::string updater_type = node->get_parameter("updater_type").as_string();
+    std::string depth_topic = node->get_parameter("depth_topic").as_string();
+    std::string depth_info_topic = node->get_parameter("depth_info_topic").as_string();
+
+    RCLCPP_INFO(logger, "Updater type: %s", updater_type.c_str());
 
     // TODO: NOt incorperated yet
     use_semantic = false;
@@ -183,10 +196,31 @@ int main(int argc, char **argv)
         // Standard mode: use regular octomap monitor
         auto monitor = std::make_shared<OccupancyMapMonitor>(node, params);
 
-        // Create PointCloud updater
-        auto pc_updater = std::make_shared<PointCloudUpdater>(pointcloud_topic, params);
-        pc_updater->initialize(node, tf_buffer);
-        monitor->addUpdater(pc_updater);
+        // Create updater (switchable)
+        if (updater_type == "pointcloud")
+        {
+            auto pc_updater = std::make_shared<PointCloudUpdater>(pointcloud_topic, params);
+            pc_updater->initialize(node, tf_buffer);
+            monitor->addUpdater(pc_updater);
+
+            RCLCPP_INFO(logger, "Using PointCloudUpdater on: %s", pointcloud_topic.c_str());
+        }
+        else if (updater_type == "depth_image")
+        {
+            auto di_updater = std::make_shared<DepthImageUpdater>(depth_topic, depth_info_topic, params);
+            di_updater->initialize(node, tf_buffer);
+            monitor->addUpdater(di_updater);
+
+            RCLCPP_INFO(logger, "Using DepthImageUpdater on: %s + %s",
+                        depth_topic.c_str(), depth_info_topic.c_str());
+        }
+        else
+        {
+            RCLCPP_ERROR(logger,
+                         "Invalid updater_type: '%s' (expected 'pointcloud' or 'depth_image')",
+                         updater_type.c_str());
+            throw std::runtime_error("Invalid updater_type");
+        }
 
         // Create visualizer with OccupancyMapTree (if enabled)
         std::shared_ptr<OccupancyMapVisualizer> visualizer;
@@ -197,10 +231,14 @@ int main(int argc, char **argv)
             visualizer->setUpdateRate(viz_rate);
         }
 
-        // Octomap publisher for planning scene world updates
-        auto psw_pub = node->create_publisher<moveit_msgs::msg::PlanningSceneWorld>(
-            planning_scene_world_topic, rclcpp::QoS(1).transient_local());
-        RCLCPP_INFO(node->get_logger(), "Planning scene world publisher created on topic: %s", planning_scene_world_topic.c_str());
+        // Octomap publisher for planning scene world updates (only if use_moveit is enabled)
+        rclcpp::Publisher<moveit_msgs::msg::PlanningSceneWorld>::SharedPtr psw_pub;
+        if (use_moveit)
+        {
+            psw_pub = node->create_publisher<moveit_msgs::msg::PlanningSceneWorld>(
+                planning_scene_world_topic, rclcpp::QoS(1).transient_local());
+            RCLCPP_INFO(node->get_logger(), "Planning scene world publisher created on topic: %s", planning_scene_world_topic.c_str());
+        }
 
         // Create NBV octomap publisher according to user settings
         rclcpp::QoS nbv_qos = rclcpp::QoS(1);
@@ -214,7 +252,7 @@ int main(int argc, char **argv)
 
         // Last publish time - use shared_ptr so it persists for lambda
         auto last_octomap_publish = std::make_shared<rclcpp::Time>(node->now());
-        
+
         // Connect update callback
         monitor->setUpdateCallback([node,
                                     visualizer,
@@ -223,6 +261,7 @@ int main(int argc, char **argv)
                                     last_octomap_publish,
                                     octomap_publish_rate,
                                     publish_free,
+                                    use_moveit,
                                     monitor,
                                     params]()
                                    {
@@ -257,10 +296,13 @@ int main(int argc, char **argv)
                     octomap_with_pose.octomap = octomap_msg;
                     octomap_with_pose.origin.orientation.w = 1.0;
 
-                    // Create a planning scene world message and publish
-                    moveit_msgs::msg::PlanningSceneWorld world_msg;
-                    world_msg.octomap = octomap_with_pose;
-                    psw_pub->publish(world_msg);
+                    // Create a planning scene world message and publish (only if use_moveit is enabled)
+                    if (use_moveit && psw_pub)
+                    {
+                        moveit_msgs::msg::PlanningSceneWorld world_msg;
+                        world_msg.octomap = octomap_with_pose;
+                        psw_pub->publish(world_msg);
+                    }
 
                     // Send the octomap on the NBV topic as well
                     nbv_pub->publish(octomap_msg);
@@ -276,7 +318,8 @@ int main(int argc, char **argv)
         // Start monitoring
         monitor->startMonitor();
 
-        RCLCPP_INFO(logger, "Standard MoveIt octomap server ready");
+        RCLCPP_INFO(logger, "Standard octomap server ready");
+        RCLCPP_INFO(logger, "  MoveIt integration: %s", use_moveit ? "ENABLED" : "DISABLED");
     }
 
     RCLCPP_INFO(logger, "  Map frame: %s", params.map_frame.c_str());
