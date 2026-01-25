@@ -12,11 +12,12 @@ namespace husky_xarm6_mcr_nbv_planner
         Viewpoint &viewpoint,
         const std::string &camera_link,
         double ik_timeout,
-        int ik_attempts)
+        int ik_attempts,
+        const rclcpp::Logger &logger)
     {
         if (!moveit_interface)
         {
-            std::cerr << "MoveItInterface is null" << std::endl;
+            RCLCPP_ERROR(logger, "MoveItInterface is null");
             return std::nullopt;
         }
 
@@ -41,8 +42,7 @@ namespace husky_xarm6_mcr_nbv_planner
         if (!moveit_interface->cameraPoseToEEPose(
                 cam_pose_world, camera_link, target_ee_pose))
         {
-            std::cerr << "Failed to convert camera pose to end-effector pose "
-                      << "(camera_link = " << camera_link << ")" << std::endl;
+            RCLCPP_ERROR(logger, "Failed to convert camera pose to end-effector pose (camera_link = %s)", camera_link.c_str());
             return std::nullopt;
         }
 
@@ -52,7 +52,7 @@ namespace husky_xarm6_mcr_nbv_planner
         std::vector<double> seed_positions;
         if (!moveit_interface->getCurrentJointAngles(seed_positions))
         {
-            std::cerr << "Failed to get current joint angles" << std::endl;
+            RCLCPP_ERROR(logger, "Failed to get current joint angles");
             return std::nullopt;
         }
 
@@ -67,10 +67,8 @@ namespace husky_xarm6_mcr_nbv_planner
 
         if (joint_angles.empty())
         {
-            std::cerr << "IK failed for viewpoint at ["
-                      << viewpoint.position.x() << ", "
-                      << viewpoint.position.y() << ", "
-                      << viewpoint.position.z() << "]" << std::endl;
+            RCLCPP_WARN(logger, "IK failed for viewpoint at [%.3f, %.3f, %.3f]",
+                        viewpoint.position.x(), viewpoint.position.y(), viewpoint.position.z());
             return std::nullopt;
         }
 
@@ -88,10 +86,8 @@ namespace husky_xarm6_mcr_nbv_planner
                 pos_error,
                 angular_error))
         {
-            std::cerr << "Warning: IK solution validation failed. "
-                      << "Position error: " << pos_error << " m, "
-                      << "Angular error: "
-                      << (angular_error * 180.0 / M_PI) << " deg" << std::endl;
+            RCLCPP_WARN(logger, "IK solution validation failed. Position error: %.4f m, Angular error: %.2f deg",
+                        pos_error, angular_error * 180.0 / M_PI);
         }
 
         // ------------------------------------------------------------
@@ -266,7 +262,8 @@ namespace husky_xarm6_mcr_nbv_planner
         bool use_positive_z,
         double z_bias_sigma,
         double min_distance,
-        int max_attempts)
+        int max_attempts,
+        const rclcpp::Logger &logger)
     {
         if (min_radius < 0)
         {
@@ -379,9 +376,8 @@ namespace husky_xarm6_mcr_nbv_planner
 
         if (viewpoints.size() < static_cast<size_t>(num_samples))
         {
-            std::cerr << "Warning: Only generated " << viewpoints.size() << "/" << num_samples
-                      << " viewpoints. Try reducing min_distance or increasing the sampling region."
-                      << std::endl;
+            RCLCPP_WARN(logger, "Only generated %zu/%d viewpoints. Try reducing min_distance or increasing the sampling region.",
+                        viewpoints.size(), num_samples);
         }
 
         return viewpoints;
@@ -396,7 +392,9 @@ namespace husky_xarm6_mcr_nbv_planner
         double max_range,
         double resolution,
         int num_rays,
-        bool use_bbox)
+        bool use_bbox,
+        const rclcpp::Logger &logger,
+        const std::shared_ptr<NBVVisualizer> &visualizer)
     {
         if (!octomap_interface || width <= 0 || height <= 0 || max_range <= 0 || resolution <= 0)
         {
@@ -406,7 +404,7 @@ namespace husky_xarm6_mcr_nbv_planner
         // Check if tree is available
         if (!octomap_interface->isTreeAvailable())
         {
-            std::cerr << "Octomap tree is not available" << std::endl;
+            RCLCPP_ERROR(logger, "Octomap tree is not available");
             return 0.0;
         }
 
@@ -416,10 +414,16 @@ namespace husky_xarm6_mcr_nbv_planner
         {
             if (!octomap_interface->getBoundingBox(bbox_min, bbox_max))
             {
-                std::cerr << "Failed to get bounding box from octomap" << std::endl;
+                RCLCPP_ERROR(logger, "Failed to get bounding box from octomap");
                 return 0.0;
             }
         }
+
+        // // Please display the bounding box in RViz for debugging
+        // if (visualizer)
+        // {
+        //     visualizer->publishBoundingBox(bbox_min, bbox_max);
+        // }
 
         // Get octree depth
         const int max_depth = octomap_interface->getOctreeDepth();
@@ -442,6 +446,7 @@ namespace husky_xarm6_mcr_nbv_planner
 
         int total_unknown = 0;
         int num_rays_cast = 0;
+        int point_id = 0; // Counter for unique point marker IDs
 
         for (int v = 0; v < height; v += stride_v)
         {
@@ -484,24 +489,60 @@ namespace husky_xarm6_mcr_nbv_planner
                         prev_point_in_bbox = current_in_bbox;
                     }
 
-                    // Only check voxels inside bbox (or if bbox disabled)
+                    // Determine voxel state and color for visualization
+                    std_msgs::msg::ColorRGBA color;
+                    color.a = 0.8f;
+                    bool should_break = false;
+
+                    if (!current_in_bbox)
+                    {
+                        // Gray for outside bounding box
+                        color.r = 0.5f;
+                        color.g = 0.5f;
+                        color.b = 0.5f;
+                    }
+
                     if (current_in_bbox)
                     {
+                        // Inside bbox - check voxel state
                         octomap::OcTreeNode *node = nullptr;
                         const bool found = octomap_interface->searchOctree(oct_point, node);
 
                         if (!found || node == nullptr)
                         {
-                            // Unknown voxel
+                            // Unknown voxel - GREEN
                             unknown_count++;
+                            color.r = 0.0f;
+                            color.g = 1.0f;
+                            color.b = 0.0f;
                         }
                         else if (octomap_interface->isVoxelOccupied(oct_point))
                         {
-                            // Occupied voxel - stop ray
-                            break;
+                            // Occupied voxel - BLUE (will stop ray after visualization)
+                            color.r = 0.0f;
+                            color.g = 0.0f;
+                            color.b = 1.0f;
+                            should_break = true;
                         }
-                        // Free voxel - continue marching
+                        else
+                        {
+                            // Free voxel - YELLOW
+                            color.r = 1.0f;
+                            color.g = 1.0f;
+                            color.b = 0.0f;
+                        }
                     }
+
+                    if (visualizer)
+                    {
+                        visualizer->publishPoint(oct_point, point_id++, 0.015, color, 0.8f, "ig_rays");
+                        // Small delay to allow RViz to process the marker
+                        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    }
+
+                    // Stop ray if hit occupied voxel
+                    if (should_break)
+                        break;
                 }
 
                 total_unknown += unknown_count;
@@ -537,7 +578,9 @@ namespace husky_xarm6_mcr_nbv_planner
 
         return computeInformationGain(
             viewpoint, octomap_interface, fov, width, height,
-            max_range, resolution, num_rays, use_bbox);
+            max_range, resolution, num_rays, use_bbox,
+            rclcpp::get_logger("viewpoint_generation"),
+            nullptr);
     }
 
 } // namespace husky_xarm6_mcr_nbv_planner

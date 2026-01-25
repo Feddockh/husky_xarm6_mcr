@@ -11,6 +11,7 @@
 #include "husky_xarm6_mcr_nbv_planner/geometry_utils.hpp"
 #include "husky_xarm6_mcr_nbv_planner/moveit_interface.hpp"
 #include "husky_xarm6_mcr_nbv_planner/octomap_interface.hpp"
+#include "husky_xarm6_mcr_nbv_planner/nbv_visualizer.hpp"
 
 namespace husky_xarm6_mcr_nbv_planner
 {
@@ -30,7 +31,8 @@ std::optional<std::vector<double>> computeViewpointJointAngles(
     Viewpoint& viewpoint,
     const std::string& camera_link,
     double ik_timeout,
-    int ik_attempts);
+    int ik_attempts,
+    const rclcpp::Logger& logger);
 
 /**
  * @brief Generate viewpoints on a spherical cap
@@ -106,7 +108,8 @@ std::vector<Viewpoint> sampleViewsFromHemisphere(
     bool use_positive_z = false,
     double z_bias_sigma = 0.3,
     double min_distance = 0.1,
-    int max_attempts = 1000);
+    int max_attempts = 1000,
+    const rclcpp::Logger& logger = rclcpp::get_logger("viewpoint_generation"));
 
 /**
  * @brief Compute information gain for a viewpoint using geometric octomap
@@ -134,7 +137,10 @@ double computeInformationGain(
     double max_range = 3.0,
     double resolution = 0.1,
     int num_rays = -1,
-    bool use_bbox = true);
+    bool use_bbox = true,
+    const rclcpp::Logger& logger = rclcpp::get_logger("viewpoint_generation"),
+    const std::shared_ptr<NBVVisualizer>& visualizer = nullptr
+    );
 
 /**
  * @brief Compute semantic information gain for a viewpoint
