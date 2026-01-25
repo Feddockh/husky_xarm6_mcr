@@ -14,19 +14,18 @@ namespace husky_xarm6_mcr_nbv_planner
         rclcpp::QoS qos(1);
         if (transient_local)
             qos.transient_local();
-        else
-            qos.best_effort();
 
-        sub_ = node_->create_subscription<octomap_msgs::msg::Octomap>(
+        sub_ = node_->create_subscription<husky_xarm6_mcr_occupancy_map::msg::CustomOctomap>(
             octomap_topic, qos,
             std::bind(&OctoMapInterface::onOctomap, this, std::placeholders::_1));
 
         RCLCPP_INFO(node_->get_logger(), "OctoMapInterface subscribing to %s", octomap_topic.c_str());
     }
 
-    void OctoMapInterface::onOctomap(const octomap_msgs::msg::Octomap::SharedPtr msg)
+    void OctoMapInterface::onOctomap(const husky_xarm6_mcr_occupancy_map::msg::CustomOctomap::SharedPtr msg)
     {
-        std::unique_ptr<octomap::AbstractOcTree> abs(octomap_msgs::msgToMap(*msg));
+        // Extract the octomap from the custom message
+        std::unique_ptr<octomap::AbstractOcTree> abs(octomap_msgs::msgToMap(msg->octomap));
         auto *tree = dynamic_cast<octomap::OcTree *>(abs.release());
         if (!tree)
         {
@@ -40,22 +39,22 @@ namespace husky_xarm6_mcr_nbv_planner
             std::unique_lock lk(mtx_);
             tree_ = new_tree;
             resolution_ = tree_->getResolution();
-            // Store the metric bounding box of the octree
-            double x_min, y_min, z_min, x_max, y_max, z_max;
-            tree_->getMetricMin(x_min, y_min, z_min);
-            tree_->getMetricMax(x_max, y_max, z_max);
+            last_update_time_ = node_->now();
             
-            // Only update bbox if we got valid bounds
-            if (x_min < x_max && y_min < y_max && z_min < z_max) {
-                bbox_min_ = octomap::point3d(x_min, y_min, z_min);
-                bbox_max_ = octomap::point3d(x_max, y_max, z_max);
+            // Use bounding box from message if provided
+            if (msg->has_bounding_box)
+            {
+                bbox_min_ = octomap::point3d(msg->bbx_min.x, msg->bbx_min.y, msg->bbx_min.z);
+                bbox_max_ = octomap::point3d(msg->bbx_max.x, msg->bbx_max.y, msg->bbx_max.z);
                 has_valid_bbox_ = true;
-                RCLCPP_DEBUG(node_->get_logger(), "Octomap received: resolution=%.4f, bbox=[%.2f,%.2f,%.2f] to [%.2f,%.2f,%.2f]",
+                RCLCPP_DEBUG(node_->get_logger(), "Octomap received: resolution=%.4f, bbox=[%.2f,%.2f,%.2f] to [%.2f,%.2f,%.2f] (from message)",
                             resolution_, bbox_min_.x(), bbox_min_.y(), bbox_min_.z(),
                             bbox_max_.x(), bbox_max_.y(), bbox_max_.z());
-            } else {
+            }
+            else
+            {
                 has_valid_bbox_ = false;
-                RCLCPP_WARN(node_->get_logger(), "Octomap received but has invalid bounding box");
+                RCLCPP_DEBUG(node_->get_logger(), "Octomap received: resolution=%.4f (no bounding box)", resolution_);
             }
         }
     }
@@ -160,9 +159,9 @@ namespace husky_xarm6_mcr_nbv_planner
         if (N == 0)
             return clusters;
 
-        // Heuristic: ~1 cluster per 40 points
+        // Heuristic: ~1 cluster per 50 points
         if (n_clusters <= 0)
-            n_clusters = std::max(1, N / 40);
+            n_clusters = std::max(1, N / 50);
 
         const int K = std::min(n_clusters, N);
 
@@ -300,6 +299,12 @@ namespace husky_xarm6_mcr_nbv_planner
             return 0;
         }
         return static_cast<int>(tree_->getTreeDepth());
+    }
+
+    rclcpp::Time OctoMapInterface::getLastUpdateTime() const
+    {
+        std::shared_lock lk(mtx_);
+        return last_update_time_;
     }
 
 }

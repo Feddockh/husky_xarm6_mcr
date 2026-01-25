@@ -3,6 +3,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <octomap/OcTree.h>
 #include <octomap_msgs/msg/octomap.hpp>
+#include "husky_xarm6_mcr_occupancy_map/msg/custom_octomap.hpp"
 #include "husky_xarm6_mcr_nbv_planner/cluster.hpp"
 
 #include <shared_mutex>
@@ -47,11 +48,13 @@ namespace husky_xarm6_mcr_nbv_planner
 
         int getOctreeDepth() const;
 
+        rclcpp::Time getLastUpdateTime() const;
+
     private:
-        void onOctomap(const octomap_msgs::msg::Octomap::SharedPtr msg);
+        void onOctomap(const husky_xarm6_mcr_occupancy_map::msg::CustomOctomap::SharedPtr msg);
 
         rclcpp::Node::SharedPtr node_;
-        rclcpp::Subscription<octomap_msgs::msg::Octomap>::SharedPtr sub_;
+        rclcpp::Subscription<husky_xarm6_mcr_occupancy_map::msg::CustomOctomap>::SharedPtr sub_;
 
         mutable std::shared_mutex mtx_;
         std::shared_ptr<octomap::OcTree> tree_;
@@ -59,6 +62,7 @@ namespace husky_xarm6_mcr_nbv_planner
         octomap::point3d bbox_min_{0.0, 0.0, 0.0};
         octomap::point3d bbox_max_{0.0, 0.0, 0.0};
         bool has_valid_bbox_{false};
+        rclcpp::Time last_update_time_;
     };
 
 } // namespace husky_xarm6_mcr_nbv_planner
