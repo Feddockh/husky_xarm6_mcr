@@ -614,6 +614,116 @@ namespace husky_xarm6_mcr_nbv_planner
         RCLCPP_DEBUG(logger_, "Published target region");
     }
 
+    void NBVVisualizer::publishBoundingBox(
+        const octomap::point3d &bbx_min,
+        const octomap::point3d &bbx_max,
+        const std::string &ns,
+        double line_width,
+        const std_msgs::msg::ColorRGBA &color)
+    {
+        auto now = node_->now();
+        visualization_msgs::msg::MarkerArray marker_array;
+
+        // Delete previous markers
+        visualization_msgs::msg::Marker del_marker;
+        del_marker.header.frame_id = map_frame_;
+        del_marker.header.stamp = now;
+        del_marker.ns = ns;
+        del_marker.id = 0;
+        del_marker.action = visualization_msgs::msg::Marker::DELETEALL;
+        marker_array.markers.push_back(del_marker);
+
+        // Create LINE_LIST marker for bounding box edges
+        visualization_msgs::msg::Marker bbox_marker;
+        bbox_marker.header.frame_id = map_frame_;
+        bbox_marker.header.stamp = now;
+        bbox_marker.ns = ns;
+        bbox_marker.id = 1;
+        bbox_marker.type = visualization_msgs::msg::Marker::LINE_LIST;
+        bbox_marker.action = visualization_msgs::msg::Marker::ADD;
+        bbox_marker.scale.x = line_width; // Line width
+        bbox_marker.pose.orientation.w = 1.0;
+
+        // Set color (use provided color or default to cyan)
+        if (color.a == 0.0 && color.r == 0.0 && color.g == 0.0 && color.b == 0.0)
+        {
+            bbox_marker.color.r = 0.0;
+            bbox_marker.color.g = 0.5;
+            bbox_marker.color.b = 1.0;
+            bbox_marker.color.a = 1.0;
+        }
+        else
+        {
+            bbox_marker.color = color;
+        }
+
+        // Define 8 corners of the bounding box
+        std::array<geometry_msgs::msg::Point, 8> corners;
+
+        // Bottom face (z = min)
+        corners[0].x = bbx_min.x();
+        corners[0].y = bbx_min.y();
+        corners[0].z = bbx_min.z();
+        corners[1].x = bbx_max.x();
+        corners[1].y = bbx_min.y();
+        corners[1].z = bbx_min.z();
+        corners[2].x = bbx_max.x();
+        corners[2].y = bbx_max.y();
+        corners[2].z = bbx_min.z();
+        corners[3].x = bbx_min.x();
+        corners[3].y = bbx_max.y();
+        corners[3].z = bbx_min.z();
+
+        // Top face (z = max)
+        corners[4].x = bbx_min.x();
+        corners[4].y = bbx_min.y();
+        corners[4].z = bbx_max.z();
+        corners[5].x = bbx_max.x();
+        corners[5].y = bbx_min.y();
+        corners[5].z = bbx_max.z();
+        corners[6].x = bbx_max.x();
+        corners[6].y = bbx_max.y();
+        corners[6].z = bbx_max.z();
+        corners[7].x = bbx_min.x();
+        corners[7].y = bbx_max.y();
+        corners[7].z = bbx_max.z();
+
+        // Bottom face edges (4 edges)
+        bbox_marker.points.push_back(corners[0]);
+        bbox_marker.points.push_back(corners[1]);
+        bbox_marker.points.push_back(corners[1]);
+        bbox_marker.points.push_back(corners[2]);
+        bbox_marker.points.push_back(corners[2]);
+        bbox_marker.points.push_back(corners[3]);
+        bbox_marker.points.push_back(corners[3]);
+        bbox_marker.points.push_back(corners[0]);
+
+        // Top face edges (4 edges)
+        bbox_marker.points.push_back(corners[4]);
+        bbox_marker.points.push_back(corners[5]);
+        bbox_marker.points.push_back(corners[5]);
+        bbox_marker.points.push_back(corners[6]);
+        bbox_marker.points.push_back(corners[6]);
+        bbox_marker.points.push_back(corners[7]);
+        bbox_marker.points.push_back(corners[7]);
+        bbox_marker.points.push_back(corners[4]);
+
+        // Vertical edges connecting top and bottom (4 edges)
+        bbox_marker.points.push_back(corners[0]);
+        bbox_marker.points.push_back(corners[4]);
+        bbox_marker.points.push_back(corners[1]);
+        bbox_marker.points.push_back(corners[5]);
+        bbox_marker.points.push_back(corners[2]);
+        bbox_marker.points.push_back(corners[6]);
+        bbox_marker.points.push_back(corners[3]);
+        bbox_marker.points.push_back(corners[7]);
+
+        marker_array.markers.push_back(bbox_marker);
+        marker_pub_->publish(marker_array);
+
+        RCLCPP_DEBUG(logger_, "Published bounding box visualization");
+    }
+
     void NBVVisualizer::clearAll(const std::string &ns_suffix)
     {
         auto now = node_->now();

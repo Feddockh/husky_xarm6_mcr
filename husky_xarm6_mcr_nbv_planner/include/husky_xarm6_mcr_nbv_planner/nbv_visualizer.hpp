@@ -143,6 +143,21 @@ namespace husky_xarm6_mcr_nbv_planner
             const std::string &ns = "target_region");
 
         /**
+         * @brief Publish bounding box as LINE_LIST marker
+         * @param bbx_min Minimum corner of bounding box
+         * @param bbx_max Maximum corner of bounding box
+         * @param ns Namespace for the marker (default: "bounding_box")
+         * @param line_width Width of the lines (default: 0.02)
+         * @param color RGBA color for the box lines
+         */
+        void publishBoundingBox(
+            const octomap::point3d &bbx_min,
+            const octomap::point3d &bbx_max,
+            const std::string &ns = "bounding_box",
+            double line_width = 0.02,
+            const std_msgs::msg::ColorRGBA &color = std_msgs::msg::ColorRGBA());
+
+        /**
          * @brief Clear all visualizations in a namespace
          * @param ns_suffix Namespace suffix (empty = all namespaces)
          */
