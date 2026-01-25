@@ -18,6 +18,9 @@
   <depend>moveit_ros_planning</depend>
   <depend>octomap</depend>
   <depend>octomap_msgs</depend>
+  <depend>semantic_octomap</depend>
+  <depend>vision_msgs</depend>
+  <depend>husky_xarm6_mcr_occupancy_map</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

@@ -165,13 +165,12 @@ int main(int argc, char **argv)
     RCLCPP_INFO(node->get_logger(), "Initializing OctoMap Interface...");
     auto octomap_interface = std::make_shared<OctoMapInterface>(node, octomap_topic, true);
     RCLCPP_INFO(node->get_logger(), "Waiting for octomap to be published on %s...", octomap_topic.c_str());
-    rclcpp::Rate wait_rate(1);
-    int wait_count = 0;
-    while (rclcpp::ok() && !octomap_interface->isTreeAvailable() && wait_count < 30)
+    rclcpp::Time start_time = node->now();
+    rclcpp::Rate spin_rate(10); // 10 Hz
+    while (rclcpp::ok() && !octomap_interface->isTreeAvailable() && (node->now() - start_time).seconds() < 30.0)
     {
         rclcpp::spin_some(node);
-        wait_rate.sleep();
-        wait_count++;
+        spin_rate.sleep();
     }
     if (!octomap_interface->isTreeAvailable())
     {
@@ -180,6 +179,10 @@ int main(int argc, char **argv)
         return 1;
     }
     RCLCPP_INFO(node->get_logger(), "Octomap received successfully");
+
+    // DEBUG: Delay
+    rclcpp::Rate rate(10); // 10 Hz
+    for (int i = 0; i < 100; ++i) { rclcpp::spin_some(node); rate.sleep(); } // ~10 second pause
 
     for (int iter = 0; iter < max_iterations; ++iter)
     {
@@ -197,7 +200,7 @@ int main(int argc, char **argv)
         else
         {
             // Cluster the frontiers
-            int n_clusters = -1; // -1 = auto-select (heuristic: 1 cluster per 40 points)
+            int n_clusters = -1; // -1 = auto-select (heuristic: 1 cluster per 50 points)
             frontier_clusters = octomap_interface->kmeansCluster(frontiers, n_clusters, 50, 1e-4);
             RCLCPP_INFO(node->get_logger(), "Clustered frontiers into %zu groups", frontier_clusters.size());
             if (visualizer)
@@ -208,6 +211,9 @@ int main(int argc, char **argv)
                 RCLCPP_INFO(node->get_logger(), "Frontier clusters visualized");
             }
         }
+
+        // // DEBUG: Delay
+        // for (int i = 0; i < 100; ++i) { rclcpp::spin_some(node); rate.sleep(); } // ~10 second pause
 
         // Step 4: Generate the viewpoint candidates
         RCLCPP_INFO(node->get_logger(), "\n=== Step 4: Generate Viewpoint Candidates ===");
@@ -256,18 +262,21 @@ int main(int argc, char **argv)
         }
         RCLCPP_INFO(node->get_logger(), "%zu out of %zu viewpoints are reachable",
                     reachable_viewpoints.size(), total_viewpoints.size());
-        if (visualizer && !reachable_viewpoints.empty())
-        {
-            RCLCPP_INFO(node->get_logger(), "Visualizing reachable viewpoints...");
-            // Convert all viewpoints to poses for batch visualization
-            std::vector<geometry_msgs::msg::Pose> viewpoint_poses;
-            for (const auto &vp : reachable_viewpoints)
-            {
-                viewpoint_poses.push_back(eigenToPose(vp.position, vp.orientation));
-            }
-            visualizer->publishCoordinates(viewpoint_poses, 0.1, 0.005, 0.7f, "reachable_viewpoints");
-            RCLCPP_INFO(node->get_logger(), "Visualization complete!");
-        }
+        // if (visualizer && !reachable_viewpoints.empty())
+        // {
+        //     RCLCPP_INFO(node->get_logger(), "Visualizing reachable viewpoints...");
+        //     // Convert all viewpoints to poses for batch visualization
+        //     std::vector<geometry_msgs::msg::Pose> viewpoint_poses;
+        //     for (const auto &vp : reachable_viewpoints)
+        //     {
+        //         viewpoint_poses.push_back(eigenToPose(vp.position, vp.orientation));
+        //     }
+        //     visualizer->publishCoordinates(viewpoint_poses, 0.1, 0.005, 0.7f, "reachable_viewpoints");
+        //     RCLCPP_INFO(node->get_logger(), "Visualization complete!");
+        // }
+
+        // // DEBUG: Delay
+        // for (int i = 0; i < 100; ++i) { rclcpp::spin_some(node); rate.sleep(); } // ~10 second pause
 
         // Step 6: Compute information gain for each viewpoint
         RCLCPP_INFO(node->get_logger(), "\n=== Step 6: Compute Information Gain for Each Viewpoint ===");
@@ -284,10 +293,17 @@ int main(int argc, char **argv)
                 camera_max_range,
                 octomap_resolution,
                 num_camera_rays,
-                true); // use_bbox
+                true, // use_bbox
+                node->get_logger(), 
+                nullptr); // DEBUG: visualize
             RCLCPP_INFO(node->get_logger(), "Viewpoint %zu: Information Gain = %.4f", i + 1, info_gain);
             reachable_viewpoints[i].information_gain = info_gain;
+            // DEBUG: Delay
+            // for (int j = 0; j < 10; ++j) { rclcpp::spin_some(node); rate.sleep(); } // ~1 second pause
         }
+
+        // DEBUG: Delay
+        for (int i = 0; i < 100; ++i) { rclcpp::spin_some(node); rate.sleep(); } // ~10 second pause
 
         // Step 7: Compute utility for each viewpoint
         RCLCPP_INFO(node->get_logger(), "\n=== Step 7: Compute Utility for Each Viewpoint ===");
@@ -299,11 +315,14 @@ int main(int argc, char **argv)
             double distance = (reachable_viewpoints[i].position - current_cam_position).norm();
             double cost = distance; // Simple cost based on distance
             double utility = reachable_viewpoints[i].information_gain - alpha_cost_weight * cost;
-            RCLCPP_INFO(node->get_logger(), "Viewpoint %zu: Cost = %.4f, Utility = %.4f",
-                        i + 1, cost, utility);
+            // RCLCPP_INFO(node->get_logger(), "Viewpoint %zu: Cost = %.4f, Utility = %.4f",
+            //             i + 1, cost, utility);
             reachable_viewpoints[i].cost = cost;
             reachable_viewpoints[i].utility = utility;
         }
+
+        // // DEBUG: Delay
+        // for (int i = 0; i < 100; ++i) { rclcpp::spin_some(node); rate.sleep(); } // ~10 second pause
 
         // Step 8: Order viewpoints by utility and select the best one with valid IK
         RCLCPP_INFO(node->get_logger(), "\n=== Step 8: Select the Best Viewpoint with Valid IK ===");
@@ -398,38 +417,65 @@ int main(int argc, char **argv)
         RCLCPP_INFO(node->get_logger(), "\n=== Step 9: Move to the Best Viewpoint ===");
         if (found_valid_viewpoint && best_joint_angles.has_value())
         {
+            // Record the octomap timestamp before motion
+            rclcpp::Time octomap_time_before_motion = octomap_interface->getLastUpdateTime();
+            
             RCLCPP_INFO(node->get_logger(), "Executing motion to best viewpoint...");
             if (interface->planAndExecute(best_joint_angles.value()))
             {
                 RCLCPP_INFO(node->get_logger(), "Successfully moved to best viewpoint!");
 
-                // Wait for sensors to settle and process octomap updates for 2 seconds
-                RCLCPP_INFO(node->get_logger(), "Waiting for sensor data and octomap updates...");
-                rclcpp::Time start_time = node->now();
+                // Wait for both motion completion and octomap update
+                RCLCPP_INFO(node->get_logger(), "Waiting for manipulator to reach goal and octomap to update...");
                 rclcpp::Rate spin_rate(10); // 10 Hz to process callbacks
-                while ((node->now() - start_time).seconds() < 10.0)
+                bool motion_complete = false;
+                bool octomap_updated = false;
+                
+                while (rclcpp::ok() && (!motion_complete || !octomap_updated))
                 {
                     rclcpp::spin_some(node);
+                    
+                    // Check if manipulator has reached the goal
+                    if (!motion_complete)
+                    {
+                        std::vector<double> current_joints;
+                        if (interface->getCurrentJointAngles(current_joints))
+                        {
+                            // Check if current joint angles match target (within tolerance)
+                            double joint_error = 0.0;
+                            for (size_t i = 0; i < current_joints.size() && i < best_joint_angles.value().size(); ++i)
+                            {
+                                joint_error += std::abs(current_joints[i] - best_joint_angles.value()[i]);
+                            }
+                            if (joint_error < 0.01) // 0.01 radian tolerance (~0.57 degrees total)
+                            {
+                                motion_complete = true;
+                                RCLCPP_INFO(node->get_logger(), "Manipulator reached goal position");
+                            }
+                        }
+                    }
+                    
+                    // Check if octomap has been updated
+                    if (!octomap_updated)
+                    {
+                        rclcpp::Time current_octomap_time = octomap_interface->getLastUpdateTime();
+                        if (current_octomap_time != octomap_time_before_motion)
+                        {
+                            octomap_updated = true;
+                            RCLCPP_INFO(node->get_logger(), "Octomap has been updated with new sensor data");
+                        }
+                    }
+                    
                     spin_rate.sleep();
                 }
 
-                RCLCPP_INFO(node->get_logger(), "Sensor data collection complete, octomap updated");
-                
-                // // Update camera position for next iteration
-                // if (!interface->getLinkPose(camera_optical_link, cam_position, cam_orientation))
-                // {
-                //     RCLCPP_WARN(node->get_logger(), "Failed to update camera pose for next iteration");
-                // }
+                RCLCPP_INFO(node->get_logger(), "Motion complete and octomap updated - ready for next iteration");
             }
             else
-            {
                 RCLCPP_ERROR(node->get_logger(), "Failed to execute motion to best viewpoint!");
-            }
         }
         else
-        {
             RCLCPP_WARN(node->get_logger(), "Skipping motion - no valid viewpoint found");
-        }
 
         // Clear all markers and spin
         if (visualizer)

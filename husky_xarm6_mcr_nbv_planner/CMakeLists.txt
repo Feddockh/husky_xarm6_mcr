@@ -16,6 +16,9 @@ find_package(visualization_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(octomap REQUIRED)
 find_package(octomap_msgs REQUIRED)
+find_package(semantic_octomap REQUIRED)
+find_package(vision_msgs REQUIRED)
+find_package(husky_xarm6_mcr_occupancy_map REQUIRED)
 
 # Define the MoveIt interface library
 add_library(moveit_interface SHARED
@@ -45,6 +48,7 @@ ament_target_dependencies(octomap_interface
   rclcpp
   octomap_msgs
   visualization_msgs
+  husky_xarm6_mcr_occupancy_map
 )
 
 # Define the NBV visualizer library
