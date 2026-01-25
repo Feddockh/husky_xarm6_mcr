@@ -25,6 +25,19 @@ find_package(octomap_msgs REQUIRED)
 find_package(moveit_msgs REQUIRED)
 find_package(semantic_octomap REQUIRED)
 find_package(vision_msgs REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+
+# Generate custom messages
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/CustomOctomap.msg"
+  DEPENDENCIES
+    std_msgs
+    geometry_msgs
+    octomap_msgs
+)
+
+# Get the typesupport target for use in same package
+rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
 # Include directories
 include_directories(
@@ -112,6 +125,7 @@ target_link_libraries(octomap_server
   ${PROJECT_NAME}_monitor
   ${PROJECT_NAME}_visualization
   ${OCTOMAP_LIBRARIES}
+  ${cpp_typesupport_target}
 )
 ament_target_dependencies(octomap_server
   rclcpp
@@ -206,6 +220,7 @@ ament_export_dependencies(
   octomap
   octomap_msgs
   moveit_msgs
+  rosidl_default_runtime
 )
 ament_export_include_directories(include)
 

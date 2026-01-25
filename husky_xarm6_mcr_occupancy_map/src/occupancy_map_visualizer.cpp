@@ -133,11 +133,13 @@ namespace husky_xarm6_mcr_occupancy_map
 
     void OccupancyMapVisualizer::publishBoundingBox(
         visualization_msgs::msg::MarkerArray &marker_array,
-        const rclcpp::Time &stamp)
+        const rclcpp::Time &stamp,
+        const std::optional<octomap::point3d> &bbx_min_opt,
+        const std::optional<octomap::point3d> &bbx_max_opt)
     {
-        // Get bounding box min/max
-        octomap::point3d bbx_min = tree_->getBBXMin();
-        octomap::point3d bbx_max = tree_->getBBXMax();
+        // Get bounding box min/max - use provided values or fall back to tree's values
+        octomap::point3d bbx_min = bbx_min_opt.has_value() ? bbx_min_opt.value() : tree_->getBBXMin();
+        octomap::point3d bbx_max = bbx_max_opt.has_value() ? bbx_max_opt.value() : tree_->getBBXMax();
 
         // Create LINE_LIST marker for bounding box edges
         visualization_msgs::msg::Marker bbox_marker;

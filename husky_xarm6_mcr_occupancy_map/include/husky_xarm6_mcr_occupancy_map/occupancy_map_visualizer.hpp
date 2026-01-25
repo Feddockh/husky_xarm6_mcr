@@ -13,6 +13,7 @@
 #include <std_msgs/msg/color_rgba.hpp>
 #include <memory>
 #include <string>
+#include <optional>
 
 namespace husky_xarm6_mcr_occupancy_map
 {
@@ -53,10 +54,16 @@ namespace husky_xarm6_mcr_occupancy_map
     private:
         /**
          * @brief Publish bounding box marker
+         * @param marker_array Marker array to add bbox marker to
+         * @param stamp Timestamp for the marker
+         * @param bbx_min Optional minimum corner of bounding box (uses tree's if not provided)
+         * @param bbx_max Optional maximum corner of bounding box (uses tree's if not provided)
          */
         void publishBoundingBox(
             visualization_msgs::msg::MarkerArray &marker_array,
-            const rclcpp::Time &stamp);
+            const rclcpp::Time &stamp,
+            const std::optional<octomap::point3d> &bbx_min = std::nullopt,
+            const std::optional<octomap::point3d> &bbx_max = std::nullopt);
 
         /**
          * @brief Create marker for voxels

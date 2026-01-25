@@ -152,7 +152,10 @@ def generate_launch_description():
             'enable_visualization': True,
             'visualization_topic': 'occupancy_map_markers',
             'visualization_rate': 1.0,
+
             'octomap_publish_rate': 1.0,
+            'nbv_octomap_topic': '/octomap_binary',
+            'nbv_octomap_qos_transient_local': True,
         }]
     )
 

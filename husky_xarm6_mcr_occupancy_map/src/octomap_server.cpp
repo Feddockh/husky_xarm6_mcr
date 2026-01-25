@@ -17,6 +17,7 @@
 #include <octomap_msgs/conversions.h>
 #include <moveit_msgs/msg/planning_scene_world.hpp>
 #include <octomap_msgs/msg/octomap_with_pose.hpp>
+#include "husky_xarm6_mcr_occupancy_map/msg/custom_octomap.hpp"
 
 using namespace husky_xarm6_mcr_occupancy_map;
 
@@ -98,7 +99,6 @@ int main(int argc, char **argv)
     bool enable_viz = node->get_parameter("enable_visualization").as_bool();
     std::string viz_topic = node->get_parameter("visualization_topic").as_string();
     double viz_rate = node->get_parameter("visualization_rate").as_double();
-    double octomap_publish_rate = node->get_parameter("octomap_publish_rate").as_double();
 
     params.use_bounding_box = node->get_parameter("use_bounding_box").as_bool();
     if (params.use_bounding_box)
@@ -117,8 +117,9 @@ int main(int argc, char **argv)
     // int32_t num_classes = node->get_parameter("num_classes").as_int();
     std::string detections_topic = node->get_parameter("detections_topic").as_string();
 
+    double octomap_publish_rate = node->get_parameter("octomap_publish_rate").as_double();
     std::string nbv_octomap_topic = node->get_parameter("nbv_octomap_topic").as_string();
-    bool nbv_transient = node->get_parameter("nbv_octomap_qos_transient_local").as_bool();
+    bool nbv_octomap_qos_transient_local = node->get_parameter("nbv_octomap_qos_transient_local").as_bool();
 
     RCLCPP_INFO(logger, "Server mode: %s", use_semantic ? "SEMANTIC" : "STANDARD");
 
@@ -241,12 +242,12 @@ int main(int argc, char **argv)
         }
 
         // Create NBV octomap publisher according to user settings
-        rclcpp::QoS nbv_qos = rclcpp::QoS(1);
-        if (nbv_transient)
+        rclcpp::QoS nbv_qos = rclcpp::QoS(1); // Default: Reliable + volatile
+        if (nbv_octomap_qos_transient_local)
         {
-            nbv_qos = rclcpp::QoS(rclcpp::KeepLast(1)).transient_local();
+            nbv_qos = rclcpp::QoS(1).transient_local(); // Reliable + transient local
         }
-        auto nbv_pub = node->create_publisher<octomap_msgs::msg::Octomap>(
+        auto nbv_pub = node->create_publisher<husky_xarm6_mcr_occupancy_map::msg::CustomOctomap>(
             nbv_octomap_topic, nbv_qos);
         RCLCPP_INFO(node->get_logger(), "NBV octomap publisher created on topic: %s", nbv_octomap_topic.c_str());
 
@@ -304,11 +305,37 @@ int main(int argc, char **argv)
                         psw_pub->publish(world_msg);
                     }
 
-                    // Send the octomap on the NBV topic as well
-                    nbv_pub->publish(octomap_msg);
+                    // Create custom message with bounding box for NBV planner
+                    husky_xarm6_mcr_occupancy_map::msg::CustomOctomap nbv_msg;
+                    nbv_msg.header = octomap_msg.header;
+                    nbv_msg.octomap = octomap_msg;
+                    
+                    // Add bounding box information if configured
+                    if (params.use_bounding_box)
+                    {
+                        nbv_msg.has_bounding_box = true;
+                        nbv_msg.bbx_min.x = params.bbx_min.x();
+                        nbv_msg.bbx_min.y = params.bbx_min.y();
+                        nbv_msg.bbx_min.z = params.bbx_min.z();
+                        nbv_msg.bbx_max.x = params.bbx_max.x();
+                        nbv_msg.bbx_max.y = params.bbx_max.y();
+                        nbv_msg.bbx_max.z = params.bbx_max.z();
+                    }
+                    else
+                    {
+                        nbv_msg.has_bounding_box = false;
+                        // Initialize to zeros (will be ignored by receiver)
+                        nbv_msg.bbx_min.x = nbv_msg.bbx_min.y = nbv_msg.bbx_min.z = 0.0;
+                        nbv_msg.bbx_max.x = nbv_msg.bbx_max.y = nbv_msg.bbx_max.z = 0.0;
+                    }
+                    
+                    // Publish custom message to NBV topic
+                    nbv_pub->publish(nbv_msg);
 
                     // Print info
-                    RCLCPP_INFO(node->get_logger(), "Published octomap with %zu nodes", monitor->getMapTree()->size());
+                    RCLCPP_INFO(node->get_logger(), "Published octomap with %zu nodes (bbox=%s)", 
+                                monitor->getMapTree()->size(), 
+                                params.use_bounding_box ? "enabled" : "disabled");
                 }
                 
                 monitor->getMapTree()->unlockRead();
