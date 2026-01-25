@@ -27,11 +27,13 @@ struct Viewpoint
         : position(pos), orientation(orient) {}
     
     /**
-     * @brief Comparison operator for max-heap ordering (higher utility first)
+     * @brief Comparison operator for max-heap ordering
+     * Returns true if this viewpoint has LOWER utility than other
+     * This creates a max-heap where highest utility is at top
      */
     bool operator<(const Viewpoint& other) const
     {
-        return utility > other.utility;
+        return utility < other.utility;
     }
 };
 
