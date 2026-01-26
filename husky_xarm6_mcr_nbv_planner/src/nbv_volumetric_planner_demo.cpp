@@ -1,5 +1,6 @@
 #include <rclcpp/rclcpp.hpp>
 #include <rosgraph_msgs/msg/clock.hpp>
+#include <std_srvs/srv/trigger.hpp>
 #include <chrono>
 #include <queue>
 #include <algorithm>
@@ -58,6 +59,7 @@ int main(int argc, char **argv)
     // Get all parameters
     std::string manipulator_group_name = node->get_parameter("manipulator_group_name").as_string();
     bool learn_workspace = node->get_parameter("learn_workspace").as_bool();
+    std::string capture_type = node->get_parameter("capture_type").as_string();
     std::string workspace_file = node->get_parameter("manipulation_workspace_file").as_string();
     int num_samples = node->get_parameter("num_samples").as_int();
     bool visualize = node->get_parameter("visualize").as_bool();
@@ -79,6 +81,7 @@ int main(int argc, char **argv)
     RCLCPP_INFO(node->get_logger(), "\n=== NBV Volumetric Planner Configuration ===");
     RCLCPP_INFO(node->get_logger(), "Manipulator group: %s", manipulator_group_name.c_str());
     RCLCPP_INFO(node->get_logger(), "Learn workspace: %s", learn_workspace ? "true" : "false");
+    RCLCPP_INFO(node->get_logger(), "Capture type: %s", capture_type.c_str());
     RCLCPP_INFO(node->get_logger(), "Workspace samples: %d", num_samples);
     RCLCPP_INFO(node->get_logger(), "Visualization: %s", visualize ? "enabled" : "disabled");
     RCLCPP_INFO(node->get_logger(), "Octomap topic: %s", octomap_topic.c_str());
@@ -187,14 +190,95 @@ int main(int argc, char **argv)
     RCLCPP_INFO(node->get_logger(), "\n=== Step 2: Receive OctoMap ===");
     RCLCPP_INFO(node->get_logger(), "Initializing OctoMap Interface...");
     auto octomap_interface = std::make_shared<OctoMapInterface>(node, octomap_topic, true);
+    
+    // Create service clients for camera triggering
+    auto start_video_client = node->create_client<std_srvs::srv::Trigger>("/trigger/start_video");
+    auto stop_video_client = node->create_client<std_srvs::srv::Trigger>("/trigger/stop_video");
+    auto send_trigger_client = node->create_client<std_srvs::srv::Trigger>("/trigger/send_trigger");
+    
+    // Handle camera triggering based on capture_type
+    if (capture_type == "continuous")
+    {
+        RCLCPP_INFO(node->get_logger(), "Starting continuous video capture...");
+        if (!start_video_client->wait_for_service(std::chrono::seconds(5)))
+        {
+            RCLCPP_WARN(node->get_logger(), "start_video service not available, continuing anyway...");
+        }
+        else
+        {
+            auto request = std::make_shared<std_srvs::srv::Trigger::Request>();
+            auto future = start_video_client->async_send_request(request);
+            if (rclcpp::spin_until_future_complete(node, future, std::chrono::seconds(5)) == rclcpp::FutureReturnCode::SUCCESS)
+            {
+                auto response = future.get();
+                if (response->success)
+                    RCLCPP_INFO(node->get_logger(), "Continuous video capture started: %s", response->message.c_str());
+                else
+                    RCLCPP_WARN(node->get_logger(), "Failed to start video: %s", response->message.c_str());
+            }
+        }
+    }
+    else if (capture_type == "triggered")
+    {
+        RCLCPP_INFO(node->get_logger(), "Using triggered capture mode, ensuring video is stopped...");
+        
+        // Stop video first (in case it was running)
+        if (!stop_video_client->wait_for_service(std::chrono::seconds(5)))
+        {
+            RCLCPP_WARN(node->get_logger(), "stop_video service not available, continuing anyway...");
+        }
+        else
+        {
+            auto request = std::make_shared<std_srvs::srv::Trigger::Request>();
+            auto future = stop_video_client->async_send_request(request);
+            if (rclcpp::spin_until_future_complete(node, future, std::chrono::seconds(5)) == rclcpp::FutureReturnCode::SUCCESS)
+            {
+                auto response = future.get();
+                RCLCPP_INFO(node->get_logger(), "Stop video service called: %s", response->message.c_str());
+            }
+        }
+        
+        // Wait for send_trigger service
+        if (!send_trigger_client->wait_for_service(std::chrono::seconds(5)))
+        {
+            RCLCPP_WARN(node->get_logger(), "send_trigger service not available, waiting for octomap anyway...");
+        }
+    }
+    
     RCLCPP_INFO(node->get_logger(), "Waiting for octomap to be published on %s...", octomap_topic.c_str());
     rclcpp::Time start_time = node->now();
     rclcpp::Rate spin_rate(10); // 10 Hz
-    while (rclcpp::ok() && !octomap_interface->isTreeAvailable() && (node->now() - start_time).seconds() < 30.0)
+    
+    if (capture_type == "triggered")
     {
-        rclcpp::spin_some(node);
-        spin_rate.sleep();
+        // Triggered mode: send triggers periodically until octomap is available
+        while (rclcpp::ok() && !octomap_interface->isTreeAvailable() && (node->now() - start_time).seconds() < 30.0)
+        {
+            auto request = std::make_shared<std_srvs::srv::Trigger::Request>();
+            auto future = send_trigger_client->async_send_request(request);
+            RCLCPP_INFO(node->get_logger(), "Sending camera trigger...");
+            
+            // Wait 1 second for trigger response and octomap
+            auto wait_start = node->now();
+            while (rclcpp::ok() && (node->now() - wait_start).seconds() < 1.0)
+            {
+                rclcpp::spin_some(node);
+                if (octomap_interface->isTreeAvailable())
+                    break;
+                spin_rate.sleep();
+            }
+        }
     }
+    else
+    {
+        // Continuous mode: just wait for octomap
+        while (rclcpp::ok() && !octomap_interface->isTreeAvailable() && (node->now() - start_time).seconds() < 30.0)
+        {
+            rclcpp::spin_some(node);
+            spin_rate.sleep();
+        }
+    }
+    
     if (!octomap_interface->isTreeAvailable())
     {
         RCLCPP_ERROR(node->get_logger(), "Octomap not available after 30 seconds. Exiting.");
@@ -445,20 +529,14 @@ int main(int argc, char **argv)
         RCLCPP_INFO(node->get_logger(), "\n=== Step 9: Move to the Best Viewpoint ===");
         if (found_valid_viewpoint)
         {
-            // Record the octomap timestamp before motion
-            rclcpp::Time octomap_time_before_motion = octomap_interface->getLastUpdateTime();
-
             RCLCPP_INFO(node->get_logger(), "Executing motion to best viewpoint...");
             if (interface->execute(plan))
             {
-                RCLCPP_INFO(node->get_logger(), "Successfully moved to best viewpoint!");
-
-                // Wait for both motion completion and octomap update
-                RCLCPP_INFO(node->get_logger(), "Waiting for manipulator to reach goal and octomap to update...");
+                // Wait for motion to complete
                 rclcpp::Rate spin_rate(10); // 10 Hz to process callbacks
+                RCLCPP_INFO(node->get_logger(), "Waiting for manipulator to reach goal...");
                 bool motion_complete = false;
-                bool octomap_updated = false;
-                while (rclcpp::ok() && (!motion_complete || !octomap_updated))
+                while (rclcpp::ok() && !motion_complete)
                 {
                     rclcpp::spin_some(node); // Process callbacks
                     // Check if manipulator has reached the goal
@@ -480,19 +558,69 @@ int main(int argc, char **argv)
                             }
                         }
                     }
-                    // Check if octomap has been updated
-                    if (!octomap_updated)
+                    spin_rate.sleep();
+                }
+                RCLCPP_INFO(node->get_logger(), "Successfully moved to best viewpoint!");
+                // Make sure that octomap is updated before next iteration
+                bool octomap_updated = false;
+                rclcpp::Time initial_octomap_time = octomap_interface->getLastUpdateTime();
+                double initial_time_seconds = initial_octomap_time.seconds();
+                RCLCPP_INFO(node->get_logger(), "Initial octomap timestamp: %.3f seconds", initial_time_seconds);
+                
+                if (capture_type == "triggered")
+                {
+                    // Triggered mode: send triggers until octomap updates
+                    RCLCPP_INFO(node->get_logger(), "Sending camera triggers until octomap updates...");
+                    int trigger_count = 0;
+                    while (rclcpp::ok() && !octomap_updated)
                     {
-                        rclcpp::Time current_octomap_time = octomap_interface->getLastUpdateTime();
-                        if (current_octomap_time != octomap_time_before_motion)
+                        // Send trigger
+                        auto request = std::make_shared<std_srvs::srv::Trigger::Request>();
+                        auto future = send_trigger_client->async_send_request(request);
+                        trigger_count++;
+                        RCLCPP_INFO(node->get_logger(), "Sending camera trigger #%d...", trigger_count);
+                        
+                        // Wait ~1 second and check for octomap update
+                        auto wait_start = node->now();
+                        while (rclcpp::ok() && (node->now() - wait_start).seconds() < 1.0)
+                        {
+                            rclcpp::spin_some(node);
+                            rclcpp::Time new_octomap_time = octomap_interface->getLastUpdateTime();
+                            double new_time_seconds = new_octomap_time.seconds();
+                            
+                            if (new_time_seconds != initial_time_seconds)
+                            {
+                                octomap_updated = true;
+                                RCLCPP_INFO(node->get_logger(), "Octomap has been updated! New timestamp: %.3f seconds (delta: %.3f)", 
+                                           new_time_seconds, new_time_seconds - initial_time_seconds);
+                                break;
+                            }
+                            spin_rate.sleep();
+                        }
+                        
+                        if (!octomap_updated)
+                        {
+                            RCLCPP_INFO(node->get_logger(), "No octomap update detected yet, will send another trigger...");
+                        }
+                    }
+                }
+                else
+                {
+                    // Continuous mode: just wait for octomap update
+                    while (rclcpp::ok() && !octomap_updated)
+                    {
+                        rclcpp::spin_some(node);
+                        rclcpp::Time new_octomap_time = octomap_interface->getLastUpdateTime();
+                        double new_time_seconds = new_octomap_time.seconds();
+                        
+                        if (new_time_seconds != initial_time_seconds)
                         {
                             octomap_updated = true;
                             RCLCPP_INFO(node->get_logger(), "Octomap has been updated with new sensor data");
                         }
+                        spin_rate.sleep();
                     }
-                    spin_rate.sleep();
                 }
-                RCLCPP_INFO(node->get_logger(), "Motion complete and octomap updated - ready for next iteration");
             }
             else
                 RCLCPP_ERROR(node->get_logger(), "Failed to execute motion to best viewpoint!");
@@ -509,6 +637,17 @@ int main(int argc, char **argv)
             visualizer->clearAllMarkers();
             RCLCPP_INFO(node->get_logger(), "Cleared all visualization markers");
         }
+    }
+
+    // Move back to initial joint configuration before exiting
+    RCLCPP_INFO(node->get_logger(), "\nMoving back to initial joint configuration...");
+    if (!interface->planAndExecute(init_joint_angles_rad))
+    {
+        RCLCPP_WARN(node->get_logger(), "Failed to move back to initial joint configuration");
+    }
+    else
+    {
+        RCLCPP_INFO(node->get_logger(), "Successfully returned to initial joint configuration");
     }
 
     RCLCPP_INFO(node->get_logger(), "Press Ctrl+C to exit.");
