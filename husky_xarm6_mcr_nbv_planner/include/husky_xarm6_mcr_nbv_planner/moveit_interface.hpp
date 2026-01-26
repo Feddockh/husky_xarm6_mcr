@@ -116,6 +116,18 @@ namespace husky_xarm6_mcr_nbv_planner
         int getNumPlanningAttempts() const;
         void setNumPlanningAttempts(int num_attempts);
 
+        // Velocity and acceleration scaling
+        double getMaxVelocityScalingFactor() const;
+        void setMaxVelocityScalingFactor(double scale);
+        double getMaxAccelerationScalingFactor() const;
+        void setMaxAccelerationScalingFactor(double scale);
+
+        // Path constraints
+        void setOrientationConstraints(const std::string& link_name, 
+                                      const geometry_msgs::msg::Quaternion& target_orientation,
+                                      double tolerance_roll, double tolerance_pitch, double tolerance_yaw);
+        void clearPathConstraints();
+
         // Frame configuration
         std::string getPoseReferenceFrame() const;
         void setPoseReferenceFrame(const std::string &frame);
@@ -154,6 +166,8 @@ namespace husky_xarm6_mcr_nbv_planner
         std::string planner_id_{"RRTConnect"};
         double planning_time_{3.0};
         int num_planning_attempts_{5};
+        double max_velocity_scaling_factor_{0.1};
+        double max_acceleration_scaling_factor_{0.1};
         std::string pose_reference_frame_;
         std::string end_effector_link_;
     };

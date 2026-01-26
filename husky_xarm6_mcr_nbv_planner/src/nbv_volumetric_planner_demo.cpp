@@ -100,6 +100,8 @@ int main(int argc, char **argv)
     interface->setPlannerId("RRTConnect");
     interface->setPlanningTime(1.0); // seconds
     interface->setNumPlanningAttempts(5);
+    interface->setMaxVelocityScalingFactor(0.1);      // 30% of max velocity
+    interface->setMaxAccelerationScalingFactor(0.1);  // 30% of max acceleration
 
     // Check
     RCLCPP_INFO(node->get_logger(), "Pipeline: %s", interface->getPlanningPipelineId().c_str());
@@ -142,6 +144,15 @@ int main(int argc, char **argv)
         visualizer->publishCoordinate(init_cam_position, init_cam_orientation, 0.15, 0.01, 1.0f, "initial_camera_pose");
         RCLCPP_INFO(node->get_logger(), "Initial camera pose published for visualization");
     }
+
+    // Set orientation constraints for base and camera (±90 degrees = ±1.57 rad)
+    interface->setOrientationConstraints(
+        interface->getEndEffectorLink(),
+        arrayToQuaternion(init_cam_orientation),
+        M_PI_2,               // ±90° roll tolerance
+        M_PI_2,               // ±90° pitch tolerance  
+        M_PI_2                // ±90° yaw tolerance
+    );
 
     // Step 1: Learn or load the manipulation workspace
     RCLCPP_INFO(node->get_logger(), "\n=== Step 1: Manipulation Workspace ===");

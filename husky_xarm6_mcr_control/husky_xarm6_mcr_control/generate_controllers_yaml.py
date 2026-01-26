@@ -77,11 +77,11 @@ def generate_controllers_yaml(platform_ns='husky', platform_prefix='a200_',
                 'linear.x.has_velocity_limits': True,
                 'linear.x.max_velocity': 1.0,
                 'linear.x.has_acceleration_limits': True,
-                'linear.x.max_acceleration': 3.0,
+                'linear.x.max_acceleration': 1.0,
                 'angular.z.has_velocity_limits': True,
-                'angular.z.max_velocity': 2.0,
+                'angular.z.max_velocity': 1.0,
                 'angular.z.has_acceleration_limits': True,
-                'angular.z.max_acceleration': 1.5
+                'angular.z.max_acceleration': 1.0
             }
         }
     

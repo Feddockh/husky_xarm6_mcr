@@ -211,7 +211,7 @@ def generate_launch_description():
                             description='Camera image height (pixels)'),
         DeclareLaunchArgument('camera_max_range', default_value='3.0',
                             description='Camera maximum sensing range (meters)'),
-        DeclareLaunchArgument('num_camera_rays', default_value='100',
+        DeclareLaunchArgument('num_camera_rays', default_value='50',
                             description='Number of rays for information gain computation'),
         DeclareLaunchArgument('map_frame', default_value='map',
                             description='Fixed frame for visualization markers'),

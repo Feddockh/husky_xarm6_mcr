@@ -62,6 +62,8 @@ namespace husky_xarm6_mcr_nbv_planner
 
             // Set our default values
             move_group_->setNumPlanningAttempts(num_planning_attempts_);
+            move_group_->setMaxVelocityScalingFactor(max_velocity_scaling_factor_);
+            move_group_->setMaxAccelerationScalingFactor(max_acceleration_scaling_factor_);
         }
     }
 
@@ -516,6 +518,77 @@ namespace husky_xarm6_mcr_nbv_planner
             move_group_->setNumPlanningAttempts(num_attempts);
             RCLCPP_INFO(node_->get_logger(), "Set number of planning attempts to: %d", num_attempts);
         }
+    }
+
+    double MoveItInterface::getMaxVelocityScalingFactor() const
+    {
+        return max_velocity_scaling_factor_;
+    }
+
+    void MoveItInterface::setMaxVelocityScalingFactor(double scale)
+    {
+        if (scale <= 0.0 || scale > 1.0) {
+            RCLCPP_WARN(node_->get_logger(), "Velocity scaling factor must be in (0.0, 1.0]. Clamping to valid range.");
+            scale = std::clamp(scale, 0.01, 1.0);
+        }
+        
+        max_velocity_scaling_factor_ = scale;
+        if (isMoveGroupValid(false)) {
+            move_group_->setMaxVelocityScalingFactor(scale);
+            RCLCPP_INFO(node_->get_logger(), "Set max velocity scaling factor to: %.2f", scale);
+        }
+    }
+
+    double MoveItInterface::getMaxAccelerationScalingFactor() const 
+    {
+        return max_acceleration_scaling_factor_;
+    }
+
+    void MoveItInterface::setMaxAccelerationScalingFactor(double scale)
+    {
+        if (scale <= 0.0 || scale > 1.0) {
+            RCLCPP_WARN(node_->get_logger(), "Acceleration scaling factor must be in (0.0, 1.0]. Clamping to valid range.");
+            scale = std::clamp(scale, 0.01, 1.0);
+        }
+        
+        max_acceleration_scaling_factor_ = scale;
+        if (isMoveGroupValid(false)) {
+            move_group_->setMaxAccelerationScalingFactor(scale);
+            RCLCPP_INFO(node_->get_logger(), "Set max acceleration scaling factor to: %.2f", scale);
+        }
+    }
+
+    void MoveItInterface::setOrientationConstraints(const std::string& link_name,
+                                                    const geometry_msgs::msg::Quaternion& target_orientation,
+                                                    double tolerance_roll, double tolerance_pitch, double tolerance_yaw)
+    {
+        if (!isMoveGroupValid())
+            return;
+
+        moveit_msgs::msg::OrientationConstraint ocm;
+        ocm.link_name = link_name;
+        ocm.header.frame_id = getPoseReferenceFrame();
+        ocm.orientation = target_orientation;
+        ocm.absolute_x_axis_tolerance = tolerance_roll;
+        ocm.absolute_y_axis_tolerance = tolerance_pitch;
+        ocm.absolute_z_axis_tolerance = tolerance_yaw;
+        ocm.weight = 1.0;
+
+        moveit_msgs::msg::Constraints constraints;
+        constraints.orientation_constraints.push_back(ocm);
+        move_group_->setPathConstraints(constraints);
+
+        RCLCPP_INFO(node_->get_logger(), "Set orientation constraints for link '%s' with tolerances [R:%.2f, P:%.2f, Y:%.2f] rad",
+                    link_name.c_str(), tolerance_roll, tolerance_pitch, tolerance_yaw);
+    }
+
+    void MoveItInterface::clearPathConstraints()
+    {
+        if (!isMoveGroupValid())
+            return;
+        
+        move_group_->clearPathConstraints();
+        RCLCPP_INFO(node_->get_logger(), "Cleared all path constraints");
     }
 
     // Frame configuration
