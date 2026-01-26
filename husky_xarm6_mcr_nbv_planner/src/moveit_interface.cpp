@@ -56,7 +56,6 @@ namespace husky_xarm6_mcr_nbv_planner
             // Set default planner if not already configured
             if (planner_id_.empty())
             {
-                planner_id_ = "RRTConnect";
                 move_group_->setPlannerId(planner_id_);
                 RCLCPP_INFO(node_->get_logger(), "Set default planner to: %s", planner_id_.c_str());
             }
@@ -466,7 +465,7 @@ namespace husky_xarm6_mcr_nbv_planner
         return move_group_->getPlanningPipelineId();
     }
 
-    void MoveItInterface::setPlanningPipelineId(const std::string &pipeline_id)
+    void MoveItInterface::setPlanningPipelineId(const std::string pipeline_id)
     {
         planning_pipeline_id_ = pipeline_id;
         if (isMoveGroupValid(false))
@@ -480,11 +479,13 @@ namespace husky_xarm6_mcr_nbv_planner
         return move_group_->getPlannerId();
     }
 
-    void MoveItInterface::setPlannerId(const std::string &planner_id)
+    void MoveItInterface::setPlannerId(const std::string planner_id)
     {
         planner_id_ = planner_id;
-        if (isMoveGroupValid(false))
+        if (isMoveGroupValid(false)) {
             move_group_->setPlannerId(planner_id);
+            RCLCPP_INFO(node_->get_logger(), "Set planner to: %s", planner_id.c_str());
+        }
     }
 
     double MoveItInterface::getPlanningTime() const
@@ -497,8 +498,10 @@ namespace husky_xarm6_mcr_nbv_planner
     void MoveItInterface::setPlanningTime(double seconds)
     {
         planning_time_ = seconds;
-        if (isMoveGroupValid(false))
+        if (isMoveGroupValid(false)) {
             move_group_->setPlanningTime(seconds);
+            RCLCPP_INFO(node_->get_logger(), "Set planning time to: %.2f seconds", seconds);
+        }
     }
 
     int MoveItInterface::getNumPlanningAttempts() const
@@ -509,8 +512,10 @@ namespace husky_xarm6_mcr_nbv_planner
     void MoveItInterface::setNumPlanningAttempts(int num_attempts)
     {
         num_planning_attempts_ = num_attempts;
-        if (isMoveGroupValid(false))
+        if (isMoveGroupValid(false)) {
             move_group_->setNumPlanningAttempts(num_attempts);
+            RCLCPP_INFO(node_->get_logger(), "Set number of planning attempts to: %d", num_attempts);
+        }
     }
 
     // Frame configuration
@@ -524,8 +529,10 @@ namespace husky_xarm6_mcr_nbv_planner
     void MoveItInterface::setPoseReferenceFrame(const std::string &frame)
     {
         pose_reference_frame_ = frame;
-        if (isMoveGroupValid(false))
+        if (isMoveGroupValid(false)) {
             move_group_->setPoseReferenceFrame(frame);
+            RCLCPP_INFO(node_->get_logger(), "Set pose reference frame to: %s", frame.c_str());
+        }
     }
 
     std::string MoveItInterface::getEndEffectorLink() const
@@ -538,8 +545,10 @@ namespace husky_xarm6_mcr_nbv_planner
     void MoveItInterface::setEndEffectorLink(const std::string &link)
     {
         end_effector_link_ = link;
-        if (isMoveGroupValid(false))
+        if (isMoveGroupValid(false)) {
             move_group_->setEndEffectorLink(link);
+            RCLCPP_INFO(node_->get_logger(), "Set end effector link to: %s", link.c_str());
+        }
     }
 
     // Robot structure queries

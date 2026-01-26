@@ -96,6 +96,16 @@ int main(int argc, char **argv)
 
     // Initialize MoveIt interface
     auto interface = std::make_shared<MoveItInterface>(node, manipulator_group_name);
+    interface->setPlanningPipelineId("ompl");
+    interface->setPlannerId("RRTConnect");
+    interface->setPlanningTime(1.0); // seconds
+    interface->setNumPlanningAttempts(5);
+
+    // Check
+    RCLCPP_INFO(node->get_logger(), "Pipeline: %s", interface->getPlanningPipelineId().c_str());
+    RCLCPP_INFO(node->get_logger(), "Planner ID: %s", interface->getPlannerId().c_str());
+    RCLCPP_INFO(node->get_logger(), "Planning time: %.2f seconds", interface->getPlanningTime());
+    RCLCPP_INFO(node->get_logger(), "Number of planning attempts: %d", interface->getNumPlanningAttempts());
 
     // Initialize visualizer if visualization is requested
     std::shared_ptr<NBVVisualizer> visualizer;
@@ -198,7 +208,8 @@ int main(int argc, char **argv)
         std::vector<octomap::point3d> frontiers = octomap_interface->findFrontiers(min_unknown_neighbors, use_frontier_bbox);
         RCLCPP_INFO(node->get_logger(), "Found %zu frontiers", frontiers.size());
         std::vector<Cluster> frontier_clusters;
-        if (frontiers.empty()) {
+        if (frontiers.empty())
+        {
             RCLCPP_WARN(node->get_logger(), "No frontiers found - exploration may be complete or bbox too restrictive");
             break;
         }
@@ -226,8 +237,8 @@ int main(int argc, char **argv)
         RCLCPP_INFO(node->get_logger(), "Generated %zu viewpoints on planar spherical cap", spherical_planar_viewpoints.size());
         // Generate viewpoints around each frontier cluster
         std::vector<Viewpoint> frontier_viewpoints;
-        double best_range = 0.5;                                    // Optimal viewing distance for frontiers
-        double range_tolerance = 0.1;                               // Allow slight variation in range
+        double best_range = 0.5;      // Optimal viewing distance for frontiers
+        double range_tolerance = 0.1; // Allow slight variation in range
         for (const auto &cluster : frontier_clusters)
         {
             Eigen::Vector3d cluster_center(cluster.center.x(), cluster.center.y(), cluster.center.z());
@@ -370,12 +381,14 @@ int main(int argc, char **argv)
                 // Check if the IK solution is collision-free
                 if (interface->isStateValid(best_joint_angles))
                     RCLCPP_INFO(node->get_logger(), "Found valid viewpoint with collision-free IK solution!");
-                else 
+                else
                 {
                     RCLCPP_INFO(node->get_logger(), "  IK solution is in collision, trying next viewpoint...");
                     continue;
                 }
-            } else {
+            }
+            else
+            {
                 RCLCPP_INFO(node->get_logger(), "  No IK solution found for this viewpoint, trying next one...");
                 continue;
             }
@@ -423,7 +436,7 @@ int main(int argc, char **argv)
         {
             // Record the octomap timestamp before motion
             rclcpp::Time octomap_time_before_motion = octomap_interface->getLastUpdateTime();
-            
+
             RCLCPP_INFO(node->get_logger(), "Executing motion to best viewpoint...");
             if (interface->execute(plan))
             {
@@ -473,7 +486,8 @@ int main(int argc, char **argv)
             else
                 RCLCPP_ERROR(node->get_logger(), "Failed to execute motion to best viewpoint!");
         }
-        else {
+        else
+        {
             RCLCPP_ERROR(node->get_logger(), "No viewpoint found to move to, ending NBV planning");
             break;
         }

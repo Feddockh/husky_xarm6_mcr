@@ -108,9 +108,9 @@ namespace husky_xarm6_mcr_nbv_planner
 
         // Planning configuration
         std::string getPlanningPipelineId() const;
-        void setPlanningPipelineId(const std::string &pipeline_id);
+        void setPlanningPipelineId(const std::string pipeline_id);
         std::string getPlannerId() const;
-        void setPlannerId(const std::string &planner_id);
+        void setPlannerId(const std::string planner_id);
         double getPlanningTime() const;
         void setPlanningTime(double seconds);
         int getNumPlanningAttempts() const;
@@ -151,9 +151,9 @@ namespace husky_xarm6_mcr_nbv_planner
         // Cached configuration values (MoveGroupInterface doesn't provide getters)
         double ik_timeout_{0.1};
         std::string planning_pipeline_id_;
-        std::string planner_id_;
-        double planning_time_{5.0};
-        int num_planning_attempts_{10};
+        std::string planner_id_{"RRTConnect"};
+        double planning_time_{3.0};
+        int num_planning_attempts_{5};
         std::string pose_reference_frame_;
         std::string end_effector_link_;
     };
