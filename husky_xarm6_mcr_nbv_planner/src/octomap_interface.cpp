@@ -3,6 +3,8 @@
 #include <octomap_msgs/conversions.h>
 #include <cmath>
 #include <limits>
+#include <random>
+#include <numeric>
 
 namespace husky_xarm6_mcr_nbv_planner
 {
@@ -40,7 +42,7 @@ namespace husky_xarm6_mcr_nbv_planner
             tree_ = new_tree;
             resolution_ = tree_->getResolution();
             last_update_time_ = node_->now();
-            
+
             // Use bounding box from message if provided
             if (msg->has_bounding_box)
             {
@@ -48,8 +50,8 @@ namespace husky_xarm6_mcr_nbv_planner
                 bbox_max_ = octomap::point3d(msg->bbx_max.x, msg->bbx_max.y, msg->bbx_max.z);
                 has_valid_bbox_ = true;
                 RCLCPP_DEBUG(node_->get_logger(), "Octomap received: resolution=%.4f, bbox=[%.2f,%.2f,%.2f] to [%.2f,%.2f,%.2f] (from message)",
-                            resolution_, bbox_min_.x(), bbox_min_.y(), bbox_min_.z(),
-                            bbox_max_.x(), bbox_max_.y(), bbox_max_.z());
+                             resolution_, bbox_min_.x(), bbox_min_.y(), bbox_min_.z(),
+                             bbox_max_.x(), bbox_max_.y(), bbox_max_.z());
             }
             else
             {
@@ -75,9 +77,10 @@ namespace husky_xarm6_mcr_nbv_planner
         if (!tree)
             return frontiers;
         const double res = tree->getResolution();
-        
+
         // If using bbox, check if we have valid bounds
-        if (use_bbox && !has_valid_bbox_) {
+        if (use_bbox && !has_valid_bbox_)
+        {
             RCLCPP_WARN(node_->get_logger(), "findFrontiers: use_bbox=true but no valid bounding box available");
             return frontiers;
         }
@@ -85,7 +88,8 @@ namespace husky_xarm6_mcr_nbv_planner
         // Lambda to check if point is inside bbox
         auto is_in_bbox = [&](const octomap::point3d &p) -> bool
         {
-            if (!use_bbox) return true;
+            if (!use_bbox)
+                return true;
             return p.x() >= bbox_min_.x() && p.x() <= bbox_max_.x() &&
                    p.y() >= bbox_min_.y() && p.y() <= bbox_max_.y() &&
                    p.z() >= bbox_min_.z() && p.z() <= bbox_max_.z();
@@ -95,7 +99,8 @@ namespace husky_xarm6_mcr_nbv_planner
         auto is_unknown = [&](const octomap::point3d &p) -> bool
         {
             // If using bbox, don't count voxels outside bbox as unknown
-            if (use_bbox && !is_in_bbox(p)) {
+            if (use_bbox && !is_in_bbox(p))
+            {
                 return false;
             }
             return tree->search(p) == nullptr;
@@ -170,25 +175,57 @@ namespace husky_xarm6_mcr_nbv_planner
         std::vector<octomap::point3d> centers(K);
         std::vector<int> sizes(K, 0);
 
-        // Deterministic initialization: pick evenly spaced points
-        for (int k = 0; k < K; ++k)
-            centers[k] = points[(k * N) / K];
+        // K-means++ initialization for faster convergence
+        std::mt19937 rng(42); // Deterministic seed
+        centers[0] = points[rng() % N];
 
-        std::vector<octomap::point3d> new_centers(K, octomap::point3d(0, 0, 0));
+        for (int k = 1; k < K; ++k)
+        {
+            std::vector<double> min_dists(N, std::numeric_limits<double>::infinity());
+
+            // Update min distances to existing centers
+            for (int i = 0; i < N; ++i)
+            {
+                double d = sqdist(points[i], centers[k - 1]);
+                min_dists[i] = std::min(min_dists[i], d);
+            }
+
+            // Choose next center with probability proportional to squared distance
+            double sum_dists = std::accumulate(min_dists.begin(), min_dists.end(), 0.0);
+            std::uniform_real_distribution<double> dist(0.0, sum_dists);
+            double target = dist(rng);
+
+            double cumsum = 0.0;
+            for (int i = 0; i < N; ++i)
+            {
+                cumsum += min_dists[i];
+                if (cumsum >= target)
+                {
+                    centers[k] = points[i];
+                    break;
+                }
+            }
+        }
+
+        std::vector<octomap::point3d> new_centers(K);
+        std::vector<double> sum_x(K), sum_y(K), sum_z(K);
 
         // K-means iteration
         for (int iter = 0; iter < max_iters; ++iter)
         {
+            // Reset accumulators
             std::fill(sizes.begin(), sizes.end(), 0);
-            for (int k = 0; k < K; ++k)
-                new_centers[k] = octomap::point3d(0, 0, 0);
+            std::fill(sum_x.begin(), sum_x.end(), 0.0);
+            std::fill(sum_y.begin(), sum_y.end(), 0.0);
+            std::fill(sum_z.begin(), sum_z.end(), 0.0);
 
             // Assignment step: assign each point to nearest center
             for (int i = 0; i < N; ++i)
             {
                 int best_k = 0;
-                double best_d = std::numeric_limits<double>::infinity();
-                for (int k = 0; k < K; ++k)
+                double best_d = sqdist(points[i], centers[0]);
+
+                for (int k = 1; k < K; ++k)
                 {
                     double d = sqdist(points[i], centers[k]);
                     if (d < best_d)
@@ -197,9 +234,12 @@ namespace husky_xarm6_mcr_nbv_planner
                         best_k = k;
                     }
                 }
+
                 labels[i] = best_k;
-                sizes[best_k] += 1;
-                new_centers[best_k] += points[i];
+                sizes[best_k]++;
+                sum_x[best_k] += points[i].x();
+                sum_y[best_k] += points[i].y();
+                sum_z[best_k] += points[i].z();
             }
 
             // Update step: recompute centers and check convergence
@@ -209,9 +249,7 @@ namespace husky_xarm6_mcr_nbv_planner
                 if (sizes[k] > 0)
                 {
                     const double inv = 1.0 / static_cast<double>(sizes[k]);
-                    octomap::point3d c(new_centers[k].x() * inv, 
-                                      new_centers[k].y() * inv, 
-                                      new_centers[k].z() * inv);
+                    octomap::point3d c(sum_x[k] * inv, sum_y[k] * inv, sum_z[k] * inv);
                     max_shift = std::max(max_shift, std::sqrt(sqdist(c, centers[k])));
                     centers[k] = c;
                 }
@@ -249,7 +287,8 @@ namespace husky_xarm6_mcr_nbv_planner
     bool OctoMapInterface::getResolution(double &resolution_out) const
     {
         std::shared_lock lk(mtx_);
-        if (!tree_) {
+        if (!tree_)
+        {
             return false;
         }
         resolution_out = resolution_;
@@ -259,10 +298,11 @@ namespace husky_xarm6_mcr_nbv_planner
     bool OctoMapInterface::getBoundingBox(octomap::point3d &min_out,
                                           octomap::point3d &max_out) const
     {
-        if (!has_valid_bbox_) {
+        if (!has_valid_bbox_)
+        {
             return false;
         }
-        
+
         min_out = bbox_min_;
         max_out = bbox_max_;
         return true;
@@ -271,11 +311,12 @@ namespace husky_xarm6_mcr_nbv_planner
     bool OctoMapInterface::isVoxelOccupied(const octomap::point3d &point) const
     {
         std::shared_lock lk(mtx_);
-        if (!tree_) {
+        if (!tree_)
+        {
             return false;
         }
 
-        octomap::OcTreeNode* node = tree_->search(point);
+        octomap::OcTreeNode *node = tree_->search(point);
         return node != nullptr && tree_->isNodeOccupied(node);
     }
 
@@ -283,7 +324,8 @@ namespace husky_xarm6_mcr_nbv_planner
                                         octomap::OcTreeNode *&node_out) const
     {
         std::shared_lock lk(mtx_);
-        if (!tree_) {
+        if (!tree_)
+        {
             node_out = nullptr;
             return false;
         }
@@ -295,7 +337,8 @@ namespace husky_xarm6_mcr_nbv_planner
     int OctoMapInterface::getOctreeDepth() const
     {
         std::shared_lock lk(mtx_);
-        if (!tree_) {
+        if (!tree_)
+        {
             return 0;
         }
         return static_cast<int>(tree_->getTreeDepth());

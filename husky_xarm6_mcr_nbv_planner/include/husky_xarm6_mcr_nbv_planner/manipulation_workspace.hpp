@@ -108,6 +108,22 @@ namespace husky_xarm6_mcr_nbv_planner
          */
         size_t getNumReachableVoxels() const { return reachable_voxels_.size(); }
 
+        /**
+         * @brief Get signed distance from a point to the workspace bounding sphere
+         * 
+         * Returns the signed distance from the given point to the surface of the bounding sphere:
+         * - Positive distance: point is outside the sphere (distance to closest surface point)
+         * - Negative distance: point is inside the sphere (depth into the sphere)
+         * - Zero: point is exactly on the sphere surface
+         * 
+         * The bounding sphere is computed via fitBoundingSphere() which is called automatically
+         * after learnWorkspace() or loadWorkspaceFromFile().
+         * 
+         * @param point 3D point in workspace coordinates
+         * @return Signed distance in meters (positive=outside, negative=inside)
+         */
+        double getDistance(const Eigen::Vector3d &point) const;
+
     private:
         /**
          * @brief Convert a pose to a 64-bit voxel key for hashing
@@ -134,10 +150,27 @@ namespace husky_xarm6_mcr_nbv_planner
          */
         int32_t discretizeCoordinate(double coord) const;
 
+        /**
+         * @brief Fit a bounding sphere around the reachable workspace
+         * 
+         * Computes a minimal bounding sphere by:
+         * 1. Computing the centroid of all reachable voxels
+         * 2. Finding the furthest voxel from the centroid
+         * 3. Setting sphere center to centroid and radius to furthest distance
+         * 
+         * This provides a conservative bound that contains all reachable positions.
+         * Called automatically after learning or loading workspace.
+         */
+        void fitBoundingSphere();
+
         std::shared_ptr<MoveItInterface> moveit_interface_;
         std::shared_ptr<NBVVisualizer> visualizer_;
         std::unordered_set<uint64_t> reachable_voxels_;
         double voxel_size_ = 0.02; // Default voxel size in meters (this is seperate from the octomap voxel size)
+        
+        // Bounding sphere parameters
+        Eigen::Vector3d sphere_center_ = Eigen::Vector3d::Zero();
+        double sphere_radius_ = 0.0;
     };
 
 }

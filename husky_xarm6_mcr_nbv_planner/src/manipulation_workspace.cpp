@@ -219,6 +219,12 @@ namespace husky_xarm6_mcr_nbv_planner
                    "Workspace learning complete: %zu reachable voxels from %d valid samples",
                    reachable_voxels_.size(), valid_samples);
 
+        // Fit bounding sphere around learned workspace
+        if (!reachable_voxels_.empty())
+        {
+            fitBoundingSphere();
+        }
+
         return !reachable_voxels_.empty();
     }
 
@@ -290,7 +296,61 @@ namespace husky_xarm6_mcr_nbv_planner
         RCLCPP_INFO(rclcpp::get_logger("manipulation_workspace"),
                    "Loaded workspace with %zu voxels from %s", reachable_voxels_.size(), file_path.c_str());
 
+        // Fit bounding sphere around loaded workspace
+        if (!reachable_voxels_.empty())
+        {
+            fitBoundingSphere();
+        }
+
         return !reachable_voxels_.empty();
+    }
+
+    void ManipulationWorkspace::fitBoundingSphere()
+    {
+        if (reachable_voxels_.empty())
+        {
+            sphere_center_ = Eigen::Vector3d::Zero();
+            sphere_radius_ = 0.0;
+            return;
+        }
+
+        // Compute centroid of all voxel centers
+        Eigen::Vector3d sum = Eigen::Vector3d::Zero();
+        for (uint64_t key : reachable_voxels_)
+        {
+            geometry_msgs::msg::Pose pose = voxelKeyToPose(key);
+            sum.x() += pose.position.x;
+            sum.y() += pose.position.y;
+            sum.z() += pose.position.z;
+        }
+        sphere_center_ = sum / static_cast<double>(reachable_voxels_.size());
+
+        // Find maximum distance from centroid to any voxel
+        double max_dist_sq = 0.0;
+        for (uint64_t key : reachable_voxels_)
+        {
+            geometry_msgs::msg::Pose pose = voxelKeyToPose(key);
+            Eigen::Vector3d point(pose.position.x, pose.position.y, pose.position.z);
+            double dist_sq = (point - sphere_center_).squaredNorm();
+            if (dist_sq > max_dist_sq)
+            {
+                max_dist_sq = dist_sq;
+            }
+        }
+        sphere_radius_ = std::sqrt(max_dist_sq);
+
+        RCLCPP_INFO(rclcpp::get_logger("manipulation_workspace"),
+                   "Bounding sphere fitted: center=[%.3f, %.3f, %.3f], radius=%.3f m",
+                   sphere_center_.x(), sphere_center_.y(), sphere_center_.z(), sphere_radius_);
+    }
+
+    double ManipulationWorkspace::getDistance(const Eigen::Vector3d &point) const
+    {
+        // Compute distance from point to sphere center
+        double dist_to_center = (point - sphere_center_).norm();
+        
+        // Signed distance: positive outside, negative inside
+        return dist_to_center - sphere_radius_;
     }
 
 }

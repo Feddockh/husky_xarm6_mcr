@@ -74,6 +74,7 @@ int main(int argc, char **argv)
     int camera_width = node->get_parameter("camera_width").as_int();
     int camera_height = node->get_parameter("camera_height").as_int();
     double camera_max_range = node->get_parameter("camera_max_range").as_double();
+    double ideal_camera_distance = node->get_parameter("ideal_camera_distance").as_double();
     int num_camera_rays = node->get_parameter("num_camera_rays").as_int();
     std::string map_frame = node->get_parameter("map_frame").as_string();
 
@@ -93,6 +94,7 @@ int main(int argc, char **argv)
     RCLCPP_INFO(node->get_logger(), "Camera V-FOV: %.1f rad (%.1f deg)", camera_vertical_fov, camera_vertical_fov * 180.0 / M_PI);
     RCLCPP_INFO(node->get_logger(), "Camera resolution: %dx%d", camera_width, camera_height);
     RCLCPP_INFO(node->get_logger(), "Max sensor range: %.2f m", camera_max_range);
+    RCLCPP_INFO(node->get_logger(), "Ideal camera distance: %.2f m", ideal_camera_distance);
     RCLCPP_INFO(node->get_logger(), "Number of IG rays: %d", num_camera_rays);
     RCLCPP_INFO(node->get_logger(), "Map frame: %s", map_frame.c_str());
     RCLCPP_INFO(node->get_logger(), "============================================\n");
@@ -103,8 +105,8 @@ int main(int argc, char **argv)
     interface->setPlannerId("RRTConnect");
     interface->setPlanningTime(1.0); // seconds
     interface->setNumPlanningAttempts(5);
-    interface->setMaxVelocityScalingFactor(0.5);
-    interface->setMaxAccelerationScalingFactor(0.5);
+    interface->setMaxVelocityScalingFactor(0.8);
+    interface->setMaxAccelerationScalingFactor(0.8);
 
     // Check
     RCLCPP_INFO(node->get_logger(), "Pipeline: %s", interface->getPlanningPipelineId().c_str());
@@ -310,11 +312,24 @@ int main(int argc, char **argv)
         }
         else
         {
+            // Filter the frontiers that are not viewable from the manipulation workspace
+            std::vector<octomap::point3d> viewable_frontiers;
+            for (const auto &frontier : frontiers)
+            {
+                Eigen::Vector3d frontier_eigen(frontier.x(), frontier.y(), frontier.z());
+                if (workspace->getDistance(frontier_eigen) < ideal_camera_distance)
+                {
+                    viewable_frontiers.push_back(frontier);
+                }
+            }
+            RCLCPP_INFO(node->get_logger(), "%zu out of %zu frontiers are viewable from the workspace",
+                    viewable_frontiers.size(), frontiers.size());
+        
             // Cluster the frontiers
-            int n_clusters = std::max(1, (int)frontiers.size() / 100); // Roughly 100 frontiers per cluster
+            int n_clusters = std::max(1, (int)viewable_frontiers.size() / 100); // Roughly 100 frontiers per cluster
             int max_kmeans_iters = 50;
             double convergence_tol = 1e-4;
-            frontier_clusters = octomap_interface->kmeansCluster(frontiers, n_clusters, max_kmeans_iters, convergence_tol);
+            frontier_clusters = octomap_interface->kmeansCluster(viewable_frontiers, n_clusters, max_kmeans_iters, convergence_tol);
             RCLCPP_INFO(node->get_logger(), "Clustered frontiers into %zu groups", frontier_clusters.size());
             if (visualizer)
             {
