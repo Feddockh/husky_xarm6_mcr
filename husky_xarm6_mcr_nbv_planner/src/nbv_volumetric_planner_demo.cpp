@@ -100,8 +100,8 @@ int main(int argc, char **argv)
     interface->setPlannerId("RRTConnect");
     interface->setPlanningTime(1.0); // seconds
     interface->setNumPlanningAttempts(5);
-    interface->setMaxVelocityScalingFactor(0.1);      // 30% of max velocity
-    interface->setMaxAccelerationScalingFactor(0.1);  // 30% of max acceleration
+    interface->setMaxVelocityScalingFactor(0.5);
+    interface->setMaxAccelerationScalingFactor(0.5);
 
     // Check
     RCLCPP_INFO(node->get_logger(), "Pipeline: %s", interface->getPlanningPipelineId().c_str());

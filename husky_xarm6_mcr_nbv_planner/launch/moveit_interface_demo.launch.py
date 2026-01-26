@@ -75,6 +75,10 @@ def launch_setup(context, *args, **kwargs):
     kinematic_yaml = load_yaml(moveit_config_pkg / 'config' / 'kinematics.yaml')
     kinematics_config = {'robot_description_kinematics': kinematic_yaml}
 
+    # Load joint limits configuration
+    joint_limits_yaml = load_yaml(moveit_config_pkg / 'config' / 'joint_limits.yaml')
+    joint_limits_config = {'robot_description_planning_joint_limits': joint_limits_yaml}
+
     # Load the planning configs
     ompl_yaml = load_yaml(moveit_config_pkg / 'config' / 'ompl_planning.yaml')
     planner_config = {
@@ -104,6 +108,7 @@ def launch_setup(context, *args, **kwargs):
             robot_description,
             robot_description_semantic,
             kinematics_config,
+            joint_limits_config,
             planner_config,
             controller_config,
             planning_scene_monitor_config,
