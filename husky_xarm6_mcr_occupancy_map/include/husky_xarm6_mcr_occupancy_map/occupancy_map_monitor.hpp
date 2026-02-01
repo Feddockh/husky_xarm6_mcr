@@ -9,6 +9,7 @@
 #pragma once
 
 #include "husky_xarm6_mcr_occupancy_map/occupancy_map_tree.hpp"
+#include "husky_xarm6_mcr_occupancy_map/semantic_occupancy_map_tree.hpp"
 #include "husky_xarm6_mcr_occupancy_map/occupancy_map_updater.hpp"
 
 #include <rclcpp/rclcpp.hpp>
@@ -41,6 +42,10 @@ namespace husky_xarm6_mcr_occupancy_map
         bool use_bounding_box;
         octomap::point3d bbx_min;
         octomap::point3d bbx_max;
+
+        // Semantic fusion parameters
+        float semantic_confidence_boost;   ///< Boost when labels match (default 0.05)
+        float semantic_mismatch_penalty;   ///< Penalty when labels differ (default 0.1)
     };
 
     /**
@@ -61,20 +66,24 @@ namespace husky_xarm6_mcr_occupancy_map
          * @param node ROS2 node handle
          * @param tf_buffer TF2 buffer for transforms
          * @param params Configuration parameters
+         * @param use_semantic If true, creates semantic tree; otherwise standard tree
          */
         OccupancyMapMonitor(
             const rclcpp::Node::SharedPtr &node,
             const std::shared_ptr<tf2_ros::Buffer> &tf_buffer,
-            const OccupancyMapParameters &params);
+            const OccupancyMapParameters &params,
+            bool use_semantic = false);
 
         /**
          * @brief Simplified constructor without TF buffer
          * @param node ROS2 node handle
          * @param params Configuration parameters
+         * @param use_semantic If true, creates semantic tree; otherwise standard tree
          */
         OccupancyMapMonitor(
             const rclcpp::Node::SharedPtr &node,
-            const OccupancyMapParameters &params);
+            const OccupancyMapParameters &params,
+            bool use_semantic = false);
 
         /**
          * @brief Destructor - stops monitoring
@@ -118,6 +127,11 @@ namespace husky_xarm6_mcr_occupancy_map
          * @brief Get map tree (alias for getOcTreePtr for convenience)
          */
         const OccupancyMapTreePtr &getMapTree() { return tree_; }
+
+        /**
+         * @brief Get semantic tree (returns nullptr if not semantic mode)
+         */
+        const SemanticOccupancyMapTreePtr &getSemanticMapTree() { return semantic_tree_; }
 
         /**
          * @brief Get map frame name
@@ -190,14 +204,16 @@ namespace husky_xarm6_mcr_occupancy_map
         // Map (params_ must come before logger_ to match initialization order)
         OccupancyMapParameters params_;
         rclcpp::Logger logger_;
-        OccupancyMapTreePtr tree_;
+        OccupancyMapTreePtr tree_;                        ///< Standard tree (nullptr in semantic mode)
         OccupancyMapTreeConstPtr tree_const_;
+        SemanticOccupancyMapTreePtr semantic_tree_;      ///< Semantic tree (nullptr in standard mode)
 
         // Updaters
         std::vector<OccupancyMapUpdaterPtr> updaters_;
 
         // State
         bool active_;
+        bool use_semantic_;  ///< True if using semantic tree
     };
 
 } // namespace husky_xarm6_mcr_occupancy_map

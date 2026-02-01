@@ -6,11 +6,13 @@
 #pragma once
 
 #include "husky_xarm6_mcr_occupancy_map/occupancy_map_tree.hpp"
+#include "husky_xarm6_mcr_occupancy_map/semantic_occupancy_map_tree.hpp"
 
 #include <rclcpp/rclcpp.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 #include <visualization_msgs/msg/marker.hpp>
 #include <std_msgs/msg/color_rgba.hpp>
+#include <octomap/OccupancyOcTreeBase.h>
 #include <memory>
 #include <string>
 #include <optional>
@@ -23,20 +25,27 @@ namespace husky_xarm6_mcr_occupancy_map
      *
      * Creates marker arrays showing occupied voxels (and optionally free voxels)
      * for debugging and visualization purposes.
+     * 
+     * Works with any OccupancyOcTreeBase-derived tree (OcTree, SemanticOcTree, etc.)
      */
     class OccupancyMapVisualizer
     {
     public:
         /**
-         * @brief Constructor
-         * @param node ROS2 node
-         * @param tree Octree to visualize
-         * @param map_frame Frame ID for markers
-         * @param topic Marker topic to publish on
+         * @brief Constructor for standard OccupancyMapTree
          */
         OccupancyMapVisualizer(
             const rclcpp::Node::SharedPtr &node,
             const OccupancyMapTreePtr &tree,
+            const std::string &map_frame,
+            const std::string &topic = "occupancy_map_markers");
+
+        /**
+         * @brief Constructor for SemanticOccupancyMapTree
+         */
+        OccupancyMapVisualizer(
+            const rclcpp::Node::SharedPtr &node,
+            const SemanticOccupancyMapTreePtr &tree,
             const std::string &map_frame,
             const std::string &topic = "occupancy_map_markers");
 
@@ -66,17 +75,14 @@ namespace husky_xarm6_mcr_occupancy_map
             const std::optional<octomap::point3d> &bbx_max = std::nullopt);
 
         /**
-         * @brief Create marker for voxels
+         * @brief Get color for semantic class ID
          */
-        visualization_msgs::msg::Marker createVoxelMarker(
-            const std::vector<octomap::point3d> &points,
-            int id,
-            const std::string &ns,
-            const std_msgs::msg::ColorRGBA &color,
-            double size);
+        std_msgs::msg::ColorRGBA getClassColor(int32_t class_id) const;
 
         rclcpp::Node::SharedPtr node_;
-        OccupancyMapTreePtr tree_;
+        octomap::AbstractOcTree *tree_base_;  // Polymorphic base pointer
+        OccupancyMapTreePtr tree_standard_;   // Keep alive standard tree
+        SemanticOccupancyMapTreePtr tree_semantic_;  // Keep alive semantic tree
         std::string map_frame_;
         rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
         rclcpp::Logger logger_;

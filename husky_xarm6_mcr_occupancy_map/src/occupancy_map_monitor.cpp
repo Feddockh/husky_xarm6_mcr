@@ -4,6 +4,7 @@
  */
 
 #include "husky_xarm6_mcr_occupancy_map/occupancy_map_monitor.hpp"
+#include "husky_xarm6_mcr_occupancy_map/semantic_occupancy_map_tree.hpp"
 
 namespace husky_xarm6_mcr_occupancy_map
 {
@@ -11,66 +12,120 @@ namespace husky_xarm6_mcr_occupancy_map
     OccupancyMapMonitor::OccupancyMapMonitor(
         const rclcpp::Node::SharedPtr &node,
         const std::shared_ptr<tf2_ros::Buffer> &tf_buffer,
-        const OccupancyMapParameters &params)
-        : node_(node), tf_buffer_(tf_buffer), params_(params), logger_(node_->get_logger()), active_(false)
+        const OccupancyMapParameters &params,
+        bool use_semantic)
+        : node_(node), tf_buffer_(tf_buffer), params_(params), logger_(node_->get_logger()), 
+          active_(false), use_semantic_(use_semantic)
     {
-        // Create octree with specified resolution
-        tree_ = std::make_shared<OccupancyMapTree>(params_.resolution);
-        tree_const_ = tree_;
-
-        // Configure octree parameters
-        tree_->setProbHit(params_.prob_hit);
-        tree_->setProbMiss(params_.prob_miss);
-        tree_->setClampingThresMin(params_.clamp_min);
-        tree_->setClampingThresMax(params_.clamp_max);
-        tree_->setOccupancyThres(params_.occupancy_threshold);
-
-        // Apply bounding box if enabled
-        if (params_.use_bounding_box) {
-            tree_->setBBXMin(params_.bbx_min);
-            tree_->setBBXMax(params_.bbx_max);
-            tree_->useBBXLimit(true);
+        if (use_semantic_)
+        {
+            // Create semantic tree
+            semantic_tree_ = std::make_shared<SemanticOccupancyMapTree>(params_.resolution);
+            tree_ = nullptr;
             
-            RCLCPP_INFO(logger_, "Bounding box enabled:");
-            RCLCPP_INFO(logger_, "  Min: [%.2f, %.2f, %.2f]", 
-                        params_.bbx_min.x(), params_.bbx_min.y(), params_.bbx_min.z());
-            RCLCPP_INFO(logger_, "  Max: [%.2f, %.2f, %.2f]", 
-                        params_.bbx_max.x(), params_.bbx_max.y(), params_.bbx_max.z());
+            // Apply bounding box if enabled
+            if (params_.use_bounding_box) {
+                semantic_tree_->setBBXMin(params_.bbx_min);
+                semantic_tree_->setBBXMax(params_.bbx_max);
+                semantic_tree_->useBBXLimit(true);
+                
+                RCLCPP_INFO(logger_, "Bounding box enabled:");
+                RCLCPP_INFO(logger_, "  Min: [%.2f, %.2f, %.2f]", 
+                            params_.bbx_min.x(), params_.bbx_min.y(), params_.bbx_min.z());
+                RCLCPP_INFO(logger_, "  Max: [%.2f, %.2f, %.2f]", 
+                            params_.bbx_max.x(), params_.bbx_max.y(), params_.bbx_max.z());
+            }
+            
+            RCLCPP_INFO(logger_, "OccupancyMapMonitor created (resolution: %.3f m, mode: SEMANTIC)", params_.resolution);
         }
+        else
+        {
+            // Create standard tree
+            tree_ = std::make_shared<OccupancyMapTree>(params_.resolution);
+            tree_const_ = tree_;
+            semantic_tree_ = nullptr;
 
-        RCLCPP_INFO(logger_, "OccupancyMapMonitor created (resolution: %.3f m)", params_.resolution);
+            // Configure octree parameters
+            tree_->setProbHit(params_.prob_hit);
+            tree_->setProbMiss(params_.prob_miss);
+            tree_->setClampingThresMin(params_.clamp_min);
+            tree_->setClampingThresMax(params_.clamp_max);
+            tree_->setOccupancyThres(params_.occupancy_threshold);
+
+            // Apply bounding box if enabled
+            if (params_.use_bounding_box) {
+                tree_->setBBXMin(params_.bbx_min);
+                tree_->setBBXMax(params_.bbx_max);
+                tree_->useBBXLimit(true);
+                
+                RCLCPP_INFO(logger_, "Bounding box enabled:");
+                RCLCPP_INFO(logger_, "  Min: [%.2f, %.2f, %.2f]", 
+                            params_.bbx_min.x(), params_.bbx_min.y(), params_.bbx_min.z());
+                RCLCPP_INFO(logger_, "  Max: [%.2f, %.2f, %.2f]", 
+                            params_.bbx_max.x(), params_.bbx_max.y(), params_.bbx_max.z());
+            }
+
+            RCLCPP_INFO(logger_, "OccupancyMapMonitor created (resolution: %.3f m, mode: STANDARD)", params_.resolution);
+        }
     }
 
     OccupancyMapMonitor::OccupancyMapMonitor(
         const rclcpp::Node::SharedPtr &node,
-        const OccupancyMapParameters &params)
-        : node_(node), tf_buffer_(nullptr), params_(params), logger_(node_->get_logger()), active_(false)
+        const OccupancyMapParameters &params,
+        bool use_semantic)
+        : node_(node), tf_buffer_(nullptr), params_(params), logger_(node_->get_logger()), 
+          active_(false), use_semantic_(use_semantic)
     {
-        // Create octree with specified resolution
-        tree_ = std::make_shared<OccupancyMapTree>(params_.resolution);
-        tree_const_ = tree_;
-
-        // Configure octree parameters
-        tree_->setProbHit(params_.prob_hit);
-        tree_->setProbMiss(params_.prob_miss);
-        tree_->setClampingThresMin(params_.clamp_min);
-        tree_->setClampingThresMax(params_.clamp_max);
-        tree_->setOccupancyThres(params_.occupancy_threshold);
-
-        // Apply bounding box if enabled
-        if (params_.use_bounding_box) {
-            tree_->setBBXMin(params_.bbx_min);
-            tree_->setBBXMax(params_.bbx_max);
-            tree_->useBBXLimit(true);
+        if (use_semantic_)
+        {
+            // Create semantic tree
+            semantic_tree_ = std::make_shared<SemanticOccupancyMapTree>(params_.resolution);
+            tree_ = nullptr;
             
-            RCLCPP_INFO(logger_, "Bounding box enabled:");
-            RCLCPP_INFO(logger_, "  Min: [%.2f, %.2f, %.2f]", 
-                        params_.bbx_min.x(), params_.bbx_min.y(), params_.bbx_min.z());
-            RCLCPP_INFO(logger_, "  Max: [%.2f, %.2f, %.2f]", 
-                        params_.bbx_max.x(), params_.bbx_max.y(), params_.bbx_max.z());
+            // Apply bounding box if enabled
+            if (params_.use_bounding_box) {
+                semantic_tree_->setBBXMin(params_.bbx_min);
+                semantic_tree_->setBBXMax(params_.bbx_max);
+                semantic_tree_->useBBXLimit(true);
+                
+                RCLCPP_INFO(logger_, "Bounding box enabled:");
+                RCLCPP_INFO(logger_, "  Min: [%.2f, %.2f, %.2f]", 
+                            params_.bbx_min.x(), params_.bbx_min.y(), params_.bbx_min.z());
+                RCLCPP_INFO(logger_, "  Max: [%.2f, %.2f, %.2f]", 
+                            params_.bbx_max.x(), params_.bbx_max.y(), params_.bbx_max.z());
+            }
+            
+            RCLCPP_INFO(logger_, "OccupancyMapMonitor created (resolution: %.3f m, mode: SEMANTIC)", params_.resolution);
         }
+        else
+        {
+            // Create standard tree
+            tree_ = std::make_shared<OccupancyMapTree>(params_.resolution);
+            tree_const_ = tree_;
+            semantic_tree_ = nullptr;
 
-        RCLCPP_INFO(logger_, "OccupancyMapMonitor created (resolution: %.3f m)", params_.resolution);
+            // Configure octree parameters
+            tree_->setProbHit(params_.prob_hit);
+            tree_->setProbMiss(params_.prob_miss);
+            tree_->setClampingThresMin(params_.clamp_min);
+            tree_->setClampingThresMax(params_.clamp_max);
+            tree_->setOccupancyThres(params_.occupancy_threshold);
+
+            // Apply bounding box if enabled
+            if (params_.use_bounding_box) {
+                tree_->setBBXMin(params_.bbx_min);
+                tree_->setBBXMax(params_.bbx_max);
+                tree_->useBBXLimit(true);
+                
+                RCLCPP_INFO(logger_, "Bounding box enabled:");
+                RCLCPP_INFO(logger_, "  Min: [%.2f, %.2f, %.2f]", 
+                            params_.bbx_min.x(), params_.bbx_min.y(), params_.bbx_min.z());
+                RCLCPP_INFO(logger_, "  Max: [%.2f, %.2f, %.2f]", 
+                            params_.bbx_max.x(), params_.bbx_max.y(), params_.bbx_max.z());
+            }
+
+            RCLCPP_INFO(logger_, "OccupancyMapMonitor created (resolution: %.3f m, mode: STANDARD)", params_.resolution);
+        }
     }
 
     OccupancyMapMonitor::~OccupancyMapMonitor()
@@ -152,7 +207,14 @@ namespace husky_xarm6_mcr_occupancy_map
 
     void OccupancyMapMonitor::setUpdateCallback(const std::function<void()> &callback)
     {
-        tree_->setUpdateCallback(callback);
+        if (semantic_tree_)
+        {
+            semantic_tree_->setUpdateCallback(callback);
+        }
+        else if (tree_)
+        {
+            tree_->setUpdateCallback(callback);
+        }
     }
 
     // ============================================================================
@@ -163,20 +225,28 @@ namespace husky_xarm6_mcr_occupancy_map
     {
         RCLCPP_INFO(logger_, "Saving map to: %s", filename.c_str());
 
-        tree_->lockRead();
         bool success = false;
 
         try
         {
-            success = tree_->writeBinary(filename);
+            if (semantic_tree_)
+            {
+                semantic_tree_->lockRead();
+                success = semantic_tree_->writeBinary(filename);
+                semantic_tree_->unlockRead();
+            }
+            else if (tree_)
+            {
+                tree_->lockRead();
+                success = tree_->writeBinary(filename);
+                tree_->unlockRead();
+            }
         }
         catch (const std::exception &e)
         {
             RCLCPP_ERROR(logger_, "Failed to save map: %s", e.what());
             success = false;
         }
-
-        tree_->unlockRead();
 
         if (success)
         {
@@ -194,29 +264,39 @@ namespace husky_xarm6_mcr_occupancy_map
     {
         RCLCPP_INFO(logger_, "Loading map from: %s", filename.c_str());
 
-        tree_->lockWrite();
         bool success = false;
 
         try
         {
-            // Read binary octree file
-            auto *loaded_tree = dynamic_cast<octomap::OcTree *>(octomap::AbstractOcTree::read(filename));
-            if (loaded_tree)
+            if (semantic_tree_)
             {
-                // Create new OccupancyMapTree and swap it in
-                auto new_tree = std::make_shared<OccupancyMapTree>(params_.resolution);
-
-                // Copy nodes from loaded tree to new tree
-                for (auto it = loaded_tree->begin_leafs(); it != loaded_tree->end_leafs(); ++it)
+                // TODO: Implement semantic tree loading if needed
+                RCLCPP_ERROR(logger_, "Loading semantic trees not yet implemented");
+                return false;
+            }
+            else if (tree_)
+            {
+                tree_->lockWrite();
+                // Read binary octree file
+                auto *loaded_tree = dynamic_cast<octomap::OcTree *>(octomap::AbstractOcTree::read(filename));
+                if (loaded_tree)
                 {
-                    new_tree->updateNode(it.getCoordinate(), it->getLogOdds());
+                    // Create new OccupancyMapTree and swap it in
+                    auto new_tree = std::make_shared<OccupancyMapTree>(params_.resolution);
+
+                    // Copy nodes from loaded tree to new tree
+                    for (auto it = loaded_tree->begin_leafs(); it != loaded_tree->end_leafs(); ++it)
+                    {
+                        new_tree->updateNode(it.getCoordinate(), it->getLogOdds());
+                    }
+
+                    // Replace tree
+                    tree_ = new_tree;
+
+                    delete loaded_tree;
+                    success = true;
                 }
-
-                // Replace tree
-                tree_ = new_tree;
-
-                delete loaded_tree;
-                success = true;
+                tree_->unlockWrite();
             }
         }
         catch (const std::exception &e)
@@ -225,14 +305,12 @@ namespace husky_xarm6_mcr_occupancy_map
             success = false;
         }
 
-        tree_->unlockWrite();
-
-        if (success)
+        if (success && tree_)
         {
             tree_->triggerUpdateCallback();
             RCLCPP_INFO(logger_, "Map loaded successfully");
         }
-        else
+        else if (!success)
         {
             RCLCPP_ERROR(logger_, "Failed to load map");
         }
@@ -244,11 +322,20 @@ namespace husky_xarm6_mcr_occupancy_map
     {
         RCLCPP_INFO(logger_, "Resetting map");
 
-        tree_->lockWrite();
-        tree_->clear();
-        tree_->unlockWrite();
-
-        tree_->triggerUpdateCallback();
+        if (semantic_tree_)
+        {
+            semantic_tree_->lockWrite();
+            semantic_tree_->clear();
+            semantic_tree_->unlockWrite();
+            semantic_tree_->triggerUpdateCallback();
+        }
+        else if (tree_)
+        {
+            tree_->lockWrite();
+            tree_->clear();
+            tree_->unlockWrite();
+            tree_->triggerUpdateCallback();
+        }
     }
 
 } // namespace husky_xarm6_mcr_occupancy_map

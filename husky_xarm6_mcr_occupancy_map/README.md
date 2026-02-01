@@ -95,7 +95,6 @@ monitor->startMonitor();
 - **Pattern**: Strategy pattern for different sensor types
 - **Implementations**:
   - `PointCloudUpdater`: Processes `sensor_msgs/PointCloud2`
-  - `DepthImageUpdater`: Processes depth images (future)
   - Custom updaters: Extensible
 
 ```cpp
@@ -373,7 +372,6 @@ void writer_thread() {
 2. **Temporal Decay**: Forget old observations over time
 3. **Ground Plane Removal**: RANSAC-based filtering
 4. **Multiple Sensors**: Fusion of multiple point clouds
-5. **Semantic Mapping**: Object-level occupancy
 
 ---
 

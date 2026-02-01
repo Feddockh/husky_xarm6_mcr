@@ -66,6 +66,8 @@ namespace husky_xarm6_mcr_occupancy_map
 
     void PointCloudUpdater::pointCloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
     {
+        auto callback_start = node_->now();
+        
         if (!tree_ || !active_)
         {
             return;
@@ -200,12 +202,14 @@ namespace husky_xarm6_mcr_occupancy_map
         // Statistics
         points_processed_ += valid_points;
 
-        RCLCPP_DEBUG(
+        auto callback_end = node_->now();
+        double callback_duration = (callback_end - callback_start).seconds();
+        
+        RCLCPP_INFO(
             logger_,
-            "Processed %zu points from %s (total: %zu)",
+            "[TIMING] Processed %zu points in %.3f ms",
             valid_points,
-            sensor_frame.c_str(),
-            points_processed_);
+            callback_duration * 1000.0);
     }
 
     bool PointCloudUpdater::isInRange(const octomap::point3d &point, const octomap::point3d &origin) const

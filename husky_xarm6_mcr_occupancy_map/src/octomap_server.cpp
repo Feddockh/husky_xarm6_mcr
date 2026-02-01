@@ -1,14 +1,11 @@
 /**
  * @file moveit_octomap_server.cpp
  * @brief MoveIt-integrated occupancy map server with octomap_msgs publishing
- * Supports both regular octomap and semantic octomap modes
  */
 
 #include "husky_xarm6_mcr_occupancy_map/occupancy_map_monitor.hpp"
 #include "husky_xarm6_mcr_occupancy_map/pointcloud_updater.hpp"
-#include "husky_xarm6_mcr_occupancy_map/semantic_occupancy_map_monitor.hpp"
 #include "husky_xarm6_mcr_occupancy_map/semantic_pointcloud_updater.hpp"
-#include "husky_xarm6_mcr_occupancy_map/depth_image_updater.hpp"
 #include "husky_xarm6_mcr_occupancy_map/occupancy_map_visualizer.hpp"
 #include <rclcpp/rclcpp.hpp>
 #include <tf2_ros/buffer.h>
@@ -51,11 +48,12 @@ int main(int argc, char **argv)
     node->declare_parameter("use_moveit", false);
     node->declare_parameter("planning_scene_world_topic", "/planning_scene_world");
 
-    node->declare_parameter("publish_free_voxels", false);
+    node->declare_parameter("publish_free_voxels", true);
     node->declare_parameter("enable_visualization", true);
     node->declare_parameter("visualization_topic", "occupancy_map_markers");
     node->declare_parameter("visualization_rate", 1.0);
     node->declare_parameter("octomap_publish_rate", 1.0);
+    
     // Bounding box parameters
     node->declare_parameter("use_bounding_box", false);
     node->declare_parameter("bbx_min_x", -1.0);
@@ -65,16 +63,13 @@ int main(int argc, char **argv)
     node->declare_parameter("bbx_max_y", 1.0);
     node->declare_parameter("bbx_max_z", 1.0);
 
-    node->declare_parameter("use_semantic", false);
-    node->declare_parameter("num_classes", 100);
-    node->declare_parameter("detections_topic", "/detections");
-
+    node->declare_parameter("use_semantics", false);
     node->declare_parameter("nbv_octomap_topic", "/octomap_binary");
     node->declare_parameter("nbv_octomap_qos_transient_local", true);
 
-    node->declare_parameter("updater_type", "pointcloud"); // "pointcloud" | "depth_image"
-    node->declare_parameter("depth_topic", "/stereo/depth");
-    node->declare_parameter("depth_info_topic", "/camera/camera_info");
+    // Semantic fusion parameters
+    node->declare_parameter("semantic_confidence_boost", 0.05);
+    node->declare_parameter("semantic_mismatch_penalty", 0.1);
 
     // Get parameters (already declared by automatically_declare_parameters_from_overrides)
     OccupancyMapParameters params;
@@ -113,115 +108,213 @@ int main(int argc, char **argv)
             node->get_parameter("bbx_max_z").as_double());
     }
 
-    bool use_semantic = node->get_parameter("use_semantic").as_bool();
-    // int32_t num_classes = node->get_parameter("num_classes").as_int();
-    std::string detections_topic = node->get_parameter("detections_topic").as_string();
-
     double octomap_publish_rate = node->get_parameter("octomap_publish_rate").as_double();
     std::string nbv_octomap_topic = node->get_parameter("nbv_octomap_topic").as_string();
     bool nbv_octomap_qos_transient_local = node->get_parameter("nbv_octomap_qos_transient_local").as_bool();
 
-    RCLCPP_INFO(logger, "Server mode: %s", use_semantic ? "SEMANTIC" : "STANDARD");
+    bool use_semantics = node->get_parameter("use_semantics").as_bool();
+    params.semantic_confidence_boost = node->get_parameter("semantic_confidence_boost").as_double();
+    params.semantic_mismatch_penalty = node->get_parameter("semantic_mismatch_penalty").as_double();
 
-    std::string updater_type = node->get_parameter("updater_type").as_string();
-    std::string depth_topic = node->get_parameter("depth_topic").as_string();
-    std::string depth_info_topic = node->get_parameter("depth_info_topic").as_string();
+    RCLCPP_INFO(logger, "Octomap mode: %s", use_semantics ? "SEMANTIC" : "STANDARD");
+    // Create monitor (creates appropriate tree type internally)
+    auto monitor = std::make_shared<OccupancyMapMonitor>(node, tf_buffer, params, use_semantics);
 
-    RCLCPP_INFO(logger, "Updater type: %s", updater_type.c_str());
-
-    // TODO: NOt incorperated yet
-    use_semantic = false;
-    if (use_semantic)
+    if (use_semantics)
     {
-        // // Semantic mode: use semantic octomap monitor
-        // auto semantic_monitor = std::make_shared<SemanticOccupancyMapMonitor>(params, num_classes);
+        // ==================== SEMANTIC MODE ====================
+        // Create semantic pointcloud updater and add to monitor
+        auto semantic_updater = std::make_shared<SemanticPointCloudUpdater>(pointcloud_topic, params);
+        semantic_updater->initialize(node, tf_buffer);
+        semantic_updater->setSemanticTree(monitor->getSemanticMapTree());
+        monitor->addUpdater(semantic_updater);
 
-        // // Create semantic pointcloud updater
-        // auto semantic_updater = std::make_shared<SemanticPointCloudUpdater>(
-        //     pointcloud_topic, detections_topic, params);
-        // semantic_updater->initialize(node, tf_buffer);
-        // semantic_updater->setSemanticMonitor(semantic_monitor);
+        RCLCPP_INFO(logger, "Using SemanticPointCloudUpdater on: %s", pointcloud_topic.c_str());
 
-        // // TODO: Create visualizer compatible with raw OcTree
-        // // For now, visualizer is disabled in semantic mode
+        // Create visualizer (supports both tree types via overloaded constructor)
+        std::shared_ptr<OccupancyMapVisualizer> visualizer;
+        if (enable_viz)
+        {
+            visualizer = std::make_shared<OccupancyMapVisualizer>(
+                node, monitor->getSemanticMapTree(), params.map_frame, viz_topic);
+            visualizer->setUpdateRate(viz_rate);
+        }
 
-        // // Octomap publisher for planning scene world updates
-        // auto psw_pub = node->create_publisher<moveit_msgs::msg::PlanningSceneWorld>(
-        //     planning_scene_world_topic, rclcpp::QoS(1).transient_local());
+        // Octomap publisher for planning scene world updates
+        rclcpp::Publisher<moveit_msgs::msg::PlanningSceneWorld>::SharedPtr psw_pub;
+        if (use_moveit)
+        {
+            psw_pub = node->create_publisher<moveit_msgs::msg::PlanningSceneWorld>(
+                planning_scene_world_topic, rclcpp::QoS(1).transient_local());
+            RCLCPP_INFO(logger, "Planning scene world publisher created on topic: %s", planning_scene_world_topic.c_str());
+        }
 
-        // rclcpp::Time last_octomap_publish = node->now();
+        // Create NBV octomap publisher
+        rclcpp::QoS nbv_qos = rclcpp::QoS(1);
+        if (nbv_octomap_qos_transient_local)
+        {
+            nbv_qos = rclcpp::QoS(1).transient_local();
+        }
+        auto nbv_pub = node->create_publisher<husky_xarm6_mcr_occupancy_map::msg::CustomOctomap>(
+            nbv_octomap_topic, nbv_qos);
+        RCLCPP_INFO(logger, "NBV octomap publisher created on topic: %s", nbv_octomap_topic.c_str());
 
-        // // Connect update callback
-        // semantic_monitor->setUpdateCallback([node,
-        //                                     psw_pub,
-        //                                     &last_octomap_publish,
-        //                                     octomap_publish_rate,
-        //                                     semantic_monitor,
-        //                                     params]()
-        // {
-        //     auto now = node->now();
-        //     if ((now - last_octomap_publish).seconds() >= (1.0 / octomap_publish_rate))
-        //     {
-        //         octomap_msgs::msg::Octomap octomap_msg;
-        //         octomap_msg.header.frame_id = params.map_frame;
-        //         octomap_msg.header.stamp = now;
+        auto last_octomap_publish = std::make_shared<rclcpp::Time>(node->now());
 
-        //         auto tree = semantic_monitor->getMapTree();
+        // Set update callback on monitor (not tree)
+        monitor->setUpdateCallback([node,
+                                    visualizer,
+                                    psw_pub,
+                                    nbv_pub,
+                                    last_octomap_publish,
+                                    octomap_publish_rate,
+                                    publish_free,
+                                    use_moveit,
+                                    monitor,
+                                    params]()
+                                   {
+            auto callback_start = node->now();
+            RCLCPP_INFO(node->get_logger(), "Semantic occupancy map callback triggered");
+            
+            auto viz_start = node->now();
+            if (visualizer)
+            {
+                visualizer->publishMarkers(publish_free);
+            }
+            auto viz_end = node->now();
 
-        //         if (octomap_msgs::binaryMapToMsg(*tree, octomap_msg))
-        //         {
-        //             octomap_msgs::msg::OctomapWithPose octomap_with_pose;
-        //             octomap_with_pose.header = octomap_msg.header;
-        //             octomap_with_pose.octomap = octomap_msg;
-        //             octomap_with_pose.origin.orientation.w = 1.0;
+            auto now = node->now();
+            if ((now - *last_octomap_publish).seconds() >= (1.0 / octomap_publish_rate))
+            {
+                auto publish_start = node->now();
+                auto lock_start = node->now();
+                monitor->getSemanticMapTree()->lockRead();
+                auto lock_end = node->now();
+                
+                // Publish to MoveIt with standard OcTree format (if enabled)
+                auto moveit_start = node->now();
+                if (use_moveit && psw_pub)
+                {
+                    // Create a temporary standard OcTree with same resolution
+                    octomap::OcTree standard_tree(params.resolution);
+                    
+                    // Copy only occupancy data from semantic tree
+                    for (auto it = monitor->getSemanticMapTree()->begin_leafs(); 
+                         it != monitor->getSemanticMapTree()->end_leafs(); ++it)
+                    {
+                        if (monitor->getSemanticMapTree()->isNodeOccupied(*it))
+                        {
+                            standard_tree.updateNode(it.getCoordinate(), it->getLogOdds());
+                        }
+                    }
+                    
+                    // Prune and update inner nodes
+                    standard_tree.updateInnerOccupancy();
+                    standard_tree.prune();
+                    
+                    // Use standard OctoMap serialization
+                    octomap_msgs::msg::Octomap moveit_msg;
+                    moveit_msg.header.frame_id = params.map_frame;
+                    moveit_msg.header.stamp = now;
+                    
+                    if (octomap_msgs::binaryMapToMsg(standard_tree, moveit_msg))
+                    {
+                        octomap_msgs::msg::OctomapWithPose octomap_with_pose;
+                        octomap_with_pose.header = moveit_msg.header;
+                        octomap_with_pose.octomap = moveit_msg;
+                        octomap_with_pose.origin.orientation.w = 1.0;
+                        
+                        moveit_msgs::msg::PlanningSceneWorld world_msg;
+                        world_msg.octomap = octomap_with_pose;
+                        psw_pub->publish(world_msg);
+                        
+                        RCLCPP_DEBUG(node->get_logger(), "Published standard OcTree to MoveIt (%zu nodes)", 
+                                    standard_tree.size());
+                    }
+                    else
+                    {
+                        RCLCPP_WARN(node->get_logger(), "Failed to serialize standard tree for MoveIt");
+                    }
+                }
+                auto moveit_end = node->now();
+                
+                // Publish full semantic tree to NBV planner
+                auto nbv_start = node->now();
+                octomap_msgs::msg::Octomap octomap_msg;
+                octomap_msg.header.frame_id = params.map_frame;
+                octomap_msg.header.stamp = now;
+                
+                if (octomap_msgs::binaryMapToMsg(*monitor->getSemanticMapTree(), octomap_msg))
+                {
+                    husky_xarm6_mcr_occupancy_map::msg::CustomOctomap nbv_msg;
+                    nbv_msg.header = octomap_msg.header;
+                    nbv_msg.octomap = octomap_msg;
+                    
+                    if (params.use_bounding_box)
+                    {
+                        nbv_msg.has_bounding_box = true;
+                        nbv_msg.bbx_min.x = params.bbx_min.x();
+                        nbv_msg.bbx_min.y = params.bbx_min.y();
+                        nbv_msg.bbx_min.z = params.bbx_min.z();
+                        nbv_msg.bbx_max.x = params.bbx_max.x();
+                        nbv_msg.bbx_max.y = params.bbx_max.y();
+                        nbv_msg.bbx_max.z = params.bbx_max.z();
+                    }
+                    else
+                    {
+                        nbv_msg.has_bounding_box = false;
+                        nbv_msg.bbx_min.x = nbv_msg.bbx_min.y = nbv_msg.bbx_min.z = 0.0;
+                        nbv_msg.bbx_max.x = nbv_msg.bbx_max.y = nbv_msg.bbx_max.z = 0.0;
+                    }
+                    
+                    nbv_pub->publish(nbv_msg);
 
-        //             moveit_msgs::msg::PlanningSceneWorld world_msg;
-        //             world_msg.octomap = octomap_with_pose;
-        //             psw_pub->publish(world_msg);
-        //         }
+                    RCLCPP_INFO(node->get_logger(), "Published semantic octomap to NBV planner with %zu nodes", 
+                                monitor->getSemanticMapTree()->size());
+                }
+                else
+                {
+                    RCLCPP_WARN(node->get_logger(), "Failed to serialize semantic tree for NBV planner");
+                }
+                auto nbv_end = node->now();
+                
+                monitor->getSemanticMapTree()->unlockRead();
+                *last_octomap_publish = now;
+                
+                auto publish_end = node->now();
+                double lock_time = (lock_end - lock_start).seconds() * 1000.0;
+                double moveit_time = (moveit_end - moveit_start).seconds() * 1000.0;
+                double nbv_time = (nbv_end - nbv_start).seconds() * 1000.0;
+                double publish_time = (publish_end - publish_start).seconds() * 1000.0;
+                RCLCPP_INFO(node->get_logger(), "[TIMING] Publish: Lock: %.2fms | MoveIt: %.2fms | NBV: %.2fms | Total: %.2fms",
+                           lock_time, moveit_time, nbv_time, publish_time);
+            }
+            
+            auto callback_end = node->now();
+            double viz_time = (viz_end - viz_start).seconds() * 1000.0;
+            double total_time = (callback_end - callback_start).seconds() * 1000.0;
+            RCLCPP_INFO(node->get_logger(), "[TIMING] Update callback: Viz: %.2fms | Total: %.2fms", viz_time, total_time);
+            });
 
-        //         last_octomap_publish = now;
-        //     }
-        // });
+        // Start monitoring
+        monitor->startMonitor();
 
-        // // Start monitoring
-        // semantic_monitor->startMonitor();
-        // semantic_updater->start();
-
-        // RCLCPP_INFO(logger, "Semantic MoveIt octomap server ready");
-        // RCLCPP_INFO(logger, "  Detections topic: %s", detections_topic.c_str());
-        // RCLCPP_INFO(logger, "  Num classes: %d", num_classes);
+        RCLCPP_INFO(logger, "Semantic octomap server ready");
+        RCLCPP_INFO(logger, "  Map frame: %s", params.map_frame.c_str());
+        RCLCPP_INFO(logger, "  Resolution: %.3f m", params.resolution);
+        RCLCPP_INFO(logger, "  Max range: %.2f m", params.max_range);
+        RCLCPP_INFO(logger, "  PointCloud topic: %s", pointcloud_topic.c_str());
+        RCLCPP_INFO(logger, "  MoveIt integration: %s", use_moveit ? "ENABLED" : "DISABLED");
     }
     else
     {
-        // Standard mode: use regular octomap monitor
-        auto monitor = std::make_shared<OccupancyMapMonitor>(node, params);
+        // ==================== STANDARD MODE ====================
+        // Create pointcloud updater and add to monitor
+        auto pc_updater = std::make_shared<PointCloudUpdater>(pointcloud_topic, params);
+        pc_updater->initialize(node, tf_buffer);
+        monitor->addUpdater(pc_updater);
 
-        // Create updater (switchable)
-        if (updater_type == "pointcloud")
-        {
-            auto pc_updater = std::make_shared<PointCloudUpdater>(pointcloud_topic, params);
-            pc_updater->initialize(node, tf_buffer);
-            monitor->addUpdater(pc_updater);
-
-            RCLCPP_INFO(logger, "Using PointCloudUpdater on: %s", pointcloud_topic.c_str());
-        }
-        else if (updater_type == "depth_image")
-        {
-            auto di_updater = std::make_shared<DepthImageUpdater>(depth_topic, depth_info_topic, params);
-            di_updater->initialize(node, tf_buffer);
-            monitor->addUpdater(di_updater);
-
-            RCLCPP_INFO(logger, "Using DepthImageUpdater on: %s + %s",
-                        depth_topic.c_str(), depth_info_topic.c_str());
-        }
-        else
-        {
-            RCLCPP_ERROR(logger,
-                         "Invalid updater_type: '%s' (expected 'pointcloud' or 'depth_image')",
-                         updater_type.c_str());
-            throw std::runtime_error("Invalid updater_type");
-        }
+        RCLCPP_INFO(logger, "Using PointCloudUpdater on: %s", pointcloud_topic.c_str());
 
         // Create visualizer with OccupancyMapTree (if enabled)
         std::shared_ptr<OccupancyMapVisualizer> visualizer;
@@ -266,27 +359,32 @@ int main(int argc, char **argv)
                                     monitor,
                                     params]()
                                    {
+            auto callback_start = node->now();
             RCLCPP_INFO(node->get_logger(), "Occupancy map callback triggered");
             
+            auto viz_start = node->now();
             if (visualizer)
             {
                 visualizer->publishMarkers(publish_free);
                 RCLCPP_INFO(node->get_logger(), "Occupancy map visualization updated");
             }
+            auto viz_end = node->now();
 
             auto now = node->now();
             RCLCPP_INFO(node->get_logger(), "Occupancy map node time: %.3f", now.seconds());
             RCLCPP_INFO(node->get_logger(), "Occupancy map last publish time: %.3f", last_octomap_publish->seconds());
             if ((now - *last_octomap_publish).seconds() >= (1.0 / octomap_publish_rate))
             {
-                
+                auto publish_start = node->now();
                 RCLCPP_INFO(node->get_logger(), "Preparing to publish octomap");
 
                 octomap_msgs::msg::Octomap octomap_msg;
                 octomap_msg.header.frame_id = params.map_frame;
                 octomap_msg.header.stamp = now;
 
+                auto lock_start = node->now();
                 monitor->getMapTree()->lockRead();
+                auto lock_end = node->now();
                 
                 // Convert the octomap to message (binarized)
                 if (octomap_msgs::binaryMapToMsg(*monitor->getMapTree(), octomap_msg))
@@ -340,19 +438,29 @@ int main(int argc, char **argv)
                 
                 monitor->getMapTree()->unlockRead();
                 *last_octomap_publish = now;
-            } });
+                
+                auto publish_end = node->now();
+                double lock_time = (lock_end - lock_start).seconds() * 1000.0;
+                double publish_time = (publish_end - publish_start).seconds() * 1000.0;
+                RCLCPP_INFO(node->get_logger(), "[TIMING] Publish: Lock: %.2fms | Total: %.2fms", lock_time, publish_time);
+            }
+            
+            auto callback_end = node->now();
+            double viz_time = (viz_end - viz_start).seconds() * 1000.0;
+            double total_time = (callback_end - callback_start).seconds() * 1000.0;
+            RCLCPP_INFO(node->get_logger(), "[TIMING] Update callback: Viz: %.2fms | Total: %.2fms", viz_time, total_time);
+            });
 
         // Start monitoring
         monitor->startMonitor();
 
         RCLCPP_INFO(logger, "Standard octomap server ready");
+        RCLCPP_INFO(logger, "  Map frame: %s", params.map_frame.c_str());
+        RCLCPP_INFO(logger, "  Resolution: %.3f m", params.resolution);
+        RCLCPP_INFO(logger, "  Max range: %.2f m", params.max_range);
+        RCLCPP_INFO(logger, "  PointCloud topic: %s", pointcloud_topic.c_str());
         RCLCPP_INFO(logger, "  MoveIt integration: %s", use_moveit ? "ENABLED" : "DISABLED");
     }
-
-    RCLCPP_INFO(logger, "  Map frame: %s", params.map_frame.c_str());
-    RCLCPP_INFO(logger, "  Resolution: %.3f m", params.resolution);
-    RCLCPP_INFO(logger, "  Max range: %.2f m", params.max_range);
-    RCLCPP_INFO(logger, "  PointCloud topic: %s", pointcloud_topic.c_str());
 
     rclcpp::spin(node);
 

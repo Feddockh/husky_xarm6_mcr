@@ -1,0 +1,289 @@
+#include "husky_xarm6_mcr_occupancy_map/semantic_occupancy_map_tree.hpp"
+
+#include <algorithm>
+#include <stdexcept>
+
+namespace octomap
+{
+
+    // =======================
+    // SemanticOcTreeNode
+    // =======================
+
+    SemanticOcTreeNode *SemanticOcTreeNode::createChild(unsigned int i)
+    {
+        if (!children)
+        {
+            allocChildren();
+        }
+        if (!children[i])
+        {
+            children[i] = new SemanticOcTreeNode();
+        }
+        return static_cast<SemanticOcTreeNode *>(children[i]);
+    }
+
+    SemanticOcTreeNode *SemanticOcTreeNode::getChild(unsigned int i)
+    {
+        if (!children)
+            return nullptr;
+        return static_cast<SemanticOcTreeNode *>(children[i]);
+    }
+
+    const SemanticOcTreeNode *SemanticOcTreeNode::getChild(unsigned int i) const
+    {
+        if (!children)
+            return nullptr;
+        return static_cast<const SemanticOcTreeNode *>(children[i]);
+    }
+
+    void SemanticOcTreeNode::expandNode()
+    {
+        if (!children)
+        {
+            allocChildren();
+        }
+        for (unsigned int i = 0; i < 8; ++i)
+        {
+            if (!children[i])
+            {
+                children[i] = new SemanticOcTreeNode();
+            }
+            auto *c = static_cast<SemanticOcTreeNode *>(children[i]);
+            c->setLogOdds(this->getLogOdds());
+            c->class_id_ = this->class_id_;
+            c->confidence_ = this->confidence_;
+        }
+    }
+
+    std::pair<int32_t, float> SemanticOcTreeNode::getBestChildSemantic() const
+    {
+        int32_t best_cls = 0;
+        float best_conf = 0.0f;
+
+        if (!children)
+            return {best_cls, best_conf};
+
+        for (unsigned int i = 0; i < 8; ++i)
+        {
+            const auto *c = getChild(i);
+            if (!c)
+                continue;
+            if (c->confidence_ > best_conf)
+            {
+                best_conf = c->confidence_;
+                best_cls = c->class_id_;
+            }
+        }
+        return {best_cls, best_conf};
+    }
+
+    void SemanticOcTreeNode::updateSemanticChildren()
+    {
+        auto [best_cls, best_conf] = getBestChildSemantic();
+        class_id_ = best_cls;
+        confidence_ = best_conf;
+    }
+
+    std::istream &SemanticOcTreeNode::readData(std::istream &s)
+    {
+        // Only serialize our additional payload; OctoMap handles base "value" elsewhere.
+        s.read(reinterpret_cast<char *>(&class_id_), sizeof(class_id_));
+        s.read(reinterpret_cast<char *>(&confidence_), sizeof(confidence_));
+        return s;
+    }
+
+    std::ostream &SemanticOcTreeNode::writeData(std::ostream &s) const
+    {
+        s.write(reinterpret_cast<const char *>(&class_id_), sizeof(class_id_));
+        s.write(reinterpret_cast<const char *>(&confidence_), sizeof(confidence_));
+        return s;
+    }
+
+    // =======================
+    // SemanticOcTree
+    // =======================
+
+    SemanticOcTree::StaticMemberInitializer SemanticOcTree::semanticOcTreeMemberInit_;
+
+    SemanticOcTree::StaticMemberInitializer::StaticMemberInitializer()
+    {
+        // Register prototype once for AbstractOcTree factory (.ot files)
+        SemanticOcTree *tree = new SemanticOcTree(0.1);
+        tree->clearKeyRays();
+        AbstractOcTree::registerTreeType(tree);
+    }
+
+    SemanticOcTree::SemanticOcTree(double resolution)
+        : OccupancyOcTreeBase<SemanticOcTreeNode>(resolution)
+    {
+        semanticOcTreeMemberInit_.ensureLinking();
+    }
+
+    SemanticOcTreeNode *SemanticOcTree::integrateNodeSemantic(const OcTreeKey &key,
+                                                              int32_t class_id,
+                                                              float confidence,
+                                                              bool require_node_exist,
+                                                              bool lazy_eval,
+                                                              float confidence_boost,
+                                                              float mismatch_penalty)
+    {
+        if (confidence <= 0.0f)
+            return nullptr;
+
+        SemanticOcTreeNode *node = this->search(key);
+
+        if (!node)
+        {
+            if (require_node_exist)
+            {
+                return nullptr;
+            }
+            // Create node as occupied (semantic implies a hit / endpoint)
+            node = this->updateNode(key, true /*occupied*/, lazy_eval);
+            if (!node)
+                return nullptr;
+        }
+
+        node->fuseSemanticMax(class_id, confidence, confidence_boost, mismatch_penalty);
+        return node;
+    }
+
+    void SemanticOcTree::updateInnerOccupancySemantic()
+    {
+        // First: call the base behavior (non-virtual) to update occupancy correctly
+        OccupancyOcTreeBase<SemanticOcTreeNode>::updateInnerOccupancy();
+
+        // Then: propagate semantics upward (best child)
+        updateInnerOccupancySemanticRecurs(this->root, 0);
+    }
+
+    void SemanticOcTree::updateInnerOccupancySemanticRecurs(SemanticOcTreeNode *node, unsigned int /*depth*/)
+    {
+        if (!node)
+            return;
+        if (!this->nodeHasChildren(node))
+            return;
+
+        for (unsigned int i = 0; i < 8; ++i)
+        {
+            SemanticOcTreeNode *c = node->getChild(i);
+            if (c)
+                updateInnerOccupancySemanticRecurs(c, 0);
+        }
+        node->updateSemanticChildren();
+    }
+
+} // namespace octomap
+
+namespace husky_xarm6_mcr_occupancy_map
+{
+
+    static bool ends_with(const std::string &s, const std::string &suffix)
+    {
+        if (suffix.size() > s.size())
+            return false;
+        return std::equal(suffix.rbegin(), suffix.rend(), s.rbegin());
+    }
+
+    SemanticOccupancyMapTree::SemanticOccupancyMapTree(double resolution)
+        : octomap::SemanticOcTree(resolution)
+    {
+    }
+
+    SemanticOccupancyMapTree::SemanticOccupancyMapTree(const std::string &filename)
+        : octomap::SemanticOcTree(0.1)
+    {
+        if (ends_with(filename, ".bt"))
+        {
+            if (!this->readBinary(filename))
+            {
+                throw std::runtime_error("SemanticOccupancyMapTree: failed to read .bt file: " + filename);
+            }
+            return;
+        }
+
+        if (ends_with(filename, ".ot"))
+        {
+            std::unique_ptr<octomap::AbstractOcTree> abs(octomap::AbstractOcTree::read(filename));
+            if (!abs)
+            {
+                throw std::runtime_error("SemanticOccupancyMapTree: failed to read .ot file: " + filename);
+            }
+
+            auto *sem = dynamic_cast<octomap::SemanticOcTree *>(abs.get());
+            if (!sem)
+            {
+                throw std::runtime_error("SemanticOccupancyMapTree: .ot file is not SemanticOcTree: " + filename);
+            }
+
+            // Reconstruct our base subobject using copy constructor (operator= is deleted).
+            // We are in the derived constructor, so this is the clean way to "load into this".
+            this->~SemanticOccupancyMapTree();
+            new (this) SemanticOccupancyMapTree(*sem); // uses copy ctor we define below
+            return;
+        }
+
+        throw std::runtime_error("SemanticOccupancyMapTree: unsupported file extension: " + filename);
+    }
+
+    SemanticOccupancyMapTree::SemanticOccupancyMapTree(const octomap::SemanticOcTree &rhs)
+        : octomap::SemanticOcTree(rhs) // OccupancyOcTreeBase has copy ctor, so this works
+    {
+    }
+
+    void SemanticOccupancyMapTree::lockRead() { tree_mutex_.lock_shared(); }
+    void SemanticOccupancyMapTree::unlockRead() { tree_mutex_.unlock_shared(); }
+    void SemanticOccupancyMapTree::lockWrite() { tree_mutex_.lock(); }
+    void SemanticOccupancyMapTree::unlockWrite() { tree_mutex_.unlock(); }
+
+    SemanticOccupancyMapTree::ReadLock SemanticOccupancyMapTree::reading()
+    {
+        return ReadLock(tree_mutex_);
+    }
+
+    SemanticOccupancyMapTree::WriteLock SemanticOccupancyMapTree::writing()
+    {
+        return WriteLock(tree_mutex_);
+    }
+
+    void SemanticOccupancyMapTree::triggerUpdateCallback()
+    {
+        if (update_callback_)
+            update_callback_();
+    }
+
+    void SemanticOccupancyMapTree::setUpdateCallback(const std::function<void()> &callback)
+    {
+        update_callback_ = callback;
+    }
+
+    size_t SemanticOccupancyMapTree::getNumOccupiedNodes() const
+    {
+        size_t count = 0;
+        for (auto it = this->begin_leafs(), end = this->end_leafs(); it != end; ++it)
+        {
+            if (this->isNodeOccupied(*it))
+                ++count;
+        }
+        return count;
+    }
+
+    size_t SemanticOccupancyMapTree::getNumFreeNodes() const
+    {
+        size_t count = 0;
+        for (auto it = this->begin_leafs(), end = this->end_leafs(); it != end; ++it)
+        {
+            if (!this->isNodeOccupied(*it))
+                ++count;
+        }
+        return count;
+    }
+
+    size_t SemanticOccupancyMapTree::memoryUsage() const
+    {
+        // Simple approximation; OctoMap has internal memoryUsage() in some builds but not always exposed
+        return this->size() * sizeof(octomap::SemanticOcTreeNode);
+    }
+
+} // namespace husky_xarm6_mcr_occupancy_map

@@ -1,7 +1,6 @@
 """
 Launch file for occupancy map server
 Optionally publishes to MoveIt planning scene if use_moveit is enabled
-Allows switching between PointCloudUpdater and DepthImageUpdater
 """
 
 from launch import LaunchDescription
@@ -14,19 +13,19 @@ def generate_launch_description():
     # --- Core args ---
     use_sim_time_arg = DeclareLaunchArgument(
         'use_sim_time',
-        default_value='true',  # real-world default
+        default_value='true',
         description='Use simulation time'
     )
 
     resolution_arg = DeclareLaunchArgument(
         'resolution',
-        default_value='0.02',
+        default_value='0.04',
         description='Octomap resolution in meters'
     )
 
     max_range_arg = DeclareLaunchArgument(
         'max_range',
-        default_value='3.0',
+        default_value='1.0',
         description='Maximum sensor range in meters'
     )
 
@@ -48,11 +47,10 @@ def generate_launch_description():
         description='Frame for the occupancy map'
     )
 
-    # --- Updater selection ---
-    updater_type_arg = DeclareLaunchArgument(
-        'updater_type',
-        default_value='pointcloud',
-        description="Updater type: 'pointcloud' or 'depth_image'"
+    use_semantics_arg = DeclareLaunchArgument(
+        'use_semantics',
+        default_value='true',
+        description='Enable semantic occupancy mapping mode'
     )
 
     # --- PointCloud updater topic ---
@@ -60,38 +58,6 @@ def generate_launch_description():
         'pointcloud_topic',
         default_value='/firefly_left/points2',
         description='PointCloud2 topic for PointCloudUpdater'
-    )
-
-    # --- Depth image updater topics ---
-    depth_topic_arg = DeclareLaunchArgument(
-        'depth_topic',
-        default_value='/firefly_left/depth',
-        description='Depth image topic (32FC1 meters or 16UC1) for DepthImageUpdater'
-    )
-
-    depth_info_topic_arg = DeclareLaunchArgument(
-        'depth_info_topic',
-        default_value='/firefly_left/camera_info_rect_scaled',
-        description='CameraInfo topic matching the depth image'
-    )
-
-    # --- Depth updater behavior knobs ---
-    depth_stride_arg = DeclareLaunchArgument(
-        'depth_stride',
-        default_value='2',
-        description='Pixel stride for DepthImageUpdater (2/4/8 to reduce CPU)'
-    )
-
-    clear_no_return_arg = DeclareLaunchArgument(
-        'clear_no_return',
-        default_value='true',
-        description='If true: pixels with invalid depth clear free space to max_range'
-    )
-
-    depth_scale_arg = DeclareLaunchArgument(
-        'depth_scale',
-        default_value='0.001',
-        description='Meters per unit for 16UC1 depth (mm->m = 0.001). Ignored for 32FC1.'
     )
 
     # Octomap server node with inline parameters
@@ -122,27 +88,30 @@ def generate_launch_description():
 
             # Bounding box (limits octomap updates to this region)
             'use_bounding_box': LaunchConfiguration('use_bbox'),
+            # Side Box
             'bbx_min_x': -1.0,
             'bbx_min_y': -2.0,
             'bbx_min_z': 0.0,
             'bbx_max_x': 1.0,
             'bbx_max_y': -0.5,
             'bbx_max_z': 2.0,
+            # # Rear Box
+            # 'bbx_min_x': -2.0,
+            # 'bbx_min_y': -1.0,
+            # 'bbx_min_z': 0.0,
+            # 'bbx_max_x': -0.5,
+            # 'bbx_max_y': 1.0,
+            # 'bbx_max_z': 2.0,
 
-            # --- Updater selection + topics ---
-            'updater_type': LaunchConfiguration('updater_type'),
+            # Semantic mode
+            'use_semantics': LaunchConfiguration('use_semantics'),
+
+            # Semantic fusion parameters
+            'semantic_confidence_boost': 0.05,
+            'semantic_mismatch_penalty': 0.1,
 
             # PointCloud updater
             'pointcloud_topic': LaunchConfiguration('pointcloud_topic'),
-
-            # Depth image updater
-            'depth_topic': LaunchConfiguration('depth_topic'),
-            'depth_info_topic': LaunchConfiguration('depth_info_topic'),
-
-            # Depth updater tuning (names match the DepthImageUpdater params I suggested)
-            'depth_updater.stride': LaunchConfiguration('depth_stride'),
-            'depth_updater.clear_no_return': LaunchConfiguration('clear_no_return'),
-            'depth_updater.depth_scale': LaunchConfiguration('depth_scale'),
 
             # MoveIt + publishing
             'use_moveit': LaunchConfiguration('use_moveit'),
@@ -167,13 +136,8 @@ def generate_launch_description():
         use_bbox_arg,
         map_frame_arg,
 
-        updater_type_arg,
+        use_semantics_arg,
         pointcloud_topic_arg,
-        depth_topic_arg,
-        depth_info_topic_arg,
-        depth_stride_arg,
-        clear_no_return_arg,
-        depth_scale_arg,
 
         octomap_server_node
     ])

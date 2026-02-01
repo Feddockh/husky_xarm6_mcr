@@ -5,7 +5,6 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# Default to C++17 for semantic_octomap compatibility
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 17)
   set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -23,8 +22,6 @@ find_package(tf2_geometry_msgs REQUIRED)
 find_package(octomap REQUIRED)
 find_package(octomap_msgs REQUIRED)
 find_package(moveit_msgs REQUIRED)
-find_package(semantic_octomap REQUIRED)
-find_package(vision_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
 # Generate custom messages
@@ -50,6 +47,7 @@ include_directories(
 # ============================================================================
 add_library(${PROJECT_NAME}_core
   src/occupancy_map_tree.cpp
+  src/semantic_occupancy_map_tree.cpp
 )
 target_include_directories(${PROJECT_NAME}_core PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -69,8 +67,6 @@ add_library(${PROJECT_NAME}_monitor
   src/occupancy_map_monitor.cpp
   src/occupancy_map_updater.cpp
   src/pointcloud_updater.cpp
-  src/depth_image_updater.cpp
-  src/semantic_occupancy_map_monitor.cpp
   src/semantic_pointcloud_updater.cpp
 )
 target_include_directories(${PROJECT_NAME}_monitor PUBLIC
@@ -88,8 +84,6 @@ ament_target_dependencies(${PROJECT_NAME}_monitor
   std_msgs
   tf2_ros
   tf2_geometry_msgs
-  semantic_octomap
-  vision_msgs
 )
 
 # ============================================================================
