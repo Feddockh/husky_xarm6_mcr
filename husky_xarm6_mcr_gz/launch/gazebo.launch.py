@@ -1,8 +1,9 @@
 import os
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, SetEnvironmentVariable, IncludeLaunchDescription, OpaqueFunction
+from launch.actions import DeclareLaunchArgument, SetEnvironmentVariable, IncludeLaunchDescription, OpaqueFunction, ExecuteProcess, RegisterEventHandler
+from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, FindExecutable
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
 
@@ -14,6 +15,18 @@ def launch_setup(context, *args, **kwargs):
     """
     world = LaunchConfiguration('world')
     world_value = world.perform(context)
+    
+    generate_markers = LaunchConfiguration('generate_markers')
+    generate_markers_value = generate_markers.perform(context)
+    
+    num_markers = LaunchConfiguration('num_markers')
+    num_markers_value = num_markers.perform(context)
+    
+    marker_dict = LaunchConfiguration('marker_dict')
+    marker_dict_value = marker_dict.perform(context)
+    
+    marker_size = LaunchConfiguration('marker_size')
+    marker_size_value = marker_size.perform(context)
     
     pkg_gz = get_package_share_directory('husky_xarm6_mcr_gz')
     worlds_dir = os.path.join(pkg_gz, 'worlds')
@@ -51,7 +64,8 @@ def launch_setup(context, *args, **kwargs):
         # Assume it's a relative path from our worlds directory
         world_file = PathJoinSubstitution([pkg_gz, 'worlds', world_value])
 
-    return [
+    # Build launch actions list
+    launch_actions = [
         # Set for Ignition Fortress
         SetEnvironmentVariable(
             name='IGN_GAZEBO_RESOURCE_PATH',
@@ -62,20 +76,56 @@ def launch_setup(context, *args, **kwargs):
             name='GZ_SIM_RESOURCE_PATH',
             value=gz_path
         ),
-
-        # Launch Gazebo with ros_gz_sim (properly sets up plugin paths)
-        IncludeLaunchDescription(
+    ]
+    
+    # Conditionally add marker generation executable
+    if generate_markers_value.lower() in ['true', '1', 'yes']:
+        marker_generator = ExecuteProcess(
+            cmd=[
+                FindExecutable(name='generate_aruco_models.py'),
+                '--count', num_markers_value,
+                '--dict', marker_dict_value,
+                '--size', marker_size_value,
+            ],
+            name='generate_aruco_markers',
+            output='screen',
+        )
+        launch_actions.append(marker_generator)
+        
+        # Launch Gazebo after marker generation completes
+        gazebo_launch = IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 os.path.join(get_package_share_directory('ros_gz_sim'), 'launch', 'gz_sim.launch.py')
             ),
             launch_arguments={
                 'gz_args': ['-r ', world_file]
             }.items()
-        ),
-
-        # Clock bridge - Gazebo to ROS2 clock synchronization
-        # The [ means GZ → ROS (subscribe to GZ /clock, publish to ROS /clock)
-        # Avoid ROS→GZ /clock to prevent loops
+        )
+        
+        # Register event handler to launch Gazebo after marker generation
+        launch_actions.append(
+            RegisterEventHandler(
+                OnProcessExit(
+                    target_action=marker_generator,
+                    on_exit=[gazebo_launch]
+                )
+            )
+        )
+    else:
+        # Launch Gazebo immediately if not generating markers
+        launch_actions.append(
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    os.path.join(get_package_share_directory('ros_gz_sim'), 'launch', 'gz_sim.launch.py')
+                ),
+                launch_arguments={
+                    'gz_args': ['-r ', world_file]
+                }.items()
+            )
+        )
+    
+    # Clock bridge - always add
+    launch_actions.append(
         Node(
             name='clock_bridge',
             package='ros_gz_bridge',
@@ -85,8 +135,10 @@ def launch_setup(context, *args, **kwargs):
             ],
             output='screen',
             parameters=[{'use_sim_time': True}]
-        ),
-    ]
+        )
+    )
+
+    return launch_actions
 
 
 def generate_launch_description():
@@ -95,6 +147,26 @@ def generate_launch_description():
             'world',
             default_value='apple_orchard',
             description='World to load: "empty", "apple_orchard", custom world name, or absolute path to .sdf file'
+        ),
+        DeclareLaunchArgument(
+            'generate_markers',
+            default_value='false',
+            description='Whether to generate ArUco marker models before launching (true/false)'
+        ),
+        DeclareLaunchArgument(
+            'num_markers',
+            default_value='12',
+            description='Number of ArUco markers to generate (0 to n-1)'
+        ),
+        DeclareLaunchArgument(
+            'marker_dict',
+            default_value='DICT_4X4_50',
+            description='ArUco dictionary to use for marker generation'
+        ),
+        DeclareLaunchArgument(
+            'marker_size',
+            default_value='0.05',
+            description='Physical size of markers in meters'
         ),
         OpaqueFunction(function=launch_setup)
     ])
