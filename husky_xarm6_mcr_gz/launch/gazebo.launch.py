@@ -3,9 +3,9 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, SetEnvironmentVariable, IncludeLaunchDescription, OpaqueFunction, ExecuteProcess, RegisterEventHandler
 from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, FindExecutable
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
-from ament_index_python.packages import get_package_share_directory
+from ament_index_python.packages import get_package_share_directory, get_package_prefix
 
 
 def launch_setup(context, *args, **kwargs):
@@ -80,9 +80,13 @@ def launch_setup(context, *args, **kwargs):
     
     # Conditionally add marker generation executable
     if generate_markers_value.lower() in ['true', '1', 'yes']:
+        # Get the path to the installed script
+        pkg_prefix = get_package_prefix('husky_xarm6_mcr_gz')
+        script_path = os.path.join(pkg_prefix, 'lib', 'husky_xarm6_mcr_gz', 'generate_aruco_models.py')
+        
         marker_generator = ExecuteProcess(
             cmd=[
-                FindExecutable(name='generate_aruco_models.py'),
+                script_path,
                 '--count', num_markers_value,
                 '--dict', marker_dict_value,
                 '--size', marker_size_value,
