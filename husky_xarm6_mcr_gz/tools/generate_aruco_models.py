@@ -73,10 +73,10 @@ MODEL_SDF_TEMPLATE = '''<?xml version="1.0"?>
         </geometry>
 
         <material>
-          <ambient>1 1 1 1</ambient>
+          <ambient>0.2 0.2 0.2 1</ambient>
           <diffuse>1 1 1 1</diffuse>
           <specular>0 0 0 1</specular>
-          <emissive>0.1 0.1 0.1 1</emissive>
+          <emissive>0 0 0 1</emissive>
           <pbr>
             <metal>
               <albedo_map>../tree_fiducials/materials/textures/aruco_{dict_name}_id{marker_id:04d}.png</albedo_map>
