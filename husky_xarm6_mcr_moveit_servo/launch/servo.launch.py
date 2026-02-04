@@ -75,6 +75,12 @@ def launch_setup(context, *args, **kwargs):
         raise RuntimeError(f"Failed to load kinematics.yaml from {moveit_config_pkg / 'config' / 'kinematics.yaml'}")
     kinematics_config = {'robot_description_kinematics': kinematics_yaml}
 
+    # Load joint limits configuration
+    joint_limits_yaml = load_yaml(moveit_config_pkg / 'config' / 'joint_limits.yaml')
+    if joint_limits_yaml is None:
+        raise RuntimeError(f"Failed to load joint_limits.yaml from {moveit_config_pkg / 'config' / 'joint_limits.yaml'}")
+    joint_limits_config = {'robot_description_planning_joint_limits': joint_limits_yaml}
+
     # Get parameters for the Servo node
     servo_config_path = servo_pkg / "config" / "servo.yaml"
     servo_yaml = load_yaml(servo_config_path)
@@ -149,6 +155,7 @@ def launch_setup(context, *args, **kwargs):
             robot_description,
             robot_description_semantic,
             kinematics_config,
+            joint_limits_config,
             {'use_sim_time': use_sim_time}
         ],
         output="screen",

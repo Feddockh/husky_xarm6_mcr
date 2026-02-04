@@ -34,7 +34,7 @@ enum Button
   X = 2,
   Y = 3,
   LEFT_BUMPER = 4,
-  RIGHT_BUMPER = 5,   // RB
+  RIGHT_BUMPER = 5,
   CHANGE_VIEW = 6,
   MENU = 7,
   HOME = 8,
@@ -58,13 +58,11 @@ public:
 
     base_frame_id_ = declare_parameter<std::string>("base_frame_id", "xarm/xarm6_base_link");
     ee_frame_id_   = declare_parameter<std::string>("ee_frame_id",   "xarm/xarm6_link_eef");
+    // frame_to_publish_ = ee_frame_id_;
+    frame_to_publish_ = base_frame_id_;
 
     // deadman (RB by default)
     enable_button_ = declare_parameter<int>("enable_button", RIGHT_BUMPER);
-
-    // optional frame toggle
-    to_base_button_ = declare_parameter<int>("to_base_button", CHANGE_VIEW);
-    to_ee_button_   = declare_parameter<int>("to_ee_button", MENU);
 
     // Scales applied BEFORE Servo scaling (Servo also applies scale.linear/rotational if command_in_type=unitless)
     lin_scale_ = declare_parameter<double>("lin_scale", 1.0);
@@ -77,9 +75,6 @@ public:
     // Trigger defaults (many drivers report 1.0 at rest)
     left_trigger_default_  = declare_parameter<double>("left_trigger_default",  1.0);
     right_trigger_default_ = declare_parameter<double>("right_trigger_default", 1.0);
-
-    // Start publishing commands in base frame by default
-    frame_to_publish_ = base_frame_id_;
 
     // QoS: VOLATILE to avoid "sticky" commands
     rclcpp::QoS qos(10);
@@ -128,8 +123,6 @@ private:
       }
     }
 
-    updateCmdFrame(msg->buttons);
-
     auto twist_msg = std::make_unique<geometry_msgs::msg::TwistStamped>();
     fillTwistFromJoy(msg->axes, *twist_msg);
 
@@ -147,62 +140,87 @@ private:
     twist_pub_->publish(std::move(z));
   }
 
-  void updateCmdFrame(const std::vector<int>& buttons)
-  {
-    if (to_base_button_ >= 0 && static_cast<size_t>(to_base_button_) < buttons.size() && buttons[to_base_button_])
-      frame_to_publish_ = base_frame_id_;
-    if (to_ee_button_ >= 0 && static_cast<size_t>(to_ee_button_) < buttons.size() && buttons[to_ee_button_])
-      frame_to_publish_ = ee_frame_id_;
-  }
-
   void fillTwistFromJoy(const std::vector<float>& axes, geometry_msgs::msg::TwistStamped& twist)
   {
-    const auto ax = [&](int idx) -> double {
+    auto ax = [&](int idx) -> double {
       return (idx >= 0 && static_cast<size_t>(idx) < axes.size()) ? static_cast<double>(axes[idx]) : 0.0;
     };
 
-    // ---- Left stick -> X/Y translation ----
-    // Convention: left stick up is usually -1.0, so we flip Y to make "up = +x" if desired.
-    const double lx = deadband(ax(LEFT_STICK_X), stick_deadband_);
-    const double ly = deadband(ax(LEFT_STICK_Y), stick_deadband_);
+    /**
+     * Mapping (from eef frame perspective):
+     * Note: on joystick the +X axis is to the left, +Y is up
+     * 
+     * Left stick up    +Y -> -Y (up)
+     * Left stick down  -Y -> +Y (down)
+     * Left stick right -X -> +X (right)
+     * Left stick left  +X -> -X (left)
+     * 
+     * Right stick up    +Y -> +Roll (rotate camera upwards)
+     * Right stick down  -Y -> -Roll (rotate camera downwards)
+     * Right stick right -X -> +Pitch (rotate camera right)
+     * Right stick left  +X -> -Pitch (rotate camera left)
+     * 
+     * Right trigger -> +Z (forward)
+     * Left trigger  -> -Z (backward)
+     * 
+     * D-pad right -> +Yaw (rotate right)
+     * D-pad left  -> -Yaw (rotate left)
+     */
 
-    // Map:
-    //   X = left/right  (left stick left/right)
-    //   Y = forward/back  (left stick up/down)
-    twist.twist.linear.x = lin_scale_ * (-ly);
-    twist.twist.linear.y = lin_scale_ * ( lx);
+    /**
+     * Mapping (from xarm base link frame perspective):
+     * Note: on joystick the +X axis is to the left, +Y is up
+     * 
+     * Left stick up    +Y -> +Z (up)
+     * Left stick down  -Y -> -Z (down)
+     * Left stick right -X -> -Y (right)
+     * Left stick left  +X -> +Y (left)
+     * 
+     * Right stick up    +Y -> -Pitch (rotate camera upwards)
+     * Right stick down  -Y -> +Pitch (rotate camera downwards)
+     * Right stick right -X -> -Yaw (rotate camera right)
+     * Right stick left  +X -> +Yaw (rotate camera left)
+     * 
+     * Right trigger -> +X (forward)
+     * Left trigger  -> -X (backward)
+     * 
+     * D-pad right -> +Roll (rotate right)
+     * D-pad left  -> -Roll (rotate left)
+     */
 
-    // ---- Triggers -> Z translation ----
-    // Many drivers: trigger at rest = 1.0, pressed = -1.0
-    // Convert each trigger to [0..1] "pressed amount"
-    const double rt_raw = ax(RIGHT_TRIGGER);
-    const double lt_raw = ax(LEFT_TRIGGER);
+    // ---- Left stick -> Left/right and forward/backward camera translation ----
+    double lx = deadband(ax(LEFT_STICK_X), stick_deadband_);
+    double ly = deadband(ax(LEFT_STICK_Y), stick_deadband_);
+    // twist.twist.linear.x = lin_scale_ * -lx; // for eef frame perspective
+    // twist.twist.linear.y = lin_scale_ * -ly; // for eef frame perspective
+    twist.twist.linear.y = lin_scale_ * lx;  // for base link frame perspective
+    twist.twist.linear.z = lin_scale_ * ly;  // for base link frame perspective
 
-    double rt = 0.5 * (right_trigger_default_ - rt_raw); // if default=1, rt_raw=-1 => rt=1
+    // ---- Triggers -> Up/down camera translation ----
+    double rt_raw = ax(RIGHT_TRIGGER);
+    double lt_raw = ax(LEFT_TRIGGER);
+    // if default=1, rt_raw=-1 => rt=1
+    double rt = 0.5 * (right_trigger_default_ - rt_raw);
     double lt = 0.5 * (left_trigger_default_  - lt_raw);
-
     rt = std::clamp(rt, 0.0, 1.0);
     lt = std::clamp(lt, 0.0, 1.0);
+    rt = deadband(rt, trigger_deadband_);
+    lt = deadband(lt, trigger_deadband_);
+    // twist.twist.linear.z = lin_scale_ * (rt - lt); // for eef frame perspective
+    twist.twist.linear.x = lin_scale_ * (rt - lt);  // for base link frame perspective
 
-    // deadband triggers
-    rt = (rt < trigger_deadband_) ? 0.0 : rt;
-    lt = (lt < trigger_deadband_) ? 0.0 : lt;
+    // ---- Right stick -> Up/down and left/right camera rotation ----
+    double rx = deadband(ax(RIGHT_STICK_X), stick_deadband_);
+    double ry = deadband(ax(RIGHT_STICK_Y), stick_deadband_);
+    // twist.twist.angular.y = ang_scale_ * -rx; // for eef frame perspective
+    // twist.twist.angular.x = ang_scale_ * ry;  // for eef frame perspective
+    twist.twist.angular.z = ang_scale_ * rx;   // for base link frame perspective
+    twist.twist.angular.y = ang_scale_ * -ry;  // for base link frame perspective
 
-    // Z: RT up (+), LT down (-)
-    twist.twist.linear.z = lin_scale_ * (rt - lt);
-
-    // ---- Right stick -> Yaw + Roll (ignore pitch) ----
-    const double rx = deadband(ax(RIGHT_STICK_X), stick_deadband_);
-    const double ry = deadband(ax(RIGHT_STICK_Y), stick_deadband_);
-
-    // Yaw around Z: right stick up/down
-    twist.twist.angular.z = ang_scale_ * (rx);
-
-    // Roll around X: right stick left/right
-    twist.twist.angular.x = ang_scale_ * (ry);
-
-    // Ignore pitch (angular.y)
-    twist.twist.angular.y = 0.0;
+    // Adjust yaw with the D-pad
+    double dx = deadband(ax(D_PAD_X), stick_deadband_);
+    // twist.twist.angular.z = ang_scale_ * -dx; // for eef frame perspective
+    twist.twist.angular.x = ang_scale_ * -dx;  // for base link frame perspective
   }
 
 private:
@@ -215,8 +233,6 @@ private:
   std::string servo_start_service_;
 
   int enable_button_{ RIGHT_BUMPER };
-  int to_base_button_{ CHANGE_VIEW };
-  int to_ee_button_{ MENU };
 
   double lin_scale_{ 1.0 };
   double ang_scale_{ 1.0 };
