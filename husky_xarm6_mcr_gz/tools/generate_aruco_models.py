@@ -18,6 +18,7 @@ from typing import List
 
 try:
     import cv2
+    import numpy as np
 except Exception as e:
     raise RuntimeError(
         "OpenCV not found. Install python3-opencv (apt) or opencv-contrib-python (pip)."
@@ -135,10 +136,20 @@ def generate_marker_texture(
     aruco_dict_name: str,
     marker_id: int,
     size_px: int,
-    border_bits: int,
+    marker_border: float,
     textures_dir: Path,
+    marker_size: float = 0.05,
 ) -> Path:
-    """Generate a single ArUco marker texture PNG."""
+    """Generate a single ArUco marker texture PNG with white border.
+    
+    Args:
+        aruco_dict_name: Name of the ArUco dictionary
+        marker_id: ID of the marker to generate
+        size_px: Total texture size in pixels (includes border)
+        marker_border: Border size in meters
+        textures_dir: Directory to save textures
+        marker_size: Physical marker size in meters (used to calculate border ratio)
+    """
     ensure_aruco_available()
 
     if aruco_dict_name not in ARUCO_DICT_MAP:
@@ -149,8 +160,26 @@ def generate_marker_texture(
     dict_id = ARUCO_DICT_MAP[aruco_dict_name]
     aruco_dict = cv2.aruco.getPredefinedDictionary(dict_id)
 
-    # Create image (single channel)
-    img = cv2.aruco.drawMarker(aruco_dict, marker_id, size_px, borderBits=border_bits)
+    # Calculate marker size in pixels based on physical proportions
+    # Total physical size = marker_size + 2*marker_border (border on each side)
+    total_physical_size = marker_size + 2 * marker_border
+    marker_ratio = marker_size / total_physical_size
+    marker_size_px = int(size_px * marker_ratio)
+    
+    # Ensure marker size is at least reasonable
+    marker_size_px = max(marker_size_px, 100)
+
+    # Generate the ArUco marker at the calculated size
+    marker_img = cv2.aruco.drawMarker(aruco_dict, marker_id, marker_size_px, borderBits=1)
+
+    # Create white background canvas at full texture size
+    img = np.ones((size_px, size_px), dtype=np.uint8) * 255
+
+    # Calculate offset to center the marker on the white background
+    offset = (size_px - marker_size_px) // 2
+
+    # Place marker in center of white background
+    img[offset:offset + marker_size_px, offset:offset + marker_size_px] = marker_img
 
     # Write texture file
     textures_dir.mkdir(parents=True, exist_ok=True)
@@ -196,9 +225,9 @@ def create_aruco_model_dir(
 def generate_aruco_models(
     marker_ids: List[int],
     dict_name: str = "DICT_4X4_50",
-    size: float = 0.05,
+    marker_size: float = 0.05,
     size_px: int = 800,
-    border_bits: int = 1,
+    marker_border: float = 0.005,
     target_dir: Path | None = None,
 ) -> None:
     """
@@ -207,9 +236,9 @@ def generate_aruco_models(
     Args:
         marker_ids: List of marker IDs to generate
         dict_name: ArUco dictionary name
-        size: Physical size in meters
+        marker_size: Physical size in meters
         size_px: Texture size in pixels
-        border_bits: Border size in bits
+        marker_border: Border size in meters
         target_dir: Target models directory (defaults to package share)
     """
     if target_dir is None:
@@ -221,20 +250,22 @@ def generate_aruco_models(
     
     print(f"Generating {len(marker_ids)} ArUco marker models")
     print(f"  Dictionary: {dict_name}")
-    print(f"  Physical size: {size}m")
+    print(f"  Marker size: {marker_size}m")
+    print(f"  Border size: {marker_border}m (on each side)")
+    print(f"  Total physical size: {marker_size + 2 * marker_border}m")
     print(f"  Texture size: {size_px}px")
     print(f"  Target directory: {models_dir}")
     print()
     
     for marker_id in marker_ids:
-        # Generate texture
+        # Generate texture of the marker sitting on white background
         texture_path = generate_marker_texture(
-            dict_name, marker_id, size_px, border_bits, textures_dir
+            dict_name, marker_id, size_px, marker_border, textures_dir, marker_size
         )
         
-        # Create model directory
+        # Create model directory using the total size (marker + 2*border for both sides)
         model_dir = create_aruco_model_dir(
-            marker_id, dict_name, size, models_dir
+            marker_id, dict_name, (marker_size + 2 * marker_border), models_dir
         )
         
         print(f"✓ Created aruco_marker_{marker_id}")
@@ -263,7 +294,7 @@ def main() -> int:
         help=f"ArUco dictionary (default: DICT_4X4_50). Options: {', '.join(ARUCO_DICT_MAP.keys())}"
     )
     ap.add_argument(
-        "--size", type=float, default=0.05,
+        "--marker_size", type=float, default=0.05,
         help="Physical marker size in meters (default: 0.05)"
     )
     ap.add_argument(
@@ -271,8 +302,8 @@ def main() -> int:
         help="Texture size in pixels (default: 800)"
     )
     ap.add_argument(
-        "--border_bits", type=int, default=1,
-        help="Border bits (default: 1)"
+        "--border_size", type=float, default=0.005,
+        help="White border size in meters on each side (default: 0.005)"
     )
     ap.add_argument(
         "--target_dir", type=str, default="",
@@ -292,9 +323,9 @@ def main() -> int:
         generate_aruco_models(
             marker_ids,
             args.dict_name,
-            args.size,
+            args.marker_size,
             args.size_px,
-            args.border_bits,
+            args.border_size,
             target_dir,
         )
         return 0
