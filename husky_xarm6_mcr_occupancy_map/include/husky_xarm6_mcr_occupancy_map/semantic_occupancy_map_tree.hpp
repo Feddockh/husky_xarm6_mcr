@@ -8,6 +8,7 @@
 #include <octomap/OcTreeNode.h>
 #include <octomap/OccupancyOcTreeBase.h>
 #include <octomap/AbstractOcTree.h>
+#include <octomap_msgs/msg/octomap.hpp>
 
 #include <cstdint>
 #include <functional>
@@ -243,5 +244,13 @@ namespace husky_xarm6_mcr_occupancy_map
 
     using SemanticOccupancyMapTreePtr = std::shared_ptr<SemanticOccupancyMapTree>;
     using SemanticOccupancyMapTreeConstPtr = std::shared_ptr<const SemanticOccupancyMapTree>;
+
+    /**
+     * @brief Extended msgToMap that handles SemanticOcTree in addition to standard types
+     * 
+     * This function checks the tree type ID in the message and creates the appropriate
+     * tree type. Falls back to standard octomap_msgs conversion for non-semantic trees.
+     */
+    octomap::AbstractOcTree* semanticMsgToMap(const octomap_msgs::msg::Octomap& msg);
 
 } // namespace husky_xarm6_mcr_occupancy_map

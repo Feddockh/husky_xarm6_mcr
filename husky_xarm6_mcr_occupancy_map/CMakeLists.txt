@@ -58,6 +58,7 @@ target_link_libraries(${PROJECT_NAME}_core
 )
 ament_target_dependencies(${PROJECT_NAME}_core
   rclcpp
+  octomap_msgs
 )
 
 # ============================================================================

@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <stdexcept>
+#include <sstream>
+#include <octomap_msgs/conversions.h>
 
 namespace octomap
 {
@@ -291,6 +293,34 @@ namespace husky_xarm6_mcr_occupancy_map
     {
         // Simple approximation; OctoMap has internal memoryUsage() in some builds but not always exposed
         return this->size() * sizeof(octomap::SemanticOcTreeNode);
+    }
+
+    octomap::AbstractOcTree* semanticMsgToMap(const octomap_msgs::msg::Octomap& msg)
+    {
+        // Check if it's a semantic octree
+        if (msg.id == "SemanticOcTree")
+        {
+            octomap::SemanticOcTree* tree = new octomap::SemanticOcTree(msg.resolution);
+            
+            std::stringstream datastream;
+            if (msg.data.size() > 0)
+            {
+                datastream.write((const char*)&msg.data[0], msg.data.size());
+                
+                if (msg.binary)
+                {
+                    tree->readBinaryData(datastream);
+                }
+                else
+                {
+                    tree->readData(datastream);
+                }
+            }
+            return tree;
+        }
+        
+        // Fall back to standard octomap_msgs conversion for OcTree and ColorOcTree
+        return octomap_msgs::msgToMap(msg);
     }
 
 } // namespace husky_xarm6_mcr_occupancy_map

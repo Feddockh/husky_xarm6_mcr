@@ -191,35 +191,22 @@ int main(int argc, char **argv)
                 monitor->getSemanticMapTree()->lockRead();
                 auto lock_end = node->now();
                 
-                // Publish to MoveIt with standard OcTree format (if enabled)
-                // TODO: binary map to msg the semantic tree directly and try swapping the msg id?
+                // Publish to MoveIt with standard OcTree format if enabled
                 auto moveit_start = node->now();
                 if (use_moveit && psw_pub)
-                {
-                    // Create a temporary standard OcTree with same resolution
-                    octomap::OcTree standard_tree(params.resolution);
-                    
-                    // Copy only occupancy data from semantic tree
-                    for (auto it = monitor->getSemanticMapTree()->begin_leafs(); 
-                         it != monitor->getSemanticMapTree()->end_leafs(); ++it)
-                    {
-                        if (monitor->getSemanticMapTree()->isNodeOccupied(*it))
-                        {
-                            standard_tree.updateNode(it.getCoordinate(), it->getLogOdds());
-                        }
-                    }
-                    
-                    // Prune and update inner nodes
-                    standard_tree.updateInnerOccupancy();
-                    standard_tree.prune();
-                    
-                    // Use standard OctoMap serialization
+                {                    
+                    // Use standard OcTree serialization
                     octomap_msgs::msg::Octomap moveit_msg;
                     moveit_msg.header.frame_id = params.map_frame;
                     moveit_msg.header.stamp = now;
                     
-                    if (octomap_msgs::binaryMapToMsg(standard_tree, moveit_msg))
+                    if (octomap_msgs::binaryMapToMsg(*monitor->getSemanticMapTree(), moveit_msg))
                     {
+                        // Convert the id to the standard OcTree id
+                        // This works because the serialization only writes the occupancy data
+                        // and the tree structure is the same for both types
+                        moveit_msg.id = "OcTree";
+
                         octomap_msgs::msg::OctomapWithPose octomap_with_pose;
                         octomap_with_pose.header = moveit_msg.header;
                         octomap_with_pose.octomap = moveit_msg;
@@ -230,7 +217,7 @@ int main(int argc, char **argv)
                         psw_pub->publish(world_msg);
                         
                         RCLCPP_DEBUG(node->get_logger(), "Published standard OcTree to MoveIt (%zu nodes)", 
-                                    standard_tree.size());
+                                    monitor->getSemanticMapTree()->size());
                     }
                     else
                     {
@@ -239,14 +226,15 @@ int main(int argc, char **argv)
                 }
                 auto moveit_end = node->now();
                 
-                // Publish full semantic tree to NBV planner
+                // Publish full semantic tree map to NBV planner
+                // Need to publish the full tree since the planner needs all semantic info
                 auto nbv_start = node->now();
                 octomap_msgs::msg::Octomap octomap_msg;
                 octomap_msg.header.frame_id = params.map_frame;
                 octomap_msg.header.stamp = now;
-                
-                if (octomap_msgs::binaryMapToMsg(*monitor->getSemanticMapTree(), octomap_msg))
+                if (octomap_msgs::fullMapToMsg(*monitor->getSemanticMapTree(), octomap_msg))
                 {
+                    // Save the octomap in a custom message that includes bounding box info
                     husky_xarm6_mcr_occupancy_map::msg::CustomOctomap nbv_msg;
                     nbv_msg.header = octomap_msg.header;
                     nbv_msg.octomap = octomap_msg;
