@@ -101,7 +101,26 @@ private:
         {
             octomap_received_ = true;
             RCLCPP_INFO(this->get_logger(), "\n=== First Octomap Received ===");
-            logOctomapStats(tree);
+            RCLCPP_INFO(this->get_logger(), "  Tree type: %s", octomap_interface_->getTreeTypeString().c_str());
+        }
+        
+        // Log octomap stats (updated every time)
+        static int stats_counter = 0;
+        if (++stats_counter % 5 == 0)  // Log every 5 updates to avoid spam
+        {
+            RCLCPP_INFO(this->get_logger(), "\n=== Octomap Stats ===");
+            if (octomap_interface_->isSemanticTree())
+            {
+                auto sem_tree = octomap_interface_->getSemanticTree();
+                if (sem_tree)
+                    logOctomapStats(sem_tree, true);
+            }
+            else
+            {
+                auto std_tree = octomap_interface_->getStandardTree();
+                if (std_tree)
+                    logOctomapStats(std_tree, false);
+            }
         }
 
         // Find frontiers
@@ -182,7 +201,9 @@ private:
         visualizer_->publishClusteredFrontiers(latest_clusters_, voxel_size_, true);
     }
 
-    void logOctomapStats(const std::shared_ptr<octomap::OcTree> &tree)
+    // Template function to handle both tree types
+    template<typename TreeType>
+    void logOctomapStats(const std::shared_ptr<TreeType> &tree, bool is_semantic)
     {
         RCLCPP_INFO(this->get_logger(), "  Resolution: %.4f m", tree->getResolution());
         RCLCPP_INFO(this->get_logger(), "  Total nodes: %zu", tree->size());
@@ -198,6 +219,20 @@ private:
         }
         RCLCPP_INFO(this->get_logger(), "  Occupied voxels: %zu", occupied);
         RCLCPP_INFO(this->get_logger(), "  Free voxels: %zu", free_space);
+        
+        // Display semantic class information if this is a semantic tree
+        if (is_semantic)
+        {
+            auto class_counts = octomap_interface_->getSemanticClassCounts();
+            if (!class_counts.empty())
+            {
+                RCLCPP_INFO(this->get_logger(), "  Semantic Classes:");
+                for (const auto &[class_id, count] : class_counts)
+                {
+                    RCLCPP_INFO(this->get_logger(), "    Class %d: %zu occupied voxels", class_id, count);
+                }
+            }
+        }
     }
 
     // Parameters

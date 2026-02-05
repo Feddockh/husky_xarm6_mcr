@@ -46,7 +46,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'octomap_topic',
-            default_value='/nbv/octomap_binary',
+            default_value='/octomap_binary',
             description='Topic to subscribe for octomap messages'
         ),
         DeclareLaunchArgument(
