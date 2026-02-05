@@ -29,11 +29,11 @@
         <!-- Mesh directory & extension rules -->
         <!-- Use file://$(find <package>) so Gazebo/Ignition can locate meshes -->
         <!-- CRITICAL that path is designed with "file://$(find x)/..." so that it works in both ROS and Gazebo Sim -->
-        <xacro:property name="visual_dir"    value="file://$(find xarm_description)/meshes/xarm6/visual"/>
+        <xacro:property name="visual_dir"    value="file://$(find xarm_description)/meshes/xarm6_1305/visual"/>
         <!-- TODO: Add in collision meshes for planning speed increase -->
-        <xacro:property name="collision_dir" value="file://$(find xarm_description)/meshes/xarm6/visual"/>
+        <xacro:property name="collision_dir" value="file://$(find xarm_description)/meshes/xarm6_1305/collision"/>
         <xacro:property name="visual_ext"    value="stl"/>
-        <xacro:property name="collision_ext" value="stl"/>
+        <xacro:property name="collision_ext" value="obj"/>
 
         <!-- ========== Links ========== -->
         <!-- base_link -->
