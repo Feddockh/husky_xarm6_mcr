@@ -192,6 +192,7 @@ int main(int argc, char **argv)
                 auto lock_end = node->now();
                 
                 // Publish to MoveIt with standard OcTree format (if enabled)
+                // TODO: binary map to msg the semantic tree directly and try swapping the msg id?
                 auto moveit_start = node->now();
                 if (use_moveit && psw_pub)
                 {

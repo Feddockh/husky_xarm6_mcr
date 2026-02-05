@@ -85,16 +85,23 @@ namespace octomap
         confidence_ = best_conf;
     }
 
+    // Only called by full tree serialization
     std::istream &SemanticOcTreeNode::readData(std::istream &s)
     {
-        // Only serialize our additional payload; OctoMap handles base "value" elsewhere.
+        // Read occupancy value (inherited from OcTreeDataNode<float>)
+        s.read(reinterpret_cast<char *>(&value), sizeof(value));
+        // Read semantic payload
         s.read(reinterpret_cast<char *>(&class_id_), sizeof(class_id_));
         s.read(reinterpret_cast<char *>(&confidence_), sizeof(confidence_));
         return s;
     }
 
+    // Only called by full tree serialization
     std::ostream &SemanticOcTreeNode::writeData(std::ostream &s) const
     {
+        // Write occupancy value (inherited from OcTreeDataNode<float>)
+        s.write(reinterpret_cast<const char *>(&value), sizeof(value));
+        // Write semantic payload
         s.write(reinterpret_cast<const char *>(&class_id_), sizeof(class_id_));
         s.write(reinterpret_cast<const char *>(&confidence_), sizeof(confidence_));
         return s;
