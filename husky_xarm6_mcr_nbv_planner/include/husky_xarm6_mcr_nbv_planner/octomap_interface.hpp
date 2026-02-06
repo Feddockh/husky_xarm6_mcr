@@ -21,6 +21,27 @@ namespace husky_xarm6_mcr_nbv_planner
         SEMANTIC
     };
 
+    /**
+     * @brief Structure to store ground truth semantic point information
+     */
+    struct SemanticPoint
+    {
+        int marker_id;        // ArUco marker ID
+        int32_t class_id;     // Semantic class ID
+        octomap::point3d position;  // 3D position in map frame
+        double last_seen;     // Last seen time (for reference)
+    };
+
+    /**
+     * @brief Structure to store a cluster of semantic voxels
+     */
+    struct SemanticCluster
+    {
+        int32_t class_id;                      // Semantic class ID
+        std::vector<octomap::point3d> points;  // All voxel positions in cluster
+        octomap::point3d centroid;             // Computed centroid
+    };
+
     class OctoMapInterface
     {
     public:
@@ -70,8 +91,34 @@ namespace husky_xarm6_mcr_nbv_planner
         std::shared_ptr<octomap::OcTree> getStandardTree() const;
         std::shared_ptr<octomap::SemanticOcTree> getSemanticTree() const;
 
+        // Ground truth evaluation
+        /**
+         * @brief Load ground truth semantic points from YAML file
+         * @param yaml_file_path Path to the YAML file containing marker positions
+         * @return true if loaded successfully, false otherwise
+         */
+        bool loadGroundTruthSemantics(const std::string &yaml_file_path);
+
+        /**
+         * @brief Evaluate semantic octomap against ground truth
+         * @param threshold_radius Maximum distance between cluster centroid and ground truth point for a match
+         */
+        void evaluateSemanticOctomap(double threshold_radius = 0.2);
+
+        /**
+         * @brief Get the loaded ground truth points
+         * @return Vector of ground truth semantic points
+         */
+        const std::vector<SemanticPoint>& getGroundTruthPoints() const { return gt_points_; }
+
     private:
         void onOctomap(const husky_xarm6_mcr_occupancy_map::msg::CustomOctomap::SharedPtr msg);
+
+        /**
+         * @brief Cluster semantic voxels by class using connected component analysis
+         * @return Vector of semantic clusters (excludes background class)
+         */
+        std::vector<SemanticCluster> clusterSemanticVoxels() const;
 
         rclcpp::Node::SharedPtr node_;
         rclcpp::Subscription<husky_xarm6_mcr_occupancy_map::msg::CustomOctomap>::SharedPtr sub_;
@@ -90,6 +137,9 @@ namespace husky_xarm6_mcr_nbv_planner
         octomap::point3d bbox_max_{0.0, 0.0, 0.0};
         bool has_valid_bbox_{false};
         rclcpp::Time last_update_time_;
+
+        // Ground truth data
+        std::vector<SemanticPoint> gt_points_;
     };
 
 } // namespace husky_xarm6_mcr_nbv_planner

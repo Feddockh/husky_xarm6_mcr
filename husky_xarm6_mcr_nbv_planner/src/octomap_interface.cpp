@@ -6,6 +6,11 @@
 #include <limits>
 #include <random>
 #include <numeric>
+#include <yaml-cpp/yaml.h>
+#include <fstream>
+#include <queue>
+#include <set>
+#include <unordered_set>
 
 namespace husky_xarm6_mcr_nbv_planner
 {
@@ -526,6 +531,360 @@ namespace husky_xarm6_mcr_nbv_planner
     {
         std::shared_lock lk(mtx_);
         return last_update_time_;
+    }
+
+    bool OctoMapInterface::loadGroundTruthSemantics(const std::string &yaml_file_path)
+    {
+        try
+        {
+            RCLCPP_INFO(node_->get_logger(), "Loading ground truth from: %s", yaml_file_path.c_str());
+            
+            YAML::Node config = YAML::LoadFile(yaml_file_path);
+            
+            if (!config["markers"])
+            {
+                RCLCPP_ERROR(node_->get_logger(), "YAML file does not contain 'markers' field");
+                return false;
+            }
+
+            gt_points_.clear();
+            
+            const YAML::Node &markers = config["markers"];
+            for (const auto &marker_node : markers)
+            {
+                SemanticPoint point;
+                
+                if (!marker_node["id"] || !marker_node["class_id"] || !marker_node["position"])
+                {
+                    RCLCPP_WARN(node_->get_logger(), "Skipping marker with missing fields");
+                    continue;
+                }
+                
+                point.marker_id = marker_node["id"].as<int>();
+                point.class_id = marker_node["class_id"].as<int32_t>();
+                
+                const YAML::Node &pos = marker_node["position"];
+                point.position = octomap::point3d(
+                    pos["x"].as<double>(),
+                    pos["y"].as<double>(),
+                    pos["z"].as<double>()
+                );
+                
+                // Optional last_seen field
+                if (marker_node["last_seen"])
+                {
+                    point.last_seen = marker_node["last_seen"].as<double>();
+                }
+                else
+                {
+                    point.last_seen = 0.0;
+                }
+                
+                gt_points_.push_back(point);
+                
+                RCLCPP_DEBUG(node_->get_logger(), 
+                            "Loaded marker %d (class %d) at (%.3f, %.3f, %.3f)",
+                            point.marker_id, point.class_id,
+                            point.position.x(), point.position.y(), point.position.z());
+            }
+            
+            RCLCPP_INFO(node_->get_logger(), "Loaded %zu ground truth markers", gt_points_.size());
+            return true;
+        }
+        catch (const YAML::Exception &e)
+        {
+            RCLCPP_ERROR(node_->get_logger(), "YAML parsing error: %s", e.what());
+            return false;
+        }
+        catch (const std::exception &e)
+        {
+            RCLCPP_ERROR(node_->get_logger(), "Error loading ground truth: %s", e.what());
+            return false;
+        }
+    }
+
+    std::vector<SemanticCluster> OctoMapInterface::clusterSemanticVoxels() const
+    {
+        std::vector<SemanticCluster> clusters;
+        
+        auto sem_tree = getSemanticTree();
+        if (!sem_tree)
+        {
+            return clusters;
+        }
+
+        double res = sem_tree->getResolution();
+
+        // Custom hash for octomap::point3d to use in unordered_set
+        struct Point3DHash
+        {
+            std::size_t operator()(const octomap::point3d &p) const
+            {
+                // Combine hashes of x, y, z coordinates
+                std::size_t h1 = std::hash<double>{}(p.x());
+                std::size_t h2 = std::hash<double>{}(p.y());
+                std::size_t h3 = std::hash<double>{}(p.z());
+                return h1 ^ (h2 << 1) ^ (h3 << 2);
+            }
+        };
+
+        struct Point3DEqual
+        {
+            bool operator()(const octomap::point3d &a, const octomap::point3d &b) const
+            {
+                return a.x() == b.x() && a.y() == b.y() && a.z() == b.z();
+            }
+        };
+
+        // Collect all occupied voxels grouped by class
+        std::map<int32_t, std::vector<octomap::point3d>> voxels_by_class;
+        
+        for (auto it = sem_tree->begin_leafs(); it != sem_tree->end_leafs(); ++it)
+        {
+            if (sem_tree->isNodeOccupied(*it))
+            {
+                int32_t class_id = it->getClassId();
+                // Skip background (class_id == -1)
+                if (class_id != -1)
+                {
+                    voxels_by_class[class_id].push_back(it.getCoordinate());
+                }
+            }
+        }
+
+        // For each class, perform connected component clustering
+        for (const auto &[class_id, voxels] : voxels_by_class)
+        {
+            std::unordered_set<octomap::point3d, Point3DHash, Point3DEqual> unvisited;
+            for (const auto &v : voxels)
+            {
+                unvisited.insert(v);
+            }
+
+            // BFS to find connected components
+            while (!unvisited.empty())
+            {
+                SemanticCluster cluster;
+                cluster.class_id = class_id;
+
+                // Start BFS from an arbitrary unvisited voxel
+                std::queue<octomap::point3d> queue;
+                auto start_it = unvisited.begin();
+                octomap::point3d start = *start_it;
+                queue.push(start);
+                unvisited.erase(start_it);
+
+                // Accumulate sum for centroid calculation
+                double sum_x = 0.0, sum_y = 0.0, sum_z = 0.0;
+
+                while (!queue.empty())
+                {
+                    octomap::point3d current = queue.front();
+                    queue.pop();
+
+                    cluster.points.push_back(current);
+                    sum_x += current.x();
+                    sum_y += current.y();
+                    sum_z += current.z();
+
+                    // Check 6-connected neighbors
+                    std::vector<octomap::point3d> neighbors = {
+                        current + octomap::point3d(res, 0, 0),
+                        current + octomap::point3d(-res, 0, 0),
+                        current + octomap::point3d(0, res, 0),
+                        current + octomap::point3d(0, -res, 0),
+                        current + octomap::point3d(0, 0, res),
+                        current + octomap::point3d(0, 0, -res)
+                    };
+
+                    for (const auto &neighbor : neighbors)
+                    {
+                        auto it = unvisited.find(neighbor);
+                        if (it != unvisited.end())
+                        {
+                            queue.push(neighbor);
+                            unvisited.erase(it);
+                        }
+                    }
+                }
+
+                // Compute centroid
+                size_t n = cluster.points.size();
+                if (n > 0)
+                {
+                    cluster.centroid = octomap::point3d(
+                        sum_x / n,
+                        sum_y / n,
+                        sum_z / n
+                    );
+                    clusters.push_back(cluster);
+                }
+            }
+        }
+
+        return clusters;
+    }
+
+    void OctoMapInterface::evaluateSemanticOctomap(double threshold_radius)
+    {
+        if (!isSemanticTree())
+        {
+            RCLCPP_WARN(node_->get_logger(), "Cannot evaluate: current tree is not semantic");
+            return;
+        }
+        
+        if (gt_points_.empty())
+        {
+            RCLCPP_WARN(node_->get_logger(), "Cannot evaluate: no ground truth points loaded");
+            return;
+        }
+
+        RCLCPP_INFO(node_->get_logger(), "\n=== Semantic Octomap Evaluation ===");
+        RCLCPP_INFO(node_->get_logger(), "Ground truth points: %zu", gt_points_.size());
+        RCLCPP_INFO(node_->get_logger(), "Match threshold radius: %.3f m", threshold_radius);
+
+        // Step 1: Cluster semantic voxels by class
+        auto clusters = clusterSemanticVoxels();
+        RCLCPP_INFO(node_->get_logger(), "Found %zu semantic clusters", clusters.size());
+
+        // Log cluster details
+        std::map<int32_t, int> clusters_per_class;
+        for (const auto &cluster : clusters)
+        {
+            clusters_per_class[cluster.class_id]++;
+        }
+        
+        RCLCPP_INFO(node_->get_logger(), "Clusters per class:");
+        for (const auto &[class_id, count] : clusters_per_class)
+        {
+            RCLCPP_INFO(node_->get_logger(), "  Class %d: %d clusters", class_id, count);
+        }
+
+        // Step 2: Match clusters to ground truth points
+        std::set<size_t> matched_gt_indices;  // Ground truth points that were matched
+        std::set<size_t> matched_cluster_indices;  // Clusters that were matched
+        
+        int true_positives = 0;
+        int class_mismatches = 0;
+        
+        double threshold_sq = threshold_radius * threshold_radius;
+
+        for (size_t i = 0; i < clusters.size(); ++i)
+        {
+            const auto &cluster = clusters[i];
+            
+            // Find closest ground truth point
+            double min_dist_sq = std::numeric_limits<double>::infinity();
+            size_t closest_gt_idx = 0;
+            bool found_match = false;
+
+            for (size_t j = 0; j < gt_points_.size(); ++j)
+            {
+                const auto &gt_point = gt_points_[j];
+                double dist_sq = sqdist(cluster.centroid, gt_point.position);
+                
+                if (dist_sq < min_dist_sq)
+                {
+                    min_dist_sq = dist_sq;
+                    closest_gt_idx = j;
+                    if (dist_sq <= threshold_sq)
+                    {
+                        found_match = true;
+                    }
+                }
+            }
+
+            if (found_match)
+            {
+                matched_cluster_indices.insert(i);
+                matched_gt_indices.insert(closest_gt_idx);
+                
+                const auto &matched_gt = gt_points_[closest_gt_idx];
+                
+                // Check if class matches
+                if (cluster.class_id == matched_gt.class_id)
+                {
+                    true_positives++;
+                    RCLCPP_DEBUG(node_->get_logger(), 
+                                "✓ Cluster %zu (class %d, %zu voxels) matched GT marker %d at dist=%.3f m",
+                                i, cluster.class_id, cluster.points.size(),
+                                matched_gt.marker_id, std::sqrt(min_dist_sq));
+                }
+                else
+                {
+                    class_mismatches++;
+                    RCLCPP_WARN(node_->get_logger(), 
+                               "✗ Cluster %zu (class %d) matched GT marker %d (class %d) but classes differ! dist=%.3f m",
+                               i, cluster.class_id, matched_gt.marker_id, matched_gt.class_id,
+                               std::sqrt(min_dist_sq));
+                }
+            }
+        }
+
+        // Step 3: Calculate metrics
+        int false_positives = static_cast<int>(clusters.size()) - static_cast<int>(matched_cluster_indices.size());
+        int false_negatives = static_cast<int>(gt_points_.size()) - static_cast<int>(matched_gt_indices.size());
+
+        // Print results
+        RCLCPP_INFO(node_->get_logger(), "\n=== Evaluation Results ===");
+        RCLCPP_INFO(node_->get_logger(), "True Positives (correct matches):  %d", true_positives);
+        RCLCPP_INFO(node_->get_logger(), "False Positives (unmatched clusters): %d", false_positives);
+        RCLCPP_INFO(node_->get_logger(), "False Negatives (undetected GT):   %d", false_negatives);
+        RCLCPP_INFO(node_->get_logger(), "Class Mismatches (wrong class):    %d", class_mismatches);
+
+        // Calculate derived metrics
+        int total_predictions = true_positives + false_positives + class_mismatches;
+        int total_gt = static_cast<int>(gt_points_.size());
+        
+        double precision = total_predictions > 0 ? 
+            static_cast<double>(true_positives) / total_predictions : 0.0;
+        double recall = total_gt > 0 ? 
+            static_cast<double>(true_positives) / total_gt : 0.0;
+        double f1_score = (precision + recall) > 0 ? 
+            2.0 * precision * recall / (precision + recall) : 0.0;
+
+        RCLCPP_INFO(node_->get_logger(), "\nMetrics:");
+        RCLCPP_INFO(node_->get_logger(), "  Precision: %.2f%% (%d/%d)", 
+                   precision * 100.0, true_positives, total_predictions);
+        RCLCPP_INFO(node_->get_logger(), "  Recall:    %.2f%% (%d/%d)", 
+                   recall * 100.0, true_positives, total_gt);
+        RCLCPP_INFO(node_->get_logger(), "  F1 Score:  %.2f%%", f1_score * 100.0);
+
+        // List unmatched ground truth points
+        if (false_negatives > 0)
+        {
+            RCLCPP_INFO(node_->get_logger(), "\nUndetected Ground Truth Points:");
+            for (size_t j = 0; j < gt_points_.size(); ++j)
+            {
+                if (matched_gt_indices.find(j) == matched_gt_indices.end())
+                {
+                    const auto &gt = gt_points_[j];
+                    RCLCPP_INFO(node_->get_logger(), 
+                               "  Marker %d (class %d) at (%.2f, %.2f, %.2f)",
+                               gt.marker_id, gt.class_id,
+                               gt.position.x(), gt.position.y(), gt.position.z());
+                }
+            }
+        }
+
+        // List unmatched clusters (false positives)
+        if (false_positives > 0)
+        {
+            RCLCPP_INFO(node_->get_logger(), "\nUnmatched Clusters (False Positives):");
+            for (size_t i = 0; i < clusters.size(); ++i)
+            {
+                if (matched_cluster_indices.find(i) == matched_cluster_indices.end())
+                {
+                    const auto &cluster = clusters[i];
+                    RCLCPP_INFO(node_->get_logger(), 
+                               "  Cluster %zu (class %d, %zu voxels) at (%.2f, %.2f, %.2f)",
+                               i, cluster.class_id, cluster.points.size(),
+                               cluster.centroid.x(), cluster.centroid.y(), cluster.centroid.z());
+                }
+            }
+        }
+
+        RCLCPP_INFO(node_->get_logger(), "=================================\n");
     }
 
 }

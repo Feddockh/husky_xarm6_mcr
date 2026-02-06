@@ -19,6 +19,7 @@ find_package(octomap_msgs REQUIRED)
 find_package(semantic_octomap REQUIRED)
 find_package(vision_msgs REQUIRED)
 find_package(husky_xarm6_mcr_occupancy_map REQUIRED)
+find_package(yaml-cpp REQUIRED)
 
 # Define the MoveIt interface library
 add_library(moveit_interface SHARED
@@ -43,7 +44,7 @@ target_include_directories(octomap_interface PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
-target_link_libraries(octomap_interface ${OCTOMAP_LIBRARIES})
+target_link_libraries(octomap_interface ${OCTOMAP_LIBRARIES} yaml-cpp)
 ament_target_dependencies(octomap_interface
   rclcpp
   octomap_msgs
@@ -155,14 +156,8 @@ install(TARGETS
 install(DIRECTORY include/
   DESTINATION include)
 
-install(DIRECTORY launch
+install(DIRECTORY launch data metrics
   DESTINATION share/${PROJECT_NAME})
-
-# Install data directory for runtime workspace storage
-install(DIRECTORY
-  data
-  DESTINATION share/${PROJECT_NAME}/
-)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
