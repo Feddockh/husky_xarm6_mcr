@@ -25,11 +25,11 @@
             <ambient>0.5 0.5 0.5 1</ambient>
             <background>0.3 0.7 0.9 1</background>
             <grid>false</grid>
-            <sky>
+            <!-- <sky>
                 <clouds>
                     <speed>12</speed>
                 </clouds>
-            </sky>
+            </sky> -->
             <shadows>true</shadows>
         </scene>
         
