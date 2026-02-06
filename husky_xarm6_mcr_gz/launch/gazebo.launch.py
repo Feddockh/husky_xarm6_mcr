@@ -1,6 +1,6 @@
 import os
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, SetEnvironmentVariable, IncludeLaunchDescription, OpaqueFunction, ExecuteProcess, RegisterEventHandler
+from launch.actions import DeclareLaunchArgument, SetEnvironmentVariable, IncludeLaunchDescription, OpaqueFunction, ExecuteProcess, RegisterEventHandler, GroupAction
 from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
@@ -77,7 +77,37 @@ def launch_setup(context, *args, **kwargs):
             value=gz_path
         ),
     ]
-    
+
+    # # Launch Gazebo after marker generation completes
+    # gazebo_launch = IncludeLaunchDescription(
+    #     PythonLaunchDescriptionSource(
+    #         os.path.join(get_package_share_directory('ros_gz_sim'), 'launch', 'gz_sim.launch.py')
+    #     ),
+    #     launch_arguments={
+    #         'gz_args': ['-r ', world_file]
+    #     }.items()
+    # )
+    gazebo_launch = GroupAction([
+        # # Force Gazebo GUI rendering on the NVIDIA GPU (PRIME offload)
+        # SetEnvironmentVariable('__NV_PRIME_RENDER_OFFLOAD', '1'),
+        # SetEnvironmentVariable('__GLX_VENDOR_LIBRARY_NAME', 'nvidia'),
+        # # Optional (often helps Vulkan/Optimus selection, harmless if unused)
+        # SetEnvironmentVariable('__VK_LAYER_NV_optimus', 'NVIDIA_only'),
+
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(
+                    get_package_share_directory('ros_gz_sim'),
+                    'launch',
+                    'gz_sim.launch.py'
+                )
+            ),
+            launch_arguments={
+                'gz_args': ['-r ', world_file]
+            }.items()
+        )
+    ])
+
     # Conditionally add marker generation executable
     if generate_markers_value.lower() in ['true', '1', 'yes']:
         # Get the path to the installed script
@@ -96,15 +126,15 @@ def launch_setup(context, *args, **kwargs):
         )
         launch_actions.append(marker_generator)
         
-        # Launch Gazebo after marker generation completes
-        gazebo_launch = IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(
-                os.path.join(get_package_share_directory('ros_gz_sim'), 'launch', 'gz_sim.launch.py')
-            ),
-            launch_arguments={
-                'gz_args': ['-r ', world_file]
-            }.items()
-        )
+        # # Launch Gazebo after marker generation completes
+        # gazebo_launch = IncludeLaunchDescription(
+        #     PythonLaunchDescriptionSource(
+        #         os.path.join(get_package_share_directory('ros_gz_sim'), 'launch', 'gz_sim.launch.py')
+        #     ),
+        #     launch_arguments={
+        #         'gz_args': ['-r ', world_file]
+        #     }.items()
+        # )
         
         # Register event handler to launch Gazebo after marker generation
         launch_actions.append(
@@ -115,18 +145,20 @@ def launch_setup(context, *args, **kwargs):
                 )
             )
         )
+
     else:
         # Launch Gazebo immediately if not generating markers
-        launch_actions.append(
-            IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(
-                    os.path.join(get_package_share_directory('ros_gz_sim'), 'launch', 'gz_sim.launch.py')
-                ),
-                launch_arguments={
-                    'gz_args': ['-r ', world_file]
-                }.items()
-            )
-        )
+        # launch_actions.append(
+        #     IncludeLaunchDescription(
+        #         PythonLaunchDescriptionSource(
+        #             os.path.join(get_package_share_directory('ros_gz_sim'), 'launch', 'gz_sim.launch.py')
+        #         ),
+        #         launch_arguments={
+        #             'gz_args': ['-r ', world_file]
+        #         }.items()
+        #     )
+        # )
+        launch_actions.append(gazebo_launch)
     
     # Clock bridge - always add
     launch_actions.append(
