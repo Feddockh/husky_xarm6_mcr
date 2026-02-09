@@ -4,261 +4,9 @@
 #include <algorithm>
 #include "husky_xarm6_mcr_nbv_planner/octomap_interface.hpp"
 #include "husky_xarm6_mcr_nbv_planner/nbv_visualizer.hpp"
+#include "husky_xarm6_mcr_nbv_planner/cluster.hpp"
 
 using namespace husky_xarm6_mcr_nbv_planner;
-
-/**
- * @brief Demo node that continuously processes octomap updates and visualizes frontiers/clusters
- */
-class OctomapInterfaceDemoNode : public rclcpp::Node
-{
-public:
-    OctomapInterfaceDemoNode() : Node("octomap_interface_demo")
-    {
-        // Declare parameters
-        this->declare_parameter("octomap_topic", "/planning_scene_world");
-        this->declare_parameter("visualization_topic", "nbv_markers");
-        this->declare_parameter("map_frame", "map");
-        this->declare_parameter("min_unknown_neighbors", 1);
-        this->declare_parameter("n_clusters", -1);  // -1 = auto-select
-        this->declare_parameter("use_bbox", false);
-        this->declare_parameter("update_rate_hz", 2.0);
-        this->declare_parameter("visualization_rate_hz", 2.0);
-
-        // Get parameters
-        octomap_topic_ = this->get_parameter("octomap_topic").as_string();
-        visualization_topic_ = this->get_parameter("visualization_topic").as_string();
-        map_frame_ = this->get_parameter("map_frame").as_string();
-        min_unknown_neighbors_ = this->get_parameter("min_unknown_neighbors").as_int();
-        n_clusters_ = this->get_parameter("n_clusters").as_int();
-        use_bbox_ = this->get_parameter("use_bbox").as_bool();
-        update_rate_hz_ = this->get_parameter("update_rate_hz").as_double();
-        visualization_rate_hz_ = this->get_parameter("visualization_rate_hz").as_double();
-
-        // Log parameters
-        RCLCPP_INFO(this->get_logger(), "\n=== Octomap Interface Demo Parameters ===");
-        RCLCPP_INFO(this->get_logger(), "  octomap_topic: %s", octomap_topic_.c_str());
-        RCLCPP_INFO(this->get_logger(), "  visualization_topic: %s", visualization_topic_.c_str());
-        RCLCPP_INFO(this->get_logger(), "  map_frame: %s", map_frame_.c_str());
-        RCLCPP_INFO(this->get_logger(), "  min_unknown_neighbors: %d", min_unknown_neighbors_);
-        RCLCPP_INFO(this->get_logger(), "  n_clusters: %d (negative = auto)", n_clusters_);
-        RCLCPP_INFO(this->get_logger(), "  use_bbox: %s", use_bbox_ ? "true" : "false");
-        RCLCPP_INFO(this->get_logger(), "  update_rate: %.1f Hz", update_rate_hz_);
-        RCLCPP_INFO(this->get_logger(), "  visualization_rate: %.1f Hz", visualization_rate_hz_);
-
-        // Setup frontier color
-        frontier_color_.r = 0.0f;
-        frontier_color_.g = 1.0f;
-        frontier_color_.b = 0.0f;
-        frontier_color_.a = 0.7f;
-
-        RCLCPP_INFO(this->get_logger(), "Demo node constructor complete. Call initialize() to start.");
-    }
-
-    void initialize()
-    {
-        // Initialize octomap interface (requires shared_from_this)
-        RCLCPP_INFO(this->get_logger(), "\n=== Initializing ===");
-        octomap_interface_ = std::make_shared<OctoMapInterface>(
-            shared_from_this(), octomap_topic_, true);
-
-        // Initialize visualizer
-        visualizer_ = std::make_shared<NBVVisualizer>(
-            shared_from_this(), map_frame_, visualization_topic_);
-
-        // Create update timer
-        auto update_period = std::chrono::duration<double>(1.0 / update_rate_hz_);
-        update_timer_ = this->create_wall_timer(
-            std::chrono::duration_cast<std::chrono::milliseconds>(update_period),
-            std::bind(&OctomapInterfaceDemoNode::updateCallback, this));
-
-        // Create visualization timer
-        auto viz_period = std::chrono::duration<double>(1.0 / visualization_rate_hz_);
-        viz_timer_ = this->create_wall_timer(
-            std::chrono::duration_cast<std::chrono::milliseconds>(viz_period),
-            std::bind(&OctomapInterfaceDemoNode::visualizationCallback, this));
-
-        RCLCPP_INFO(this->get_logger(), "Demo node initialized. Waiting for octomap...");
-    }
-
-private:
-    void updateCallback()
-    {
-        // Get latest octomap snapshot
-        auto tree = octomap_interface_->getTreeSnapshot();
-        if (!tree)
-        {
-            if (!octomap_received_)
-            {
-                RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
-                                     "Waiting for octomap on topic: %s", octomap_topic_.c_str());
-            }
-            return;
-        }
-
-        // First octomap received
-        if (!octomap_received_)
-        {
-            octomap_received_ = true;
-            RCLCPP_INFO(this->get_logger(), "\n=== First Octomap Received ===");
-            RCLCPP_INFO(this->get_logger(), "  Tree type: %s", octomap_interface_->getTreeTypeString().c_str());
-        }
-        
-        // Log octomap stats (updated every time)
-        static int stats_counter = 0;
-        if (++stats_counter % 5 == 0)  // Log every 5 updates to avoid spam
-        {
-            RCLCPP_INFO(this->get_logger(), "\n=== Octomap Stats ===");
-            if (octomap_interface_->isSemanticTree())
-            {
-                auto sem_tree = octomap_interface_->getSemanticTree();
-                if (sem_tree)
-                    logOctomapStats(sem_tree, true);
-            }
-            else
-            {
-                auto std_tree = octomap_interface_->getStandardTree();
-                if (std_tree)
-                    logOctomapStats(std_tree, false);
-            }
-        }
-
-        // Find frontiers
-        auto start = std::chrono::high_resolution_clock::now();
-        std::vector<octomap::point3d> frontiers;
-        if (use_bbox_)
-            frontiers = octomap_interface_->findFrontiers(min_unknown_neighbors_, true);
-        else
-            frontiers = octomap_interface_->findFrontiers(min_unknown_neighbors_, false);
-        
-        auto end = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-
-        if (frontiers.empty())
-        {
-            RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 10000,
-                                 "No frontiers found. Try lowering min_unknown_neighbors (current: %d)",
-                                 min_unknown_neighbors_);
-            // Clear visualization if no frontiers
-            latest_frontiers_.clear();
-            latest_clusters_.clear();
-            return;
-        }
-
-        RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
-                             "Found %zu frontiers in %ld ms", frontiers.size(), duration.count());
-
-        // Determine number of clusters
-        int n_clusters = n_clusters_;
-        if (n_clusters <= 0)
-        {
-            n_clusters = std::max(1, static_cast<int>(frontiers.size()) / 40);
-        }
-
-        // Cluster frontiers
-        start = std::chrono::high_resolution_clock::now();
-        auto clusters = octomap_interface_->kmeansCluster(frontiers, n_clusters);
-        end = std::chrono::high_resolution_clock::now();
-        duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-
-        RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
-                             "Clustered into %zu groups in %ld ms", clusters.size(), duration.count());
-
-        // Store latest results
-        latest_frontiers_ = frontiers;
-        latest_clusters_ = clusters;
-        voxel_size_ = tree->getResolution();
-        has_data_ = true;
-
-        // Log cluster details occasionally
-        static int update_count = 0;
-        if (++update_count % 10 == 0)
-        {
-            RCLCPP_INFO(this->get_logger(), "\nCluster details:");
-            for (size_t i = 0; i < clusters.size() && i < 5; ++i)
-            {
-                const auto &cluster = clusters[i];
-                RCLCPP_INFO(this->get_logger(), "  Cluster %d: %d points, center [%.3f, %.3f, %.3f]",
-                            cluster.label, cluster.size,
-                            cluster.center.x(), cluster.center.y(), cluster.center.z());
-            }
-            if (clusters.size() > 5)
-            {
-                RCLCPP_INFO(this->get_logger(), "  ... and %zu more clusters", clusters.size() - 5);
-            }
-        }
-    }
-
-    void visualizationCallback()
-    {
-        if (!has_data_)
-        {
-            return;
-        }
-
-        // Republish frontiers and clusters
-        visualizer_->publishFrontiers(latest_frontiers_, voxel_size_, frontier_color_);
-        visualizer_->publishClusteredFrontiers(latest_clusters_, voxel_size_, true);
-    }
-
-    // Template function to handle both tree types
-    template<typename TreeType>
-    void logOctomapStats(const std::shared_ptr<TreeType> &tree, bool is_semantic)
-    {
-        RCLCPP_INFO(this->get_logger(), "  Resolution: %.4f m", tree->getResolution());
-        RCLCPP_INFO(this->get_logger(), "  Total nodes: %zu", tree->size());
-        RCLCPP_INFO(this->get_logger(), "  Leaf nodes: %zu", tree->getNumLeafNodes());
-
-        size_t occupied = 0, free_space = 0;
-        for (auto it = tree->begin_leafs(); it != tree->end_leafs(); ++it)
-        {
-            if (tree->isNodeOccupied(*it))
-                occupied++;
-            else
-                free_space++;
-        }
-        RCLCPP_INFO(this->get_logger(), "  Occupied voxels: %zu", occupied);
-        RCLCPP_INFO(this->get_logger(), "  Free voxels: %zu", free_space);
-        
-        // Display semantic class information if this is a semantic tree
-        if (is_semantic)
-        {
-            auto class_counts = octomap_interface_->getSemanticClassCounts();
-            if (!class_counts.empty())
-            {
-                RCLCPP_INFO(this->get_logger(), "  Semantic Classes:");
-                for (const auto &[class_id, count] : class_counts)
-                {
-                    RCLCPP_INFO(this->get_logger(), "    Class %d: %zu occupied voxels", class_id, count);
-                }
-            }
-        }
-    }
-
-    // Parameters
-    std::string octomap_topic_;
-    std::string visualization_topic_;
-    std::string map_frame_;
-    int min_unknown_neighbors_;
-    int n_clusters_;
-    bool use_bbox_;
-    double update_rate_hz_;
-    double visualization_rate_hz_;
-
-    // Components
-    std::shared_ptr<OctoMapInterface> octomap_interface_;
-    std::shared_ptr<NBVVisualizer> visualizer_;
-    rclcpp::TimerBase::SharedPtr update_timer_;
-    rclcpp::TimerBase::SharedPtr viz_timer_;
-
-    // State
-    bool octomap_received_ = false;
-    bool has_data_ = false;
-    std::vector<octomap::point3d> latest_frontiers_;
-    std::vector<Cluster> latest_clusters_;
-    double voxel_size_ = 0.1;
-    std_msgs::msg::ColorRGBA frontier_color_;
-};
 
 void waitForSimClock(const std::shared_ptr<rclcpp::Node> &node)
 {
@@ -291,7 +39,9 @@ int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
 
-    auto node = std::make_shared<OctomapInterfaceDemoNode>();
+    auto node = std::make_shared<rclcpp::Node>(
+        "octomap_interface_demo",
+        rclcpp::NodeOptions().automatically_declare_parameters_from_overrides(true));
 
     // Wait for sim clock if using sim time
     if (node->get_parameter("use_sim_time").as_bool())
@@ -299,9 +49,141 @@ int main(int argc, char **argv)
         waitForSimClock(node);
     }
 
-    // Initialize after shared_ptr is created
-    node->initialize();
+    // Get parameters
+    std::string octomap_topic = node->get_parameter("octomap_topic").as_string();
+    std::string visualization_topic = node->get_parameter("visualization_topic").as_string();
+    std::string map_frame = node->get_parameter("map_frame").as_string();
+    int min_unknown_neighbors = node->get_parameter("min_unknown_neighbors").as_int();
+    int n_clusters = node->get_parameter("n_clusters").as_int();
+    bool use_bbox = node->get_parameter("use_bbox").as_bool();
+    double update_rate_hz = node->get_parameter("update_rate_hz").as_double();
+    std::string gt_points_file = node->get_parameter("gt_points_file").as_string();
+    bool enable_evaluation = node->get_parameter("enable_evaluation").as_bool();
+    double eval_threshold_radius = node->get_parameter("eval_threshold_radius").as_double();
 
+    // Log parameters
+    RCLCPP_INFO(node->get_logger(), "\n=== Octomap Interface Demo Parameters ===");
+    RCLCPP_INFO(node->get_logger(), "  octomap_topic: %s", octomap_topic.c_str());
+    RCLCPP_INFO(node->get_logger(), "  visualization_topic: %s", visualization_topic.c_str());
+    RCLCPP_INFO(node->get_logger(), "  map_frame: %s", map_frame.c_str());
+    RCLCPP_INFO(node->get_logger(), "  min_unknown_neighbors: %d", min_unknown_neighbors);
+    RCLCPP_INFO(node->get_logger(), "  n_clusters: %d (negative = auto)", n_clusters);
+    RCLCPP_INFO(node->get_logger(), "  use_bbox: %s", use_bbox ? "true" : "false");
+    RCLCPP_INFO(node->get_logger(), "  update_rate: %.1f Hz", update_rate_hz);
+    RCLCPP_INFO(node->get_logger(), "  enable_evaluation: %s", enable_evaluation ? "true" : "false");
+    if (enable_evaluation)
+    {
+        RCLCPP_INFO(node->get_logger(), "  gt_points_file: %s", gt_points_file.c_str());
+        RCLCPP_INFO(node->get_logger(), "  eval_threshold_radius: %.3f m", eval_threshold_radius);
+    }
+
+    // Initialize octomap interface
+    RCLCPP_INFO(node->get_logger(), "\n=== Initializing ===");
+    auto octomap_interface = std::make_shared<OctoMapInterface>(node, octomap_topic, true);
+
+    // Load ground truth if evaluation is enabled
+    if (enable_evaluation)
+    {
+        if (!gt_points_file.empty())
+        {
+            if (octomap_interface->loadGroundTruthSemantics(gt_points_file))
+            {
+                RCLCPP_INFO(node->get_logger(), "Ground truth loaded successfully");
+            }
+            else
+            {
+                RCLCPP_ERROR(node->get_logger(), "Failed to load ground truth file: %s", gt_points_file.c_str());
+                enable_evaluation = false;
+            }
+        }
+        else
+        {
+            RCLCPP_WARN(node->get_logger(), "Evaluation enabled but no ground truth file specified");
+            enable_evaluation = false;
+        }
+    }
+
+    // Initialize visualizer
+    auto visualizer = std::make_shared<NBVVisualizer>(node, map_frame, visualization_topic);   
+
+    // State variables for callbacks
+    bool octomap_received = false;
+    bool has_data = false;
+    std::vector<Cluster> latest_clusters;
+
+    // Create update timer
+    auto update_callback = [&]()
+    {
+        // Get latest octomap snapshot
+        auto tree = octomap_interface->getTreeSnapshot();
+        if (!tree)
+        {
+            if (!octomap_received)
+            {
+                RCLCPP_WARN_THROTTLE(node->get_logger(), *node->get_clock(), 5000,
+                                     "Waiting for octomap on topic: %s", octomap_topic.c_str());
+            }
+            return;
+        }
+
+        // First octomap received
+        if (!octomap_received)
+        {
+            octomap_received = true;
+            RCLCPP_INFO(node->get_logger(), "\n=== First Octomap Received ===");
+            RCLCPP_INFO(node->get_logger(), "  Tree type: %s", octomap_interface->getTreeTypeString().c_str());
+        }
+
+        // Run evaluation if enabled and this is a semantic tree
+        if (enable_evaluation && octomap_interface->isSemanticTree())
+        {
+            RCLCPP_INFO(node->get_logger(), "Running semantic octomap evaluation...");
+            // octomap_interface->evaluateSemanticOctomap(eval_threshold_radius);
+
+            // Step 1: Cluster semantic voxels by class
+            latest_clusters = octomap_interface->clusterSemanticVoxels(false);
+
+            // Step 2: Match clusters to ground truth
+            auto match_result = octomap_interface->matchClustersToGroundTruth(latest_clusters, eval_threshold_radius, false);
+            visualizer->publishMatchResults(match_result, eval_threshold_radius*2, 0.8f); // Visualizer uses diameter
+
+            // Step 3: Evaluate and print metrics
+            octomap_interface->evaluateMatchResults(match_result, false);
+
+            has_data = true;
+        }
+
+        // Log octomap stats (updated every time)
+        static int stats_counter = 0;
+        if (++stats_counter % 5 == 0) // Log every 5 updates to avoid spam
+        {
+            RCLCPP_INFO(node->get_logger(), "\n=== Octomap Stats ===");
+            octomap_interface->printOctomapStats();
+        }
+
+        // Visualize clusters if we have data and this is a semantic tree
+        if (has_data && octomap_interface->isSemanticTree())
+        {
+            std::vector<std_msgs::msg::ColorRGBA> cluster_colors;
+            for (const auto &cluster : latest_clusters)
+                cluster_colors.push_back(visualizer->colorForLabel(cluster.class_id, 0.8f));
+            // for (int i = 0; i < latest_clusters.size(); ++i)
+            //     cluster_colors.push_back(visualizer->colorForLabel(i, 0.8f));
+            visualizer->publishClusteredVoxels(latest_clusters, octomap_interface->getResolution(), cluster_colors, false, 0.8f);
+        }
+
+        // // Visualize ground truth points once after loading
+        // const auto &gt_points = octomap_interface->getGroundTruthPoints();
+        // if (enable_evaluation && !gt_points.empty())
+        //     visualizer->publishSemanticPoints(gt_points, eval_threshold_radius*2, 0.8f, true);
+    };
+
+    auto update_period = std::chrono::duration<double>(1.0 / update_rate_hz);
+    auto update_timer = node->create_wall_timer(
+        std::chrono::duration_cast<std::chrono::milliseconds>(update_period),
+        update_callback);
+
+    RCLCPP_INFO(node->get_logger(), "Demo node initialized. Waiting for octomap...");
     RCLCPP_INFO(node->get_logger(), "\n=== Demo Running ===");
     RCLCPP_INFO(node->get_logger(), "Press Ctrl+C to exit.");
 

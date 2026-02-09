@@ -14,6 +14,7 @@
 #include <octomap/octomap.h>
 #include "husky_xarm6_mcr_nbv_planner/cluster.hpp"
 #include "husky_xarm6_mcr_nbv_planner/viewpoint.hpp"
+#include "husky_xarm6_mcr_nbv_planner/semantic_point.hpp"
 
 #include <vector>
 #include <string>
@@ -47,34 +48,83 @@ namespace husky_xarm6_mcr_nbv_planner
             const std::string &topic = "nbv_markers");
 
         /**
-         * @brief Publish frontier voxels as colored cubes
-         * @param frontiers Frontier voxel positions
+         * @brief Publish voxels as colored cubes
+         * @param voxels Voxel positions
          * @param voxel_size Size of each voxel cube
-         * @param color RGBA color for all frontiers
+         * @param color RGBA color for all voxels
          * @param alpha Alpha value for transparency (default: 0.85)
-         * @param ns Namespace for the markers (default: "frontiers")
+         * @param ns Namespace for the markers (default: "voxels")
          */
-        void publishFrontiers(
-            const std::vector<octomap::point3d> &frontiers,
+        void publishVoxels(
+            const std::vector<octomap::point3d> &voxels,
             double voxel_size,
             const std_msgs::msg::ColorRGBA &color,
             float alpha = 0.85f,
-            const std::string &ns = "frontiers");
+            const std::string &ns = "voxels");
 
         /**
-         * @brief Publish clustered frontiers with per-cluster colors
-         * @param clusters Vector of clusters, each containing frontier voxel positions
+         * @brief Publish voxels with individual colors per voxel
+         * @param voxels Voxel positions
+         * @param voxel_size Size of each voxel cube
+         * @param colors Vector of colors (must match size of voxels)
+         * @param alpha Alpha value for transparency (default: 0.85)
+         * @param ns Namespace for the markers (default: "voxels")
+         */
+        void publishVoxels(
+            const std::vector<octomap::point3d> &voxels,
+            double voxel_size,
+            const std::vector<std_msgs::msg::ColorRGBA> &colors,
+            float alpha = 0.85f,
+            const std::string &ns = "voxels");
+
+        /**
+         * @brief Publish clustered voxels with per-cluster colors
+         * @param clusters Vector of clusters, each containing voxel positions
          * @param voxel_size Size of each voxel cube
          * @param plot_centers Whether to plot cluster centers as small 0.1 diameter spheres
          * @param alpha Alpha value for transparency (default: 0.85)
-         * @param ns Namespace for the markers (default: "clustered_frontiers")
+         * @param ns Namespace for the markers (default: "clustered_voxels")
          */
-        void publishClusteredFrontiers(
+        void publishClusteredVoxels(
             const std::vector<Cluster> &clusters,
             double voxel_size,
             bool plot_centers = false,
             float alpha = 0.85f,
-            const std::string &ns = "clustered_frontiers");
+            const std::string &ns = "clustered_voxels");
+
+        /**
+         * @brief Publish clustered voxels with a single color for all clusters
+         * @param clusters Vector of clusters, each containing voxel positions
+         * @param voxel_size Size of each voxel cube
+         * @param color Color to use for all clusters
+         * @param plot_centers Whether to plot cluster centers
+         * @param alpha Alpha value for transparency (default: 0.85)
+         * @param ns Namespace for the markers
+         */
+        void publishClusteredVoxels(
+            const std::vector<Cluster> &clusters,
+            double voxel_size,
+            const std_msgs::msg::ColorRGBA &color,
+            bool plot_centers = false,
+            float alpha = 0.85f,
+            const std::string &ns = "clustered_voxels");
+
+        /**
+         * @brief Publish clustered voxels with individual colors per cluster
+         * @param clusters Vector of clusters, each containing voxel positions
+         * @param voxel_size Size of each voxel cube
+         * @param colors Vector of colors (must match size of clusters)
+         * @param plot_centers Whether to plot cluster centers
+         * @param alpha Alpha value for transparency (default: 0.85)
+         * @param ns Namespace for the markers
+         */
+        void publishClusteredVoxels(
+            const std::vector<Cluster> &clusters,
+            double voxel_size,
+            const std::vector<std_msgs::msg::ColorRGBA> &colors,
+            bool plot_centers = false,
+            float alpha = 0.85f,
+            const std::string &ns = "clustered_voxels");
 
         /**
          * @brief Publish geometry poses as axes
@@ -169,13 +219,14 @@ namespace husky_xarm6_mcr_nbv_planner
         void clearAllMarkers();
 
         /**
-         * @brief Publish a single point marker
+         * @brief Publish a single point marker with optional text label
          * @param point 3D point position
          * @param id Unique ID for the marker
          * @param size Size of the point marker (default: 0.02m)
          * @param color Optional color for the point (default: green)
          * @param alpha Alpha value for transparency (default: 0.8)
          * @param ns Namespace for the marker (default: "points")
+         * @param text_label Optional text label to display above the point
          */
         void publishPoint(
             const octomap::point3d &point,
@@ -183,7 +234,8 @@ namespace husky_xarm6_mcr_nbv_planner
             double size = 0.02,
             const std_msgs::msg::ColorRGBA &color = std_msgs::msg::ColorRGBA(),
             float alpha = 0.8f,
-            const std::string &ns = "points");
+            const std::string &ns = "points",
+            const std::string &text_label = "");
 
         /**
          * @brief Publish multiple points as a single marker (more efficient)
@@ -201,20 +253,65 @@ namespace husky_xarm6_mcr_nbv_planner
             const std::string &ns = "points");
 
         /**
+         * @brief Publish multiple points with individual colors and optional text labels
+         * @param points Vector of 3D point positions
+         * @param colors Vector of colors (must match size of points)
+         * @param labels Optional vector of text labels (if non-empty, must match size of points)
+         * @param size Size of each point sphere (default: 0.02m)
+         * @param alpha Alpha value for transparency (default: 0.8)
+         * @param ns Namespace for the markers (default: "points")
+         */
+        void publishPoints(
+            const std::vector<octomap::point3d> &points,
+            const std::vector<std_msgs::msg::ColorRGBA> &colors,
+            const std::vector<std::string> &labels = {},
+            double size = 0.02,
+            float alpha = 0.8f,
+            const std::string &ns = "points");
+
+        /**
+         * @brief Publish semantic points with colors based on class_id
+         * @param semantic_points Vector of semantic points with id, class_id, and position
+         * @param size Size of each point sphere (default: 0.02m)
+         * @param alpha Alpha value for transparency (default: 0.8)
+         * @param show_labels Whether to display ID labels above points (default: true)
+         * @param ns Namespace for the markers (default: "semantic_points")
+         */
+        void publishSemanticPoints(
+            const std::vector<SemanticPoint> &semantic_points,
+            double size = 0.02,
+            float alpha = 0.8f,
+            bool show_labels = true,
+            const std::string &ns = "semantic_points");
+
+        /**
+         * 
+         */
+        void publishMatchResults(
+            const MatchResult &match_result,
+            double point_size = 0.02,
+            float alpha = 0.8f,
+            const std::string &ns = "match_results");
+
+        /**
          * @brief Clear specific visualization namespace
          */
-        void clearFrontiers();
-        void clearClusteredFrontiers();
+        void clearVoxels();
+        void clearClusteredVoxels();
         void clearClusterCenters();
         void clearCandidateViews();
         void clearBestView();
         void clearTargetRegion();
 
-    private:
         /**
          * @brief Generate deterministic color from cluster label
+         * @param label Class or cluster label
+         * @param alpha Alpha value for transparency (default: 0.85)
+         * @return RGBA color corresponding to the label
          */
-        std_msgs::msg::ColorRGBA colorForLabel(int label, float alpha = 0.85f);
+        static std_msgs::msg::ColorRGBA colorForLabel(int label, float alpha = 0.85f);
+
+    private:
 
         /**
          * @brief Create wireframe sphere marker

@@ -31,68 +31,63 @@ namespace husky_xarm6_mcr_nbv_planner
     std_msgs::msg::ColorRGBA NBVVisualizer::colorForLabel(int label, float alpha)
     {
         std_msgs::msg::ColorRGBA color;
+        color.a = alpha;
 
+        // Handle negative class IDs (background)
         if (label < 0)
         {
-            // Gray for noise
-            color.r = 0.6f;
-            color.g = 0.6f;
-            color.b = 0.6f;
-            color.a = alpha;
+            color.r = 128.0 / 255.0;
+            color.g = 128.0 / 255.0;
+            color.b = 128.0 / 255.0;
             return color;
         }
 
-        // Golden ratio for good color spread
-        const double h = std::fmod(0.618033988749895 * (label + 1), 1.0);
-        const double s = 0.85;
-        const double v = 0.95;
+        // Predefined color palette for classes 0-19
+        const uint8_t palette[][3] = {
+            {230, 25, 75},    // Red - class 0
+            {60, 180, 75},    // Green - class 1
+            {255, 225, 25},   // Yellow - class 2
+            {0, 130, 200},    // Blue - class 3
+            {245, 130, 48},   // Orange - class 4
+            {145, 30, 180},   // Purple - class 5
+            {70, 240, 240},   // Cyan - class 6
+            {240, 50, 230},   // Magenta - class 7
+            {210, 245, 60},   // Lime - class 8
+            {250, 190, 212},  // Pink - class 9
+            {0, 128, 128},    // Teal - class 10
+            {220, 190, 255},  // Lavender - class 11
+            {170, 110, 40},   // Brown - class 12
+            {255, 250, 200},  // Beige - class 13
+            {128, 0, 0},      // Maroon - class 14
+            {170, 255, 195},  // Mint - class 15
+            {128, 128, 0},    // Olive - class 16
+            {255, 215, 180},  // Coral - class 17
+            {0, 0, 128},      // Navy - class 18
+            {128, 128, 128}   // Grey - class 19
+        };
 
-        // HSV to RGB conversion
-        const double i = std::floor(h * 6.0);
-        const double f = h * 6.0 - i;
-        const double p = v * (1.0 - s);
-        const double q = v * (1.0 - f * s);
-        const double t = v * (1.0 - (1.0 - f) * s);
-
-        double r = 0, g = 0, b = 0;
-        switch (static_cast<int>(i) % 6)
+        if (label < 20)
         {
-        case 0:
-            r = v;
-            g = t;
-            b = p;
-            break;
-        case 1:
-            r = q;
-            g = v;
-            b = p;
-            break;
-        case 2:
-            r = p;
-            g = v;
-            b = t;
-            break;
-        case 3:
-            r = p;
-            g = q;
-            b = v;
-            break;
-        case 4:
-            r = t;
-            g = p;
-            b = v;
-            break;
-        case 5:
-            r = v;
-            g = p;
-            b = q;
-            break;
+            color.r = palette[label][0] / 255.0;
+            color.g = palette[label][1] / 255.0;
+            color.b = palette[label][2] / 255.0;
+            return color;
         }
 
-        color.r = static_cast<float>(r);
-        color.g = static_cast<float>(g);
-        color.b = static_cast<float>(b);
-        color.a = alpha;
+        // For class IDs >= 20, use hash function with brightness adjustment
+        uint32_t hash = static_cast<uint32_t>(label) * 2654435761u;  // Knuth's multiplicative hash
+        uint8_t r = (hash >> 16) & 0xFF;
+        uint8_t g = (hash >> 8) & 0xFF;
+        uint8_t b = hash & 0xFF;
+
+        // Ensure colors are not too dark
+        r = (r < 50) ? r + 100 : r;
+        g = (g < 50) ? g + 100 : g;
+        b = (b < 50) ? b + 100 : b;
+
+        color.r = r / 255.0;
+        color.g = g / 255.0;
+        color.b = b / 255.0;
 
         return color;
     }
@@ -106,13 +101,41 @@ namespace husky_xarm6_mcr_nbv_planner
         return point;
     }
 
-    void NBVVisualizer::publishFrontiers(
-        const std::vector<octomap::point3d> &frontiers,
+    void NBVVisualizer::publishVoxels(
+        const std::vector<octomap::point3d> &voxels,
         double voxel_size,
         const std_msgs::msg::ColorRGBA &color,
         float alpha,
         const std::string &ns)
     {
+        if (voxels.empty())
+        {
+            return;
+        }
+
+        // Create vector of same color for all voxels
+        std_msgs::msg::ColorRGBA actual_color = color;
+        actual_color.a = alpha;
+        std::vector<std_msgs::msg::ColorRGBA> colors(voxels.size(), actual_color);
+
+        // Call the more general function
+        publishVoxels(voxels, voxel_size, colors, alpha, ns);
+    }
+
+    void NBVVisualizer::publishVoxels(
+        const std::vector<octomap::point3d> &voxels,
+        double voxel_size,
+        const std::vector<std_msgs::msg::ColorRGBA> &colors,
+        float alpha,
+        const std::string &ns)
+    {
+        if (colors.size() != voxels.size())
+        {
+            RCLCPP_ERROR(logger_, "publishVoxels: colors vector size (%zu) must match voxels size (%zu)",
+                         colors.size(), voxels.size());
+            return;
+        }
+
         auto now = node_->now();
         visualization_msgs::msg::MarkerArray marker_array;
 
@@ -125,46 +148,96 @@ namespace husky_xarm6_mcr_nbv_planner
         del_marker.action = visualization_msgs::msg::Marker::DELETEALL;
         marker_array.markers.push_back(del_marker);
 
-        if (frontiers.empty())
+        if (voxels.empty())
         {
             marker_pub_->publish(marker_array);
             return;
         }
 
-        // Create CUBE_LIST marker for all frontiers
-        visualization_msgs::msg::Marker marker;
-        marker.header.frame_id = map_frame_;
-        marker.header.stamp = now;
-        marker.ns = ns;
-        marker.id = 1;
-        marker.type = visualization_msgs::msg::Marker::CUBE_LIST;
-        marker.action = visualization_msgs::msg::Marker::ADD;
-        marker.pose.orientation.w = 1.0;
-
-        marker.scale.x = voxel_size;
-        marker.scale.y = voxel_size;
-        marker.scale.z = voxel_size;
-        marker.color = color;
-        marker.color.a = alpha;
-
-        for (const auto &frontier : frontiers)
+        // Create individual CUBE markers for each voxel (to support per-voxel colors)
+        for (size_t i = 0; i < voxels.size(); ++i)
         {
-            marker.points.push_back(toPoint(frontier));
+            visualization_msgs::msg::Marker marker;
+            marker.header.frame_id = map_frame_;
+            marker.header.stamp = now;
+            marker.ns = ns;
+            marker.id = static_cast<int>(i + 1);
+            marker.type = visualization_msgs::msg::Marker::CUBE;
+            marker.action = visualization_msgs::msg::Marker::ADD;
+            marker.pose.position = toPoint(voxels[i]);
+            marker.pose.orientation.w = 1.0;
+            marker.scale.x = marker.scale.y = marker.scale.z = voxel_size;
+            marker.color = colors[i];
+            marker.color.a = alpha; // Apply alpha override
+            marker_array.markers.push_back(marker);
         }
 
-        marker_array.markers.push_back(marker);
         marker_pub_->publish(marker_array);
-
-        RCLCPP_DEBUG(logger_, "Published %zu frontier voxels", frontiers.size());
+        RCLCPP_DEBUG(logger_, "Published %zu voxels with individual colors", voxels.size());
     }
 
-    void NBVVisualizer::publishClusteredFrontiers(
+    void NBVVisualizer::publishClusteredVoxels(
         const std::vector<Cluster> &clusters,
         double voxel_size,
         bool plot_centers,
         float alpha,
         const std::string &ns)
     {
+        if (clusters.empty())
+        {
+            return;
+        }
+
+        // Generate colors based on class_id (if available) or label
+        std::vector<std_msgs::msg::ColorRGBA> colors;
+        colors.reserve(clusters.size());
+        for (const auto &cluster : clusters)
+        {
+            int color_index = (cluster.class_id >= 0) ? cluster.class_id : cluster.label;
+            colors.push_back(colorForLabel(color_index, alpha));
+        }
+
+        // Call the more general function
+        publishClusteredVoxels(clusters, voxel_size, colors, plot_centers, alpha, ns);
+    }
+
+    void NBVVisualizer::publishClusteredVoxels(
+        const std::vector<Cluster> &clusters,
+        double voxel_size,
+        const std_msgs::msg::ColorRGBA &color,
+        bool plot_centers,
+        float alpha,
+        const std::string &ns)
+    {
+        if (clusters.empty())
+        {
+            return;
+        }
+
+        // Create vector of same color for all clusters
+        std_msgs::msg::ColorRGBA actual_color = color;
+        actual_color.a = alpha;
+        std::vector<std_msgs::msg::ColorRGBA> colors(clusters.size(), actual_color);
+
+        // Call the more general function
+        publishClusteredVoxels(clusters, voxel_size, colors, plot_centers, alpha, ns);
+    }
+
+    void NBVVisualizer::publishClusteredVoxels(
+        const std::vector<Cluster> &clusters,
+        double voxel_size,
+        const std::vector<std_msgs::msg::ColorRGBA> &colors,
+        bool plot_centers,
+        float alpha,
+        const std::string &ns)
+    {
+        if (colors.size() != clusters.size())
+        {
+            RCLCPP_ERROR(logger_, "publishClusteredVoxels: colors vector size (%zu) must match clusters size (%zu)",
+                         colors.size(), clusters.size());
+            return;
+        }
+
         auto now = node_->now();
         visualization_msgs::msg::MarkerArray marker_array;
 
@@ -196,8 +269,9 @@ namespace husky_xarm6_mcr_nbv_planner
 
         // Create one CUBE_LIST marker per cluster
         int id = 1;
-        for (const auto &cluster : clusters)
+        for (size_t i = 0; i < clusters.size(); ++i)
         {
+            const auto &cluster = clusters[i];
             if (cluster.points.empty())
                 continue;
 
@@ -210,8 +284,8 @@ namespace husky_xarm6_mcr_nbv_planner
             marker.action = visualization_msgs::msg::Marker::ADD;
             marker.pose.orientation.w = 1.0;
             marker.scale.x = marker.scale.y = marker.scale.z = voxel_size;
-            marker.color = colorForLabel(cluster.label);
-            marker.color.a = alpha;
+            marker.color = colors[i]; // Use per-cluster color
+            marker.color.a = alpha; // Apply alpha override
 
             for (const auto &point : cluster.points)
             {
@@ -250,11 +324,7 @@ namespace husky_xarm6_mcr_nbv_planner
         }
 
         marker_pub_->publish(marker_array);
-        RCLCPP_DEBUG(logger_, "Published %zu clusters with %d total frontier voxels",
-                     clusters.size(),
-                     std::accumulate(clusters.begin(), clusters.end(), 0,
-                                     [](int sum, const Cluster &c)
-                                     { return sum + c.size; }));
+        RCLCPP_DEBUG(logger_, "Published %zu clusters with individual colors", clusters.size());
     }
 
     visualization_msgs::msg::Marker NBVVisualizer::createAxisTriad(
@@ -741,7 +811,7 @@ namespace husky_xarm6_mcr_nbv_planner
         RCLCPP_DEBUG(logger_, "Cleared all markers in namespace '%s'", ns_suffix.c_str());
     }
 
-    void NBVVisualizer::clearFrontiers()
+    void NBVVisualizer::clearVoxels()
     {
         auto now = node_->now();
         visualization_msgs::msg::MarkerArray marker_array;
@@ -749,7 +819,7 @@ namespace husky_xarm6_mcr_nbv_planner
         visualization_msgs::msg::Marker del_marker;
         del_marker.header.frame_id = map_frame_;
         del_marker.header.stamp = now;
-        del_marker.ns = "frontiers";
+        del_marker.ns = "voxels";
         del_marker.id = 0;
         del_marker.action = visualization_msgs::msg::Marker::DELETEALL;
         marker_array.markers.push_back(del_marker);
@@ -757,7 +827,7 @@ namespace husky_xarm6_mcr_nbv_planner
         marker_pub_->publish(marker_array);
     }
 
-    void NBVVisualizer::clearClusteredFrontiers()
+    void NBVVisualizer::clearClusteredVoxels()
     {
         auto now = node_->now();
         visualization_msgs::msg::MarkerArray marker_array;
@@ -765,7 +835,7 @@ namespace husky_xarm6_mcr_nbv_planner
         visualization_msgs::msg::Marker del_marker;
         del_marker.header.frame_id = map_frame_;
         del_marker.header.stamp = now;
-        del_marker.ns = "clustered_frontiers";
+        del_marker.ns = "clustered_voxels";
         del_marker.id = 0;
         del_marker.action = visualization_msgs::msg::Marker::DELETEALL;
         marker_array.markers.push_back(del_marker);
@@ -843,8 +913,8 @@ namespace husky_xarm6_mcr_nbv_planner
     void NBVVisualizer::clearAllMarkers()
     {
         // Clear all known namespaces
-        clearFrontiers();
-        clearClusteredFrontiers();
+        clearVoxels();
+        clearClusteredVoxels();
         clearClusterCenters();
         clearCandidateViews();
         clearBestView();
@@ -857,8 +927,12 @@ namespace husky_xarm6_mcr_nbv_planner
         double size,
         const std_msgs::msg::ColorRGBA &color,
         float alpha,
-        const std::string &ns)
+        const std::string &ns,
+        const std::string &text_label)
     {
+        visualization_msgs::msg::MarkerArray marker_array;
+
+        // Create point marker
         visualization_msgs::msg::Marker marker;
         marker.header.frame_id = map_frame_;
         marker.header.stamp = node_->now();
@@ -880,16 +954,39 @@ namespace husky_xarm6_mcr_nbv_planner
             marker.color.r = 0.0f;
             marker.color.g = 1.0f;
             marker.color.b = 0.0f;
-            marker.color.a = 0.8f;
+            marker.color.a = alpha;
         }
         else
         {
             marker.color = color;
+            marker.color.a = alpha;
         }
 
-        // Publish single marker
-        visualization_msgs::msg::MarkerArray marker_array;
         marker_array.markers.push_back(marker);
+
+        // Add text label if provided
+        if (!text_label.empty())
+        {
+            visualization_msgs::msg::Marker text_marker;
+            text_marker.header.frame_id = map_frame_;
+            text_marker.header.stamp = node_->now();
+            text_marker.ns = ns + "_text";
+            text_marker.id = id;
+            text_marker.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
+            text_marker.action = visualization_msgs::msg::Marker::ADD;
+            text_marker.pose.position = toPoint(point);
+            text_marker.pose.position.z += size; // Position text above the point
+            text_marker.pose.orientation.w = 1.0;
+            text_marker.scale.z = 0.05; // Text height
+            text_marker.color.r = 1.0f;
+            text_marker.color.g = 1.0f;
+            text_marker.color.b = 1.0f;
+            text_marker.color.a = 1.0f;
+            text_marker.text = text_label;
+            marker_array.markers.push_back(text_marker);
+        }
+
+        // Publish marker array
         marker_pub_->publish(marker_array);
     }
 
@@ -905,45 +1002,258 @@ namespace husky_xarm6_mcr_nbv_planner
             return;
         }
 
-        visualization_msgs::msg::Marker marker;
-        marker.header.frame_id = map_frame_;
-        marker.header.stamp = node_->now();
-        marker.ns = ns;
-        marker.id = 0;
-        marker.type = visualization_msgs::msg::Marker::POINTS;
-        marker.action = visualization_msgs::msg::Marker::ADD;
-        marker.pose.orientation.w = 1.0;
-
-        // Set point size
-        marker.scale.x = size;
-        marker.scale.y = size;
-
         // Use provided color or default to green
+        std_msgs::msg::ColorRGBA actual_color = color;
         if (color.a == 0.0 && color.r == 0.0 && color.g == 0.0 && color.b == 0.0)
         {
-            marker.color.r = 0.0f;
-            marker.color.g = 1.0f;
-            marker.color.b = 0.0f;
-            marker.color.a = alpha;
+            actual_color.r = 0.0f;
+            actual_color.g = 1.0f;
+            actual_color.b = 0.0f;
+            actual_color.a = alpha;
         }
         else
         {
-            marker.color = color;
-            marker.color.a = alpha;
+            actual_color.a = alpha;
         }
 
-        // Add all points
-        for (const auto &point : points)
+        // Create vector of same color for all points
+        std::vector<std_msgs::msg::ColorRGBA> colors(points.size(), actual_color);
+        std::vector<std::string> labels; // Empty labels
+
+        // Call the more general function
+        publishPoints(points, colors, labels, size, alpha, ns);
+    }
+
+    void NBVVisualizer::publishPoints(
+        const std::vector<octomap::point3d> &points,
+        const std::vector<std_msgs::msg::ColorRGBA> &colors,
+        const std::vector<std::string> &labels,
+        double size,
+        float alpha,
+        const std::string &ns)
+    {
+        if (points.empty())
         {
-            marker.points.push_back(toPoint(point));
+            return;
         }
 
-        // Publish marker array
+        if (colors.size() != points.size())
+        {
+            RCLCPP_ERROR(logger_, "publishPoints: colors vector size (%zu) must match points size (%zu)",
+                         colors.size(), points.size());
+            return;
+        }
+
+        if (!labels.empty() && labels.size() != points.size())
+        {
+            RCLCPP_ERROR(logger_, "publishPoints: labels vector size (%zu) must match points size (%zu) or be empty",
+                         labels.size(), points.size());
+            return;
+        }
+
         visualization_msgs::msg::MarkerArray marker_array;
-        marker_array.markers.push_back(marker);
+        auto stamp = node_->now();
+
+        // Create individual sphere markers for each point (to support per-point colors)
+        for (size_t i = 0; i < points.size(); ++i)
+        {
+            visualization_msgs::msg::Marker marker;
+            marker.header.frame_id = map_frame_;
+            marker.header.stamp = stamp;
+            marker.ns = ns;
+            marker.id = static_cast<int>(i);
+            marker.type = visualization_msgs::msg::Marker::SPHERE;
+            marker.action = visualization_msgs::msg::Marker::ADD;
+            marker.pose.position = toPoint(points[i]);
+            marker.pose.orientation.w = 1.0;
+            marker.scale.x = size;
+            marker.scale.y = size;
+            marker.scale.z = size;
+            marker.color = colors[i];
+            marker.color.a = alpha; // Apply alpha override
+            marker_array.markers.push_back(marker);
+
+            // Add text label if provided
+            if (!labels.empty() && !labels[i].empty())
+            {
+                visualization_msgs::msg::Marker text_marker;
+                text_marker.header.frame_id = map_frame_;
+                text_marker.header.stamp = stamp;
+                text_marker.ns = ns + "_text";
+                text_marker.id = static_cast<int>(i);
+                text_marker.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
+                text_marker.action = visualization_msgs::msg::Marker::ADD;
+                text_marker.pose.position = toPoint(points[i]);
+                text_marker.pose.position.z += size; // Position text above point
+                text_marker.pose.orientation.w = 1.0;
+                text_marker.scale.z = 0.05; // Text height
+                text_marker.color.r = 1.0f;
+                text_marker.color.g = 1.0f;
+                text_marker.color.b = 1.0f;
+                text_marker.color.a = 1.0f;
+                text_marker.text = labels[i];
+                marker_array.markers.push_back(text_marker);
+            }
+        }
+
+        // Publish all markers at once
         marker_pub_->publish(marker_array);
 
-        RCLCPP_DEBUG(logger_, "Published %zu points in namespace '%s'", points.size(), ns.c_str());
+        RCLCPP_DEBUG(logger_, "Published %zu points with individual colors in namespace '%s'",
+                     points.size(), ns.c_str());
+    }
+
+    void NBVVisualizer::publishSemanticPoints(
+        const std::vector<SemanticPoint> &semantic_points,
+        double size,
+        float alpha,
+        bool show_labels,
+        const std::string &ns)
+    {
+        if (semantic_points.empty())
+        {
+            return;
+        }
+
+        // Extract positions and generate colors from class_id
+        std::vector<octomap::point3d> positions;
+        std::vector<std_msgs::msg::ColorRGBA> colors;
+        std::vector<std::string> labels;
+
+        positions.reserve(semantic_points.size());
+        colors.reserve(semantic_points.size());
+        if (show_labels)
+        {
+            labels.reserve(semantic_points.size());
+        }
+
+        for (const auto &sp : semantic_points)
+        {
+            positions.push_back(sp.position);
+            colors.push_back(colorForLabel(sp.class_id, alpha));
+            if (show_labels)
+            {
+                labels.push_back(std::to_string(sp.id));
+            }
+        }
+
+        // Use the existing publishPoints function
+        publishPoints(positions, colors, labels, size, alpha, ns);
+
+        RCLCPP_DEBUG(logger_, "Published %zu semantic points in namespace '%s'",
+                     semantic_points.size(), ns.c_str());
+    }
+
+    void NBVVisualizer::publishMatchResults(
+        const MatchResult &match_result,
+        double size,
+        float alpha,
+        const std::string &ns)
+    {
+        // Keep track of all the gt points (correct, incorrect, both, and missed) and their labels/colors
+        std::vector<SemanticPoint> correct_gt_points;
+        std::vector<SemanticPoint> correct_incorrect_gt_points;
+        std::vector<SemanticPoint> incorrect_gt_points;
+        std::vector<SemanticPoint> missed_gt_points = match_result.unmatched_gt;
+
+        // Keep track of all the gt points to publish and their corresponding colors and labels
+        std::vector<octomap::point3d> gt_points;
+        std::vector<std::string> labels;
+        std::vector<std_msgs::msg::ColorRGBA> colors;
+
+        // Define the colors for each category
+        std_msgs::msg::ColorRGBA correct_color; // Green
+        correct_color.r = 0.0f;
+        correct_color.g = 1.0f;
+        correct_color.b = 0.0f;
+        correct_color.a = alpha;
+
+        std_msgs::msg::ColorRGBA incorrect_color; // Red
+        incorrect_color.r = 1.0f;
+        incorrect_color.g = 0.0f;
+        incorrect_color.b = 0.0f;
+        incorrect_color.a = alpha;
+
+        std_msgs::msg::ColorRGBA both_color; // Yellow (both correct and incorrect matches, indicating ambiguity)
+        both_color.r = 1.0f;
+        both_color.g = 1.0f;
+        both_color.b = 0.0f;
+        both_color.a = alpha;
+
+        std_msgs::msg::ColorRGBA missed_color; // Blue (missed gt points)
+        missed_color.r = 0.0f;
+        missed_color.g = 0.0f;
+        missed_color.b = 1.0f;
+        missed_color.a = alpha;
+
+        // Go through the correct gt points and add to the correct_gt_points vector only if they are not in the incorrect matches
+        // Otherwise add to the correct_incorrect_gt_points vector (these are points that are both correctly and incorrectly matched, which indicates some ambiguity in the matching)
+        for (const auto &correct_match : match_result.correct_matches)
+        {
+            // Check if this gt_point id is the same as any of the gt_point ids in the incorrect matches
+            auto it = std::find_if(match_result.class_mismatches.begin(), match_result.class_mismatches.end(),
+                                   [&correct_match](const MatchResult::Match & class_mismatch) {
+                                       return correct_match.gt_point.id == class_mismatch.gt_point.id;
+                                   });
+            if (it != match_result.class_mismatches.end())
+            {
+                correct_incorrect_gt_points.push_back(correct_match.gt_point);
+            }
+            else
+            {
+                correct_gt_points.push_back(correct_match.gt_point);
+            }
+        }
+
+        // Go through the incorrect matches and add to the incorrect_gt_points vector only if they are not in the correct matches
+        // Ignore if they are in the correct matches since those points were already added to the correct_incorrect_gt_points vector
+        for (const auto &class_mismatch : match_result.class_mismatches)
+        {
+            // Check if this gt_point id is the same as any of the gt_point ids in the correct matches
+            auto it = std::find_if(match_result.correct_matches.begin(), match_result.correct_matches.end(),
+                                   [&class_mismatch](const MatchResult::Match &correct_match) {
+                                       return class_mismatch.gt_point.id == correct_match.gt_point.id;
+                                   });
+            if (it == match_result.correct_matches.end())
+            {
+                incorrect_gt_points.push_back(class_mismatch.gt_point);
+            }
+        }
+
+        // Go through all of the correctly matched ground truth points and publish them in green
+        for (const auto &gt_pt : correct_gt_points)
+        {
+            gt_points.push_back(gt_pt.position);
+            labels.push_back(std::to_string(gt_pt.id));
+            colors.push_back(correct_color);
+        }
+
+        // Go through all of the incorrectly matched ground truth points and publish them in red
+        for (const auto &gt_pt : incorrect_gt_points)
+        {
+            gt_points.push_back(gt_pt.position);
+            labels.push_back(std::to_string(gt_pt.id));
+            colors.push_back(incorrect_color);
+        }
+
+        // Go through all of the correctly and incorrectly matched ground truth points and publish them in yellow (these are the points that are both correctly and incorrectly matched, which indicates some ambiguity in the matching)
+        for (const auto &gt_pt : correct_incorrect_gt_points)
+        {
+            gt_points.push_back(gt_pt.position);
+            labels.push_back(std::to_string(gt_pt.id));
+            colors.push_back(both_color);
+        }
+
+        // Go through all of the missed ground truth points and publish them in blue
+        for (const auto &gt_pt : missed_gt_points)
+        {
+            gt_points.push_back(gt_pt.position);
+            labels.push_back(std::to_string(gt_pt.id));
+            colors.push_back(missed_color);
+        }
+
+        // Publish all the gt points with their corresponding colors
+        publishPoints(gt_points, colors, labels, size, alpha, ns);
     }
 
 } // namespace husky_xarm6_mcr_nbv_planner

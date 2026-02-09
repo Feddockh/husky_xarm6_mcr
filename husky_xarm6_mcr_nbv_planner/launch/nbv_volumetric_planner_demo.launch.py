@@ -188,7 +188,7 @@ def generate_launch_description():
         DeclareLaunchArgument('manipulator_group_name', default_value='xarm6_manipulator'),
         DeclareLaunchArgument('learn_workspace', default_value='false', 
                             description='True to learn new workspace, False to load existing'),
-        DeclareLaunchArgument('capture_type', default_value='continuous',
+        DeclareLaunchArgument('capture_type', default_value='triggered',
                             description='Camera capture type: "continuous" or "triggered"'),
         DeclareLaunchArgument('num_samples', default_value='10000000',
                             description='Number of samples for workspace learning'),

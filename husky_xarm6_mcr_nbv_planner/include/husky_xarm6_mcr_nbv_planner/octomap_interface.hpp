@@ -6,6 +6,7 @@
 #include "husky_xarm6_mcr_occupancy_map/msg/custom_octomap.hpp"
 #include "husky_xarm6_mcr_occupancy_map/semantic_occupancy_map_tree.hpp"
 #include "husky_xarm6_mcr_nbv_planner/cluster.hpp"
+#include "husky_xarm6_mcr_nbv_planner/semantic_point.hpp"
 
 #include <shared_mutex>
 #include <memory>
@@ -21,27 +22,6 @@ namespace husky_xarm6_mcr_nbv_planner
         SEMANTIC
     };
 
-    /**
-     * @brief Structure to store ground truth semantic point information
-     */
-    struct SemanticPoint
-    {
-        int marker_id;        // ArUco marker ID
-        int32_t class_id;     // Semantic class ID
-        octomap::point3d position;  // 3D position in map frame
-        double last_seen;     // Last seen time (for reference)
-    };
-
-    /**
-     * @brief Structure to store a cluster of semantic voxels
-     */
-    struct SemanticCluster
-    {
-        int32_t class_id;                      // Semantic class ID
-        std::vector<octomap::point3d> points;  // All voxel positions in cluster
-        octomap::point3d centroid;             // Computed centroid
-    };
-
     class OctoMapInterface
     {
     public:
@@ -51,7 +31,7 @@ namespace husky_xarm6_mcr_nbv_planner
 
         // Common operations (work with both tree types)
         std::shared_ptr<octomap::AbstractOcTree> getTreeSnapshot() const;
-        
+
         std::vector<octomap::point3d> findFrontiers(int min_unknown_neighbors = 1,
                                                     bool use_bbox = false) const;
 
@@ -60,36 +40,72 @@ namespace husky_xarm6_mcr_nbv_planner
                                            int max_iters = 50,
                                            double tol = 1e-4) const;
 
-        bool isTreeAvailable() const;
-        bool getResolution(double &resolution_out) const;
-        bool getBoundingBox(octomap::point3d &min_out, octomap::point3d &max_out) const;
+        bool isTreeAvailable() const {
+            std::shared_lock lk(mtx_);
+            return std::visit([](auto&& tree) { return tree != nullptr; }, tree_);
+        }
+        double getResolution() const {
+            std::shared_lock lk(mtx_);
+            return resolution_;
+        }
+        bool getBoundingBox(octomap::point3d &min_out, octomap::point3d &max_out) const {
+            if (!has_valid_bbox_) {
+                return false;
+            }
+            min_out = bbox_min_;
+            max_out = bbox_max_;
+            return true;
+        }
         bool isVoxelOccupied(const octomap::point3d &point) const;
         bool searchOctree(const octomap::point3d &point, octomap::OcTreeNode *&node_out) const;
         int getOctreeDepth() const;
-        rclcpp::Time getLastUpdateTime() const;
+        rclcpp::Time getLastUpdateTime() const {
+            std::shared_lock lk(mtx_);
+            return last_update_time_;
+        }
 
         // Tree type info
-        OctoMapType getTreeType() const;
-        bool isSemanticTree() const;
-        std::string getTreeTypeString() const;
+        OctoMapType getTreeType() const {
+            std::shared_lock lk(mtx_);
+            return tree_type_;
+        }
+        bool isSemanticTree() const {
+            return getTreeType() == OctoMapType::SEMANTIC;
+        }
+        std::string getTreeTypeString() const {
+            std::shared_lock lk(mtx_);
+            return tree_type_ == OctoMapType::SEMANTIC ? "SemanticOcTree" : "OcTree";
+        }
 
         // Semantic-specific operations (return false if not semantic tree)
-        bool getVoxelSemantic(const octomap::point3d &point, 
-                             int32_t &class_id, 
-                             float &confidence) const;
-        
+        bool getVoxelSemantic(const octomap::point3d &point,
+                              int32_t &class_id,
+                              float &confidence) const;
+
         std::vector<octomap::point3d> findFrontiersByClass(int32_t class_id,
                                                            float min_confidence = 0.5f,
                                                            int min_unknown_neighbors = 1,
                                                            bool use_bbox = false) const;
-        
+
         // Get counts of occupied voxels per semantic class
         // Returns map of class_id -> count. Returns empty map if not semantic tree.
         std::map<int32_t, size_t> getSemanticClassCounts() const;
 
         // Type-safe accessors
-        std::shared_ptr<octomap::OcTree> getStandardTree() const;
-        std::shared_ptr<octomap::SemanticOcTree> getSemanticTree() const;
+        std::shared_ptr<octomap::OcTree> getStandardTree() const {
+            std::shared_lock lk(mtx_);
+            if (tree_type_ == OctoMapType::STANDARD) {
+                return std::get<std::shared_ptr<octomap::OcTree>>(tree_);
+            }
+            return nullptr;
+        }
+        std::shared_ptr<octomap::SemanticOcTree> getSemanticTree() const {
+            std::shared_lock lk(mtx_);
+            if (tree_type_ == OctoMapType::SEMANTIC) {
+                return std::get<std::shared_ptr<octomap::SemanticOcTree>>(tree_);
+            }
+            return nullptr;
+        }
 
         // Ground truth evaluation
         /**
@@ -100,37 +116,63 @@ namespace husky_xarm6_mcr_nbv_planner
         bool loadGroundTruthSemantics(const std::string &yaml_file_path);
 
         /**
+         * @brief Match semantic clusters to ground truth points
+         * @param clusters Vector of semantic clusters to match
+         * @param threshold_radius Maximum distance between cluster centroid and ground truth point for a match
+         * @param verbose If true, print detailed matching information
+         * @return MatchResult containing correct matches, class mismatches, and unmatched points/clusters
+         */
+        MatchResult matchClustersToGroundTruth(const std::vector<Cluster> &clusters,
+                                               double threshold_radius = 0.2,
+                                               bool verbose = false) const;
+
+        /**
+         * @brief Compute and print evaluation metrics from match results
+         * @param result MatchResult from matchClustersToGroundTruth
+         * @param verbose If true, print detailed lists of unmatched points and clusters
+         */
+        void evaluateMatchResults(const MatchResult &result, bool verbose = false) const;
+
+        /**
          * @brief Evaluate semantic octomap against ground truth
          * @param threshold_radius Maximum distance between cluster centroid and ground truth point for a match
+         * @param verbose If true, print detailed evaluation information
          */
-        void evaluateSemanticOctomap(double threshold_radius = 0.2);
+        void evaluateSemanticOctomap(double threshold_radius = 0.2, bool verbose = false);
 
         /**
          * @brief Get the loaded ground truth points
          * @return Vector of ground truth semantic points
          */
-        const std::vector<SemanticPoint>& getGroundTruthPoints() const { return gt_points_; }
-
-    private:
-        void onOctomap(const husky_xarm6_mcr_occupancy_map::msg::CustomOctomap::SharedPtr msg);
+        const std::vector<SemanticPoint> &getGroundTruthPoints() const { return gt_points_; }
 
         /**
          * @brief Cluster semantic voxels by class using connected component analysis
+         * @param verbose If true, print cluster statistics
          * @return Vector of semantic clusters (excludes background class)
          */
-        std::vector<SemanticCluster> clusterSemanticVoxels() const;
+        std::vector<Cluster> clusterSemanticVoxels(bool verbose = false) const;
+
+        /**
+         * @brief Print statistics about the current octomap
+         * Logs resolution, node counts, occupied/free voxels, and semantic class info (if semantic tree)
+         */
+        void printOctomapStats() const;
+
+    private:
+        void onOctomap(const husky_xarm6_mcr_occupancy_map::msg::CustomOctomap::SharedPtr msg);
 
         rclcpp::Node::SharedPtr node_;
         rclcpp::Subscription<husky_xarm6_mcr_occupancy_map::msg::CustomOctomap>::SharedPtr sub_;
 
         mutable std::shared_mutex mtx_;
-        
+
         // Store as variant to support both tree types without type erasure overhead
         std::variant<
             std::shared_ptr<octomap::OcTree>,
-            std::shared_ptr<octomap::SemanticOcTree>
-        > tree_;
-        
+            std::shared_ptr<octomap::SemanticOcTree>>
+            tree_;
+
         OctoMapType tree_type_{OctoMapType::STANDARD};
         double resolution_{0.0};
         octomap::point3d bbox_min_{0.0, 0.0, 0.0};

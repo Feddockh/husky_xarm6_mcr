@@ -333,9 +333,8 @@ int main(int argc, char **argv)
             RCLCPP_INFO(node->get_logger(), "Clustered frontiers into %zu groups", frontier_clusters.size());
             if (visualizer)
             {
-                double octomap_resolution;
-                octomap_interface->getResolution(octomap_resolution);
-                visualizer->publishClusteredFrontiers(frontier_clusters, octomap_resolution, false, 0.8f, "frontier_clusters");
+                double octomap_resolution = octomap_interface->getResolution();
+                visualizer->publishClusteredVoxels(frontier_clusters, octomap_resolution, false, 0.8f, "frontier_clusters");
                 RCLCPP_INFO(node->get_logger(), "Frontier clusters visualized");
             }
         }
@@ -399,8 +398,7 @@ int main(int argc, char **argv)
 
         // Step 6: Compute information gain for each viewpoint
         RCLCPP_INFO(node->get_logger(), "\n=== Step 6: Compute Information Gain for Each Reachable Viewpoint ===");
-        double octomap_resolution;
-        octomap_interface->getResolution(octomap_resolution);
+        double octomap_resolution = octomap_interface->getResolution();
         double average_information_gain = 0.0;
         for (size_t i = 0; i < reachable_viewpoints.size(); ++i)
         {
