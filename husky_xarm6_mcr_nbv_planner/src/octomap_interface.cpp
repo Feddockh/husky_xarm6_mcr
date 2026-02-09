@@ -739,7 +739,7 @@ namespace husky_xarm6_mcr_nbv_planner
             // Create match entries for this GT point
             if (!matching_class_clusters.empty())
             {
-                MatchResult::Match match;
+                Match match;
                 match.gt_point = gt_point;
                 match.clusters = matching_class_clusters;
                 match.distances = matching_class_distances;
@@ -748,7 +748,7 @@ namespace husky_xarm6_mcr_nbv_planner
 
             if (!mismatching_class_clusters.empty())
             {
-                MatchResult::Match match;
+                Match match;
                 match.gt_point = gt_point;
                 match.clusters = mismatching_class_clusters;
                 match.distances = mismatching_class_distances;

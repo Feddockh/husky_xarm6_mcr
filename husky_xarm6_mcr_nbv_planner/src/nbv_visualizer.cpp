@@ -1192,7 +1192,7 @@ namespace husky_xarm6_mcr_nbv_planner
         {
             // Check if this gt_point id is the same as any of the gt_point ids in the incorrect matches
             auto it = std::find_if(match_result.class_mismatches.begin(), match_result.class_mismatches.end(),
-                                   [&correct_match](const MatchResult::Match & class_mismatch) {
+                                   [&correct_match](const Match & class_mismatch) {
                                        return correct_match.gt_point.id == class_mismatch.gt_point.id;
                                    });
             if (it != match_result.class_mismatches.end())
@@ -1211,7 +1211,7 @@ namespace husky_xarm6_mcr_nbv_planner
         {
             // Check if this gt_point id is the same as any of the gt_point ids in the correct matches
             auto it = std::find_if(match_result.correct_matches.begin(), match_result.correct_matches.end(),
-                                   [&class_mismatch](const MatchResult::Match &correct_match) {
+                                   [&class_mismatch](const Match &correct_match) {
                                        return class_mismatch.gt_point.id == correct_match.gt_point.id;
                                    });
             if (it == match_result.correct_matches.end())

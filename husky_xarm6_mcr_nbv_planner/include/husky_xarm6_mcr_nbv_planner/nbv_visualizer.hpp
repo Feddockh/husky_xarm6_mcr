@@ -12,9 +12,8 @@
 #include <geometry_msgs/msg/pose.hpp>
 #include <std_msgs/msg/color_rgba.hpp>
 #include <octomap/octomap.h>
-#include "husky_xarm6_mcr_nbv_planner/cluster.hpp"
+#include "husky_xarm6_mcr_nbv_planner/nbv_types.hpp"
 #include "husky_xarm6_mcr_nbv_planner/viewpoint.hpp"
-#include "husky_xarm6_mcr_nbv_planner/semantic_point.hpp"
 
 #include <vector>
 #include <string>
@@ -285,7 +284,11 @@ namespace husky_xarm6_mcr_nbv_planner
             const std::string &ns = "semantic_points");
 
         /**
-         * 
+         * @brief Publish match results with different colors for correct matches, class mismatches, and incorrect matches
+         * @param match_result MatchResult containing vectors of correct matches, class mismatches, and incorrect matches
+         * @param point_size Size of each point sphere (default: 0.02m
+         * @param alpha Alpha value for transparency (default: 0.8)
+         * @param ns Namespace for the markers (default: "match_results")
          */
         void publishMatchResults(
             const MatchResult &match_result,
@@ -304,12 +307,21 @@ namespace husky_xarm6_mcr_nbv_planner
         void clearTargetRegion();
 
         /**
+         * 
+         */
+        void plotMatchResults(
+            std::vector<MatchResult> &match_result,
+            double point_size = 0.02,
+            float alpha = 0.8f,
+            const std::string &ns = "match_results");
+
+        /**
          * @brief Generate deterministic color from cluster label
          * @param label Class or cluster label
          * @param alpha Alpha value for transparency (default: 0.85)
          * @return RGBA color corresponding to the label
          */
-        static std_msgs::msg::ColorRGBA colorForLabel(int label, float alpha = 0.85f);
+        static std_msgs::msg::ColorRGBA colorForLabel(int label, float alpha = 0.85f);        
 
     private:
 

@@ -4,7 +4,6 @@
 #include <algorithm>
 #include "husky_xarm6_mcr_nbv_planner/octomap_interface.hpp"
 #include "husky_xarm6_mcr_nbv_planner/nbv_visualizer.hpp"
-#include "husky_xarm6_mcr_nbv_planner/cluster.hpp"
 
 using namespace husky_xarm6_mcr_nbv_planner;
 

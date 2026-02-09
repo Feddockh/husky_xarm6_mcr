@@ -5,8 +5,7 @@
 #include <octomap_msgs/msg/octomap.hpp>
 #include "husky_xarm6_mcr_occupancy_map/msg/custom_octomap.hpp"
 #include "husky_xarm6_mcr_occupancy_map/semantic_occupancy_map_tree.hpp"
-#include "husky_xarm6_mcr_nbv_planner/cluster.hpp"
-#include "husky_xarm6_mcr_nbv_planner/semantic_point.hpp"
+#include "husky_xarm6_mcr_nbv_planner/nbv_types.hpp"
 
 #include <shared_mutex>
 #include <memory>
