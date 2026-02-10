@@ -8,6 +8,11 @@
 #include <unordered_map>
 #include <numeric>
 #include <cmath>
+#include <sstream>
+#include <iomanip>
+#include <set>
+#include <algorithm>
+#include <matplot/matplot.h>
 
 namespace husky_xarm6_mcr_nbv_planner
 {
@@ -44,26 +49,26 @@ namespace husky_xarm6_mcr_nbv_planner
 
         // Predefined color palette for classes 0-19
         const uint8_t palette[][3] = {
-            {230, 25, 75},    // Red - class 0
-            {60, 180, 75},    // Green - class 1
-            {255, 225, 25},   // Yellow - class 2
-            {0, 130, 200},    // Blue - class 3
-            {245, 130, 48},   // Orange - class 4
-            {145, 30, 180},   // Purple - class 5
-            {70, 240, 240},   // Cyan - class 6
-            {240, 50, 230},   // Magenta - class 7
-            {210, 245, 60},   // Lime - class 8
-            {250, 190, 212},  // Pink - class 9
-            {0, 128, 128},    // Teal - class 10
-            {220, 190, 255},  // Lavender - class 11
-            {170, 110, 40},   // Brown - class 12
-            {255, 250, 200},  // Beige - class 13
-            {128, 0, 0},      // Maroon - class 14
-            {170, 255, 195},  // Mint - class 15
-            {128, 128, 0},    // Olive - class 16
-            {255, 215, 180},  // Coral - class 17
-            {0, 0, 128},      // Navy - class 18
-            {128, 128, 128}   // Grey - class 19
+            {230, 25, 75},   // Red - class 0
+            {60, 180, 75},   // Green - class 1
+            {255, 225, 25},  // Yellow - class 2
+            {0, 130, 200},   // Blue - class 3
+            {245, 130, 48},  // Orange - class 4
+            {145, 30, 180},  // Purple - class 5
+            {70, 240, 240},  // Cyan - class 6
+            {240, 50, 230},  // Magenta - class 7
+            {210, 245, 60},  // Lime - class 8
+            {250, 190, 212}, // Pink - class 9
+            {0, 128, 128},   // Teal - class 10
+            {220, 190, 255}, // Lavender - class 11
+            {170, 110, 40},  // Brown - class 12
+            {255, 250, 200}, // Beige - class 13
+            {128, 0, 0},     // Maroon - class 14
+            {170, 255, 195}, // Mint - class 15
+            {128, 128, 0},   // Olive - class 16
+            {255, 215, 180}, // Coral - class 17
+            {0, 0, 128},     // Navy - class 18
+            {128, 128, 128}  // Grey - class 19
         };
 
         if (label < 20)
@@ -75,7 +80,7 @@ namespace husky_xarm6_mcr_nbv_planner
         }
 
         // For class IDs >= 20, use hash function with brightness adjustment
-        uint32_t hash = static_cast<uint32_t>(label) * 2654435761u;  // Knuth's multiplicative hash
+        uint32_t hash = static_cast<uint32_t>(label) * 2654435761u; // Knuth's multiplicative hash
         uint8_t r = (hash >> 16) & 0xFF;
         uint8_t g = (hash >> 8) & 0xFF;
         uint8_t b = hash & 0xFF;
@@ -285,7 +290,7 @@ namespace husky_xarm6_mcr_nbv_planner
             marker.pose.orientation.w = 1.0;
             marker.scale.x = marker.scale.y = marker.scale.z = voxel_size;
             marker.color = colors[i]; // Use per-cluster color
-            marker.color.a = alpha; // Apply alpha override
+            marker.color.a = alpha;   // Apply alpha override
 
             for (const auto &point : cluster.points)
             {
@@ -397,9 +402,10 @@ namespace husky_xarm6_mcr_nbv_planner
         const std::string &ns)
     {
         std::vector<visualization_msgs::msg::Marker> markers;
-        
+
         // Helper lambda to create a cylinder for one axis
-        auto createAxisCylinder = [&](int axis_id, double dx, double dy, double dz, float r, float g, float b) {
+        auto createAxisCylinder = [&](int axis_id, double dx, double dy, double dz, float r, float g, float b)
+        {
             visualization_msgs::msg::Marker marker;
             marker.header.frame_id = map_frame_;
             marker.header.stamp = node_->now();
@@ -407,43 +413,46 @@ namespace husky_xarm6_mcr_nbv_planner
             marker.id = base_id * 3 + axis_id;
             marker.type = visualization_msgs::msg::Marker::CYLINDER;
             marker.action = visualization_msgs::msg::Marker::ADD;
-            
+
             // Transform the pose to position the cylinder along the axis
             // Cylinder is centered at its pose, oriented along Z axis by default
             // We need to translate it by half the length and rotate it
-            
+
             // Convert pose quaternion to transformation matrix
-            Eigen::Quaterniond q(pose.orientation.w, pose.orientation.x, 
-                                pose.orientation.y, pose.orientation.z);
+            Eigen::Quaterniond q(pose.orientation.w, pose.orientation.x,
+                                 pose.orientation.y, pose.orientation.z);
             Eigen::Vector3d pos(pose.position.x, pose.position.y, pose.position.z);
-            
+
             // Direction vector for this axis
             Eigen::Vector3d axis_dir(dx, dy, dz);
             axis_dir.normalize();
-            
+
             // Position at half the axis length
             Eigen::Vector3d axis_pos = pos + q * (axis_dir * axis_length * 0.5);
-            
+
             // Create rotation to align Z axis with the desired axis direction
             Eigen::Vector3d z_axis(0, 0, 1);
             Eigen::Quaterniond axis_rotation;
-            
+
             // If axis is along +X
-            if (std::abs(dx - 1.0) < 0.01) {
-                axis_rotation = Eigen::AngleAxisd(M_PI/2, Eigen::Vector3d(0, 1, 0));
+            if (std::abs(dx - 1.0) < 0.01)
+            {
+                axis_rotation = Eigen::AngleAxisd(M_PI / 2, Eigen::Vector3d(0, 1, 0));
             }
             // If axis is along +Y
-            else if (std::abs(dy - 1.0) < 0.01) {
-                axis_rotation = Eigen::AngleAxisd(-M_PI/2, Eigen::Vector3d(1, 0, 0));
+            else if (std::abs(dy - 1.0) < 0.01)
+            {
+                axis_rotation = Eigen::AngleAxisd(-M_PI / 2, Eigen::Vector3d(1, 0, 0));
             }
             // If axis is along +Z
-            else {
+            else
+            {
                 axis_rotation = Eigen::Quaterniond::Identity();
             }
-            
+
             // Combine rotations
             Eigen::Quaterniond final_q = q * axis_rotation;
-            
+
             marker.pose.position.x = axis_pos.x();
             marker.pose.position.y = axis_pos.y();
             marker.pose.position.z = axis_pos.z();
@@ -451,26 +460,26 @@ namespace husky_xarm6_mcr_nbv_planner
             marker.pose.orientation.y = final_q.y();
             marker.pose.orientation.z = final_q.z();
             marker.pose.orientation.w = final_q.w();
-            
+
             marker.scale.x = axis_radius * 2.0; // diameter
-            marker.scale.y = axis_radius * 2.0; // diameter  
+            marker.scale.y = axis_radius * 2.0; // diameter
             marker.scale.z = axis_length;       // height
-            
+
             marker.color.r = r;
             marker.color.g = g;
             marker.color.b = b;
             marker.color.a = alpha;
-            
+
             return marker;
         };
-        
+
         // Create X axis (red)
         markers.push_back(createAxisCylinder(0, 1, 0, 0, 1.0f, 0.0f, 0.0f));
         // Create Y axis (green)
         markers.push_back(createAxisCylinder(1, 0, 1, 0, 0.0f, 1.0f, 0.0f));
         // Create Z axis (blue)
         markers.push_back(createAxisCylinder(2, 0, 0, 1, 0.0f, 0.0f, 1.0f));
-        
+
         return markers;
     }
 
@@ -509,7 +518,7 @@ namespace husky_xarm6_mcr_nbv_planner
                 axis_radius,
                 alpha,
                 ns);
-            
+
             // Add all three cylinder markers (X, Y, Z axes)
             for (auto &marker : cylinders)
             {
@@ -550,7 +559,7 @@ namespace husky_xarm6_mcr_nbv_planner
         pose.orientation.y = orientation[1];
         pose.orientation.z = orientation[2];
         pose.orientation.w = orientation[3];
-        
+
         publishCoordinate(pose, axis_length, axis_radius, alpha, ns);
     }
 
@@ -1192,7 +1201,8 @@ namespace husky_xarm6_mcr_nbv_planner
         {
             // Check if this gt_point id is the same as any of the gt_point ids in the incorrect matches
             auto it = std::find_if(match_result.class_mismatches.begin(), match_result.class_mismatches.end(),
-                                   [&correct_match](const Match & class_mismatch) {
+                                   [&correct_match](const Match &class_mismatch)
+                                   {
                                        return correct_match.gt_point.id == class_mismatch.gt_point.id;
                                    });
             if (it != match_result.class_mismatches.end())
@@ -1211,7 +1221,8 @@ namespace husky_xarm6_mcr_nbv_planner
         {
             // Check if this gt_point id is the same as any of the gt_point ids in the correct matches
             auto it = std::find_if(match_result.correct_matches.begin(), match_result.correct_matches.end(),
-                                   [&class_mismatch](const Match &correct_match) {
+                                   [&class_mismatch](const Match &correct_match)
+                                   {
                                        return class_mismatch.gt_point.id == correct_match.gt_point.id;
                                    });
             if (it == match_result.correct_matches.end())
@@ -1254,6 +1265,187 @@ namespace husky_xarm6_mcr_nbv_planner
 
         // Publish all the gt points with their corresponding colors
         publishPoints(gt_points, colors, labels, size, alpha, ns);
+    }
+
+    bool NBVVisualizer::plotMetrics(
+        const std::vector<std::vector<double>> &y_data,
+        const std::vector<double> &x_data,
+        const std::vector<std::string> &series_labels,
+        const std::string &plot_title,
+        const std::string &x_title,
+        const std::string &y_title,
+        const std::vector<std::array<float, 3>> &colors,
+        const std::string &save_path,
+        double y_min,
+        double y_max)
+    {
+        if (y_data.empty())
+        {
+            RCLCPP_WARN(logger_, "No data to plot");
+            return false;
+        }
+
+        // Validate input sizes
+        if (!x_data.empty() && x_data.size() != y_data[0].size())
+        {
+            RCLCPP_ERROR(logger_, "x_data size (%zu) must match y data points per series (%zu)",
+                         x_data.size(), y_data[0].size());
+            return false;
+        }
+
+        if (!series_labels.empty() && series_labels.size() != y_data.size())
+        {
+            RCLCPP_ERROR(logger_, "series_labels size (%zu) must match number of series (%zu)",
+                         series_labels.size(), y_data.size());
+            return false;
+        }
+
+        // Create a mutable copy of colors and fill in missing colors
+        std::vector<std::array<float, 3>> plot_colors = colors;
+        if (plot_colors.size() < y_data.size())
+        {
+            for (size_t i = plot_colors.size(); i < y_data.size(); ++i)
+            {
+                // Add default color from label color map
+                auto color_rgba = colorForLabel(static_cast<int>(i));
+                plot_colors.push_back({color_rgba.r, color_rgba.g, color_rgba.b});
+            }
+        }
+
+        try
+        {
+            using namespace matplot;
+
+            size_t num_series = y_data.size();
+            size_t num_points = y_data[0].size();
+
+            // Create figure
+            auto fig = figure(true);
+            fig->size(1200, 800);
+
+            // Use provided x_data or generate default positions
+            std::vector<double> x_values;
+            if (!x_data.empty())
+            {
+                x_values = x_data;
+            }
+            else
+            {
+                x_values.resize(num_points);
+                for (size_t i = 0; i < num_points; ++i)
+                {
+                    x_values[i] = static_cast<double>(i);
+                }
+            }
+
+            // Plot each series
+            std::vector<matplot::line_handle> line_handles;
+            for (size_t i = 0; i < num_series; ++i)
+            {
+                auto h = plot(x_values, y_data[i]);
+                h->line_width(2);
+
+                // Apply custom color if provided
+                if (!plot_colors.empty() && i < plot_colors.size())
+                {
+                    h->color({plot_colors[i][0], plot_colors[i][1], plot_colors[i][2]});
+                }
+
+                line_handles.push_back(h);
+                hold(on);
+            }
+
+            // Set labels and title
+            title(plot_title);
+            xlabel(x_title);
+            ylabel(y_title);
+            ylim({y_min, y_max});
+
+            // Add legend if series labels provided
+            if (!series_labels.empty())
+            {
+                legend(series_labels);
+            }
+
+            grid(on);
+
+            // Save the figure
+            try
+            {
+                fig->save(save_path);
+            }
+            catch (const std::exception &e)
+            {
+                RCLCPP_ERROR(logger_, "Failed to save plot to '%s': %s", save_path.c_str(), e.what());
+                return false;
+            }
+
+            // Show the plot (non-blocking)
+            // show();
+
+            return true;
+        }
+        catch (const std::exception &e)
+        {
+            RCLCPP_ERROR(logger_, "Failed to plot metrics: %s", e.what());
+            return false;
+        }
+    }
+
+    bool NBVVisualizer::plotMetrics(
+        const std::vector<std::vector<ClassMetrics>> &all_metrics,
+        const std::string &plot_title,
+        const std::vector<std::array<float, 3>> &colors,
+        const std::string &save_path)
+    {
+        if (all_metrics.empty())
+        {
+            RCLCPP_WARN(logger_, "No metrics to plot");
+            return false;
+        }
+
+        // Define the data vectors
+        std::vector<std::vector<double>> y_data;
+        std::vector<double> x_data;
+        std::vector<std::string> series_labels;
+
+        // Define the number of iterations and classes based on the input metrics
+        int num_iterations = static_cast<int>(all_metrics.size());
+        int num_classes = static_cast<int>(all_metrics[0].size());
+
+        // Fill out the y data with zeros to initialize the vectors for each metric type (precision, recall, F1) for each class across all iterations
+        y_data.resize(num_classes * 3); // 3 metrics per class
+        for (auto &series : y_data)
+            series.resize(num_iterations, 0.0);
+
+        // Fill out the x data (iteration numbers from 0 to num_iterations-1)
+        for (int i = 0; i < num_iterations; ++i)
+            x_data.push_back(static_cast<double>(i));
+
+        // Fill out the series labels based on the class names and metric types (precision, recall, F1)
+        for (size_t class_idx = 0; class_idx < static_cast<size_t>(num_classes); ++class_idx)
+        {
+            series_labels.push_back("Class " + std::to_string(class_idx) + " Precision");
+            series_labels.push_back("Class " + std::to_string(class_idx) + " Recall");
+            series_labels.push_back("Class " + std::to_string(class_idx) + " F1 Score");
+        }
+
+        // Pull the precision, recall, and F1 scores across each iteration for each class and add to the data vectors
+        for (size_t i = 0; i < all_metrics.size(); ++i)
+        {
+            const auto &iter_metrics = all_metrics[i];
+            for (size_t class_idx = 0; class_idx < static_cast<size_t>(num_classes); ++class_idx)
+            {
+                const auto &class_metrics = iter_metrics[class_idx];
+                // Add precision, recall, and F1 to the y_data vector
+                y_data[class_idx * 3][i] = class_metrics.precision;
+                y_data[class_idx * 3 + 1][i] = class_metrics.recall;
+                y_data[class_idx * 3 + 2][i] = class_metrics.f1_score;
+            }
+        }
+
+        // Call the more general plotMetrics function
+        return plotMetrics(y_data, x_data, series_labels, plot_title, "Iteration", "Metric Value", colors, save_path, 0.0, 1.0);
     }
 
 } // namespace husky_xarm6_mcr_nbv_planner

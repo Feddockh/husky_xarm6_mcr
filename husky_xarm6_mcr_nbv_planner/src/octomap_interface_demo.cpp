@@ -109,6 +109,7 @@ int main(int argc, char **argv)
     bool octomap_received = false;
     bool has_data = false;
     std::vector<Cluster> latest_clusters;
+    std::vector<std::vector<ClassMetrics>> all_metrics;
 
     // Create update timer
     auto update_callback = [&]()
@@ -147,7 +148,9 @@ int main(int argc, char **argv)
             visualizer->publishMatchResults(match_result, eval_threshold_radius*2, 0.8f); // Visualizer uses diameter
 
             // Step 3: Evaluate and print metrics
-            octomap_interface->evaluateMatchResults(match_result, false);
+            std::vector<ClassMetrics> eval_results = octomap_interface->evaluateMatchResults(match_result, false);
+            all_metrics.push_back(eval_results);
+            visualizer->plotMetrics(all_metrics, "NBV Metrics", {}, "./nbv_metrics_plot.png");
 
             has_data = true;
         }

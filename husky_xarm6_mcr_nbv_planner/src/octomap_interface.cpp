@@ -765,39 +765,12 @@ namespace husky_xarm6_mcr_nbv_planner
     std::vector<ClassMetrics> OctoMapInterface::evaluateMatchResults(const MatchResult &result, bool verbose) const
     {
         // Debug: Print input summary
-        RCLCPP_INFO(node_->get_logger(), "\n=== DEBUG: Evaluation Input ===");
-        RCLCPP_INFO(node_->get_logger(), "GT classes count: %zu", gt_classes_.size());
-        RCLCPP_INFO(node_->get_logger(), "Correct matches: %zu", result.correct_matches.size());
-        RCLCPP_INFO(node_->get_logger(), "Class mismatches: %zu", result.class_mismatches.size());
-        RCLCPP_INFO(node_->get_logger(), "Unmatched GT points: %zu", result.unmatched_gt.size());
-        RCLCPP_INFO(node_->get_logger(), "Unmatched clusters: %zu", result.unmatched_clusters.size());
-        
-        // // Print GT classes
-        // RCLCPP_INFO(node_->get_logger(), "GT classes: [");
-        // for (size_t i = 0; i < gt_classes_.size(); ++i)
-        // {
-        //     RCLCPP_INFO(node_->get_logger(), "  %d%s", gt_classes_[i], (i < gt_classes_.size() - 1) ? "," : "");
-        // }
-        // RCLCPP_INFO(node_->get_logger(), "]");
-
-        // // Debug: Print class IDs from correct matches
-        // RCLCPP_INFO(node_->get_logger(), "\nCorrect match class IDs:");
-        // for (const auto &match : result.correct_matches)
-        // {
-        //     RCLCPP_INFO(node_->get_logger(), "  GT point class_id: %d, num clusters: %zu", 
-        //                 match.gt_point.class_id, match.clusters.size());
-        //     for (const auto &cluster : match.clusters)
-        //     {
-        //         RCLCPP_INFO(node_->get_logger(), "    Cluster class_id: %d", cluster.class_id);
-        //     }
-        // }
-        
-        // // Debug: Print class IDs from unmatched GT
-        // RCLCPP_INFO(node_->get_logger(), "\nUnmatched GT class IDs:");
-        // for (const auto &gt : result.unmatched_gt)
-        // {
-        //     RCLCPP_INFO(node_->get_logger(), "  GT point %d class_id: %d", gt.id, gt.class_id);
-        // }
+        RCLCPP_DEBUG(node_->get_logger(), "\n=== DEBUG: Evaluation Input ===");
+        RCLCPP_DEBUG(node_->get_logger(), "GT classes count: %zu", gt_classes_.size());
+        RCLCPP_DEBUG(node_->get_logger(), "Correct matches: %zu", result.correct_matches.size());
+        RCLCPP_DEBUG(node_->get_logger(), "Class mismatches: %zu", result.class_mismatches.size());
+        RCLCPP_DEBUG(node_->get_logger(), "Unmatched GT points: %zu", result.unmatched_gt.size());
+        RCLCPP_DEBUG(node_->get_logger(), "Unmatched clusters: %zu", result.unmatched_clusters.size());
 
         // Determine the number of unique classes in GT and predictions and fill out the metrics vector
         std::vector<ClassMetrics> metrics;
@@ -807,15 +780,15 @@ namespace husky_xarm6_mcr_nbv_planner
             ClassMetrics cm;
             cm.class_id = gt_classes_[i];
 
-            // RCLCPP_INFO(node_->get_logger(), "\n--- Processing class %d ---", cm.class_id);
+            RCLCPP_DEBUG(node_->get_logger(), "\n--- Processing class %d ---", cm.class_id);
 
             // Count true positive clusters for this class by summing clusters from correct matches that belong to this class
             for (const auto &match : result.correct_matches)
             {
-                // RCLCPP_INFO(node_->get_logger(), "Checking correct match: GT class=%d vs target class=%d", match.gt_point.class_id, cm.class_id);
+                RCLCPP_DEBUG(node_->get_logger(), "Checking correct match: GT class=%d vs target class=%d", match.gt_point.class_id, cm.class_id);
                 if (match.gt_point.class_id == cm.class_id)
                 {
-                    // RCLCPP_INFO(node_->get_logger(), "Match! Adding %zu clusters", match.clusters.size());
+                    RCLCPP_DEBUG(node_->get_logger(), "Match! Adding %zu clusters", match.clusters.size());
                     cm.tp_clusters += static_cast<int>(match.clusters.size());
                 }
             }
@@ -825,7 +798,7 @@ namespace husky_xarm6_mcr_nbv_planner
             {
                 if (cluster.class_id == cm.class_id)
                 {
-                    // RCLCPP_INFO(node_->get_logger(), "Unmatched cluster: class=%d", cluster.class_id);
+                    RCLCPP_DEBUG(node_->get_logger(), "Unmatched cluster: class=%d", cluster.class_id);
                     cm.fp_clusters += 1;
                 }
             }
@@ -837,7 +810,7 @@ namespace husky_xarm6_mcr_nbv_planner
                 {                   
                     if (cluster.class_id == cm.class_id)
                     {
-                        // RCLCPP_INFO(node_->get_logger(), "Mismatched cluster: cluster_class=%d", cluster.class_id);
+                        RCLCPP_DEBUG(node_->get_logger(), "Mismatched cluster: cluster_class=%d", cluster.class_id);
                         cm.fp_clusters += 1;
                     }
                 }
@@ -846,10 +819,10 @@ namespace husky_xarm6_mcr_nbv_planner
             // Count true positives for GT points of this class
             for (const auto &match : result.correct_matches)
             {
-                // RCLCPP_INFO(node_->get_logger(), "Checking TP point: GT class=%d vs target class=%d", match.gt_point.class_id, cm.class_id);
+                RCLCPP_DEBUG(node_->get_logger(), "Checking TP point: GT class=%d vs target class=%d", match.gt_point.class_id, cm.class_id);
                 if (match.gt_point.class_id == cm.class_id)
                 {
-                    // RCLCPP_INFO(node_->get_logger(), "TP point match!");
+                    RCLCPP_DEBUG(node_->get_logger(), "TP point match!");
                     cm.tp_points += 1;
                 }
             }
@@ -857,10 +830,10 @@ namespace husky_xarm6_mcr_nbv_planner
             // Count false negatives for GT points of this class
             for (const auto &gt : result.unmatched_gt)
             {
-                // RCLCPP_INFO(node_->get_logger(), "Checking FN point: GT class=%d vs target class=%d", gt.class_id, cm.class_id);
+                RCLCPP_DEBUG(node_->get_logger(), "Checking FN point: GT class=%d vs target class=%d", gt.class_id, cm.class_id);
                 if (gt.class_id == cm.class_id)
                 {
-                    // RCLCPP_INFO(node_->get_logger(), "FN point match!");
+                    RCLCPP_DEBUG(node_->get_logger(), "FN point match!");
                     cm.fn_points += 1;
                 }
             }
@@ -870,7 +843,7 @@ namespace husky_xarm6_mcr_nbv_planner
             {
                 if (mismatch.gt_point.class_id == cm.class_id)
                 {
-                    // RCLCPP_INFO(node_->get_logger(), "FN point (mismatch): GT marker %d", mismatch.gt_point.id);
+                    RCLCPP_DEBUG(node_->get_logger(), "FN point (mismatch): GT marker %d", mismatch.gt_point.id);
                     cm.fn_points += 1;
                 }
             }
@@ -983,11 +956,13 @@ namespace husky_xarm6_mcr_nbv_planner
             return;
         }
 
+        RCLCPP_INFO(node_->get_logger(), "\n=== Octomap Statistics ===");
+
         // Common stats for both tree types
         std::visit([&](auto&& tree) {
-            RCLCPP_INFO(node_->get_logger(), "  Resolution: %.4f m", tree->getResolution());
-            RCLCPP_INFO(node_->get_logger(), "  Total nodes: %zu", tree->size());
-            RCLCPP_INFO(node_->get_logger(), "  Leaf nodes: %zu", tree->getNumLeafNodes());
+            RCLCPP_INFO(node_->get_logger(), "Resolution: %.4f m", tree->getResolution());
+            RCLCPP_INFO(node_->get_logger(), "Total nodes: %zu", tree->size());
+            RCLCPP_INFO(node_->get_logger(), "Leaf nodes: %zu", tree->getNumLeafNodes());
 
             size_t occupied = 0, free_space = 0;
             for (auto it = tree->begin_leafs(); it != tree->end_leafs(); ++it)
@@ -997,8 +972,8 @@ namespace husky_xarm6_mcr_nbv_planner
                 else
                     free_space++;
             }
-            RCLCPP_INFO(node_->get_logger(), "  Occupied voxels: %zu", occupied);
-            RCLCPP_INFO(node_->get_logger(), "  Free voxels: %zu", free_space);
+            RCLCPP_INFO(node_->get_logger(), "Occupied voxels: %zu", occupied);
+            RCLCPP_INFO(node_->get_logger(), "Free voxels: %zu", free_space);
         }, tree_);
 
         // Display semantic class information if this is a semantic tree
@@ -1007,13 +982,14 @@ namespace husky_xarm6_mcr_nbv_planner
             auto class_counts = getSemanticClassCounts();
             if (!class_counts.empty())
             {
-                RCLCPP_INFO(node_->get_logger(), "  Semantic Classes:");
+                RCLCPP_INFO(node_->get_logger(), "Semantic Classes:");
                 for (const auto &[class_id, count] : class_counts)
                 {
-                    RCLCPP_INFO(node_->get_logger(), "    Class %d: %zu occupied voxels", class_id, count);
+                    RCLCPP_INFO(node_->get_logger(), "Class %d: %zu occupied voxels", class_id, count);
                 }
             }
         }
+        RCLCPP_INFO(node_->get_logger(), "==========================\n");
     }
 
     std::vector<ClassMetrics> OctoMapInterface::evaluateSemanticOctomap(double threshold_radius, bool verbose)

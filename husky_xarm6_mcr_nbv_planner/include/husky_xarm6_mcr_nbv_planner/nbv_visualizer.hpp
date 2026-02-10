@@ -297,6 +297,48 @@ namespace husky_xarm6_mcr_nbv_planner
             const std::string &ns = "match_results");
 
         /**
+         * @brief Plot generic data as line chart with customizable labels and colors
+         * @param y_data 2D vector where each inner vector represents one series of y values
+         * @param x_data X-axis values (shared across all series, optional - will use 0,1,2... if empty)
+         * @param series_labels Labels for each series (legend entries)
+         * @param plot_title Title of the plot
+         * @param x_title X-axis label
+         * @param y_title Y-axis label
+         * @param colors Colors for each series (optional, uses defaults if empty)
+         * @param save_path Path to save the plot (default: "/tmp/plot.png")
+         * @param y_min Minimum y-axis value (default: 0.0)
+         * @param y_max Maximum y-axis value (default: 1.0)
+         * @return true if successful, false otherwise
+         */
+        bool plotMetrics(
+            const std::vector<std::vector<double>> &y_data,
+            const std::vector<double> &x_data,
+            const std::vector<std::string> &series_labels,
+            const std::string &plot_title = "Metrics",
+            const std::string &x_title = "X",
+            const std::string &y_title = "Y",
+            const std::vector<std::array<float, 3>> &colors = {},
+            const std::string &save_path = "/tmp/plot.png",
+            double y_min = 0.0,
+            double y_max = 1.0
+        );
+
+        /**
+         * @brief Plot evaluation metrics from ClassMetrics structure
+         * @param all_metrics 2D vector of ClassMetrics (outer: different runs, inner: classes)
+         * @param plot_title Title of the plot (default: "Classification Metrics")
+         * @param colors Colors for each metric run (optional)
+         * @param save_path Path to save the plot (default: "/tmp/metrics.png")
+         * @return true if successful, false otherwise
+         */
+        bool plotMetrics(
+            const std::vector<std::vector<ClassMetrics>> &all_metrics,
+            const std::string &plot_title = "NBV Metrics",
+            const std::vector<std::array<float, 3>> &colors = {},
+            const std::string &save_path = "/tmp/metrics.png"
+        );
+
+        /**
          * @brief Clear specific visualization namespace
          */
         void clearVoxels();

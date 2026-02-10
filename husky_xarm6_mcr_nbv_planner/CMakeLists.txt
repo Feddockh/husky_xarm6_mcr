@@ -21,6 +21,23 @@ find_package(vision_msgs REQUIRED)
 find_package(husky_xarm6_mcr_occupancy_map REQUIRED)
 find_package(yaml-cpp REQUIRED)
 
+# Check for gnuplot (required by matplotplusplus)
+find_program(GNUPLOT_EXECUTABLE NAMES gnuplot)
+if(NOT GNUPLOT_EXECUTABLE)
+  message(WARNING "\n"
+    "========================================\n"
+    "gnuplot not found!\n"
+    "matplotplusplus requires gnuplot to generate plots.\n"
+    "Please install it with:\n"
+    "  sudo apt-get install gnuplot\n"
+    "========================================\n")
+endif()
+
+# Add matplotplusplus submodule
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build shared libraries" FORCE)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../external/matplotplusplus ${CMAKE_CURRENT_BINARY_DIR}/matplotplusplus)
+
 # Define the MoveIt interface library
 add_library(moveit_interface SHARED
   src/moveit_interface.cpp
@@ -61,7 +78,7 @@ target_include_directories(nbv_visualizer PUBLIC
   $<INSTALL_INTERFACE:include>
   ${EIGEN3_INCLUDE_DIRS}
 )
-target_link_libraries(nbv_visualizer ${OCTOMAP_LIBRARIES})
+target_link_libraries(nbv_visualizer ${OCTOMAP_LIBRARIES} matplot)
 ament_target_dependencies(nbv_visualizer
   rclcpp
   visualization_msgs
