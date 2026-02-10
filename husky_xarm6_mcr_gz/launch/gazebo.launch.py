@@ -119,7 +119,7 @@ def launch_setup(context, *args, **kwargs):
                 script_path,
                 '--count', num_markers_value,
                 '--dict', marker_dict_value,
-                '--size', marker_size_value,
+                '--marker_size', marker_size_value,
             ],
             name='generate_aruco_markers',
             output='screen',
@@ -186,12 +186,12 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'generate_markers',
-            default_value='false',
+            default_value='true',
             description='Whether to generate ArUco marker models before launching (true/false)'
         ),
         DeclareLaunchArgument(
             'num_markers',
-            default_value='12',
+            default_value='20',
             description='Number of ArUco markers to generate (0 to n-1)'
         ),
         DeclareLaunchArgument(
