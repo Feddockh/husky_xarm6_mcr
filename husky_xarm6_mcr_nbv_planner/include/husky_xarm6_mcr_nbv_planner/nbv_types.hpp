@@ -30,13 +30,13 @@ namespace husky_xarm6_mcr_nbv_planner
         std::vector<Cluster> clusters;
         std::vector<double> distances;
     };
-        
+    
     struct MatchResult
     {
-        std::vector<Match> correct_matches;      // TP: GT and clusters with matching class
-        std::vector<Match> class_mismatches;     // Class mismatch: GT and clusters matched but wrong class
-        std::vector<SemanticPoint> unmatched_gt; // FN: GT points with no matching cluster
-        std::vector<Cluster> unmatched_clusters; // FP: Clusters with no matching GT
+        std::vector<Match> correct_matches;      // GT and clusters with matching class
+        std::vector<Match> class_mismatches;     // GT and clusters matched but wrong class
+        std::vector<SemanticPoint> unmatched_gt;
+        std::vector<Cluster> unmatched_clusters;
     };
 
     /**
@@ -45,8 +45,15 @@ namespace husky_xarm6_mcr_nbv_planner
     struct ClassMetrics
     {
         int32_t class_id;
-        double precision;
-        double recall;
-        double f1_score;
+
+        int32_t tp_clusters = 0;  // Class id clusters correctly matched to GT points of this class
+        int32_t fp_clusters = 0;  // Class id clusters incorrectly matched (class mismatch or no match)
+
+        int32_t tp_points = 0;    // GT points correctly matched to clusters of the same class
+        int32_t fn_points = 0;    // GT points not matched to any cluster (class mismatch or no match)
+        
+        double precision; // Computed using the cluster counts: tp_clusters / (tp_clusters + fp_clusters)
+        double recall;    // Computed using the GT point counts: tp_points / (tp_points + fn_points)
+        double f1_score;  // Harmonic mean of precision and recall: 2 * (precision * recall) / (precision + recall)
     };
 }

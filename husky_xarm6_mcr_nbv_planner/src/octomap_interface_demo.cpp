@@ -136,7 +136,7 @@ int main(int argc, char **argv)
         // Run evaluation if enabled and this is a semantic tree
         if (enable_evaluation && octomap_interface->isSemanticTree())
         {
-            RCLCPP_INFO(node->get_logger(), "Running semantic octomap evaluation...");
+            // RCLCPP_INFO(node->get_logger(), "Running semantic octomap evaluation...");
             // octomap_interface->evaluateSemanticOctomap(eval_threshold_radius);
 
             // Step 1: Cluster semantic voxels by class
@@ -152,13 +152,13 @@ int main(int argc, char **argv)
             has_data = true;
         }
 
-        // Log octomap stats (updated every time)
-        static int stats_counter = 0;
-        if (++stats_counter % 5 == 0) // Log every 5 updates to avoid spam
-        {
-            RCLCPP_INFO(node->get_logger(), "\n=== Octomap Stats ===");
-            octomap_interface->printOctomapStats();
-        }
+        // // Log octomap stats (updated every time)
+        // static int stats_counter = 0;
+        // if (++stats_counter % 5 == 0) // Log every 5 updates to avoid spam
+        // {
+        //     RCLCPP_INFO(node->get_logger(), "\n=== Octomap Stats ===");
+        //     octomap_interface->printOctomapStats();
+        // }
 
         // Visualize clusters if we have data and this is a semantic tree
         if (has_data && octomap_interface->isSemanticTree())

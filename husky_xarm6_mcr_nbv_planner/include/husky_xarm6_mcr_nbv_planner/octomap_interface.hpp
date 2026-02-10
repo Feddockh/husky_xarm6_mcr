@@ -130,14 +130,14 @@ namespace husky_xarm6_mcr_nbv_planner
          * @param result MatchResult from matchClustersToGroundTruth
          * @param verbose If true, print detailed lists of unmatched points and clusters
          */
-        void evaluateMatchResults(const MatchResult &result, bool verbose = false) const;
+        std::vector<ClassMetrics> evaluateMatchResults(const MatchResult &result, bool verbose = false) const;
 
         /**
          * @brief Evaluate semantic octomap against ground truth
          * @param threshold_radius Maximum distance between cluster centroid and ground truth point for a match
          * @param verbose If true, print detailed evaluation information
          */
-        void evaluateSemanticOctomap(double threshold_radius = 0.2, bool verbose = false);
+        std::vector<ClassMetrics> evaluateSemanticOctomap(double threshold_radius = 0.2, bool verbose = false);
 
         /**
          * @brief Get the loaded ground truth points
@@ -181,6 +181,7 @@ namespace husky_xarm6_mcr_nbv_planner
 
         // Ground truth data
         std::vector<SemanticPoint> gt_points_;
+        std::vector<int> gt_classes_;
     };
 
 } // namespace husky_xarm6_mcr_nbv_planner
