@@ -1,0 +1,52 @@
+# ArUco Marker Positions
+# Generated at: 1.77083e+09
+markers:
+  - id: 0
+    class_id: 0
+    position:
+      x: -0.303074
+      y: -0.908952
+      z: 1.13899
+    last_seen: 52.8593  # seconds ago
+  - id: 1
+    class_id: 0
+    position:
+      x: -0.20173
+      y: -0.857748
+      z: 1.43278
+    last_seen: 14.8955  # seconds ago
+  - id: 2
+    class_id: 0
+    position:
+      x: 0.219451
+      y: -1.06261
+      z: 1.24849
+    last_seen: 83.8279  # seconds ago
+  - id: 3
+    class_id: 0
+    position:
+      x: 0.424972
+      y: -1.02147
+      z: 1.04705
+    last_seen: 95.8189  # seconds ago
+  - id: 4
+    class_id: 0
+    position:
+      x: 0.0899311
+      y: -1.07843
+      z: 1.43518
+    last_seen: 68.8417  # seconds ago
+  - id: 5
+    class_id: 0
+    position:
+      x: -0.280146
+      y: -1.25697
+      z: 1.34831
+    last_seen: 0.912378  # seconds ago
+  - id: 6
+    class_id: 0
+    position:
+      x: -0.140613
+      y: -1.27603
+      z: 0.978246
+    last_seen: 36.8714  # seconds ago
