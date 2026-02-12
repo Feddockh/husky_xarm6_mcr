@@ -2,6 +2,8 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import LaunchConfiguration, Command
 from launch_ros.actions import Node
+from launch_ros.substitutions import FindPackageShare
+from launch.substitutions import PathJoinSubstitution
 from ament_index_python.packages import get_package_share_directory
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_param_builder import load_xacro
@@ -131,6 +133,10 @@ def launch_setup(context, *args, **kwargs):
         }
     }
 
+    gt_points_file = os.path.join(
+        LaunchConfiguration('gt_points_dir').perform(context),
+        LaunchConfiguration('gt_points_file').perform(context)
+    )
     nbv_volumetric_planner_demo = Node(
         package='husky_xarm6_mcr_nbv_planner',
         executable='nbv_volumetric_planner_demo',
@@ -170,6 +176,10 @@ def launch_setup(context, *args, **kwargs):
             # User Input Control Parameters
             {'wait_for_user_input': LaunchConfiguration('wait_for_user_input')},
             {'auto_continue_delay': LaunchConfiguration('auto_continue_delay')},
+            # Ground Truth Evaluation Parameters
+            {'gt_points_file': gt_points_file},
+            {'enable_evaluation': LaunchConfiguration('enable_evaluation')},
+            {'eval_threshold_radius': LaunchConfiguration('eval_threshold_radius')},
         ],
     )
 
@@ -230,5 +240,15 @@ def generate_launch_description():
                             description='Wait for user to press Enter at each step (incompatible with ros2 launch)'),
         DeclareLaunchArgument('auto_continue_delay', default_value='3.0',
                             description='Auto-continue delay in seconds when wait_for_user_input is false'),
+
+        # Ground Truth Evaluation Parameters
+        DeclareLaunchArgument('gt_points_dir', default_value=PathJoinSubstitution([FindPackageShare('husky_xarm6_mcr_nbv_planner'), 'metrics', 'gt_points']),
+            description='Directory containing ground truth points YAML files for semantic evaluation'),
+        DeclareLaunchArgument('gt_points_file', default_value='sim_aruco_gt_points.yaml',
+                            description='Path to the ground truth points YAML file for semantic evaluation'),
+        DeclareLaunchArgument('enable_evaluation', default_value='true',
+                            description='Enable semantic octomap evaluation against ground truth'),
+        DeclareLaunchArgument('eval_threshold_radius', default_value='0.1',
+                            description='Threshold radius (meters) for matching clusters to ground truth points'),
         OpaqueFunction(function=launch_setup),
     ])

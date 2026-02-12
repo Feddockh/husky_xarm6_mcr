@@ -77,6 +77,9 @@ int main(int argc, char **argv)
     double ideal_camera_distance = node->get_parameter("ideal_camera_distance").as_double();
     int num_camera_rays = node->get_parameter("num_camera_rays").as_int();
     std::string map_frame = node->get_parameter("map_frame").as_string();
+    std::string gt_points_file = node->get_parameter("gt_points_file").as_string();
+    bool enable_evaluation = node->get_parameter("enable_evaluation").as_bool();
+    double eval_threshold_radius = node->get_parameter("eval_threshold_radius").as_double();
 
     // Print NBV Planner Configuration
     RCLCPP_INFO(node->get_logger(), "\n=== NBV Volumetric Planner Configuration ===");
@@ -97,6 +100,9 @@ int main(int argc, char **argv)
     RCLCPP_INFO(node->get_logger(), "Ideal camera distance: %.2f m", ideal_camera_distance);
     RCLCPP_INFO(node->get_logger(), "Number of IG rays: %d", num_camera_rays);
     RCLCPP_INFO(node->get_logger(), "Map frame: %s", map_frame.c_str());
+    RCLCPP_INFO(node->get_logger(), "GT points file: %s", gt_points_file.c_str());
+    RCLCPP_INFO(node->get_logger(), "Enable evaluation: %s", enable_evaluation ? "true" : "false");
+    RCLCPP_INFO(node->get_logger(), "Evaluation threshold radius: %.2f m", eval_threshold_radius);
     RCLCPP_INFO(node->get_logger(), "============================================\n");
 
     // Initialize MoveIt interface
@@ -288,6 +294,45 @@ int main(int argc, char **argv)
         return 1;
     }
     RCLCPP_INFO(node->get_logger(), "Octomap received successfully");
+
+    // Evaluate the octomap if semantic labels are present
+    std::vector<std::vector<ClassMetrics>> all_metrics;
+    if (enable_evaluation && octomap_interface->isSemanticTree())
+    {
+        // Load ground truth if evaluation is enabled
+        if (enable_evaluation)
+        {
+            if (!gt_points_file.empty())
+            {
+                if (octomap_interface->loadGroundTruthSemantics(gt_points_file))
+                {
+                    RCLCPP_INFO(node->get_logger(), "Ground truth loaded successfully");
+                }
+                else
+                {
+                    RCLCPP_ERROR(node->get_logger(), "Failed to load ground truth file: %s", gt_points_file.c_str());
+                    enable_evaluation = false;
+                }
+            }
+            else
+            {
+                RCLCPP_WARN(node->get_logger(), "Evaluation enabled but no ground truth file specified");
+                enable_evaluation = false;
+            }
+        }
+
+        // Step 1: Cluster semantic voxels by class
+        auto latest_clusters = octomap_interface->clusterSemanticVoxels(false);
+
+        // Step 2: Match clusters to ground truth
+        auto match_result = octomap_interface->matchClustersToGroundTruth(latest_clusters, eval_threshold_radius, false);
+        visualizer->publishMatchResults(match_result, eval_threshold_radius*2, 0.8f); // Visualizer uses diameter
+
+        // Step 3: Evaluate and print metrics
+        std::vector<ClassMetrics> eval_results = octomap_interface->evaluateMatchResults(match_result, false);
+        all_metrics.push_back(eval_results);
+        visualizer->plotMetrics(all_metrics, "NBV Metrics", {}, "./nbv_metrics_plot.png");
+    }
 
     // // DEBUG: Delay
     // rclcpp::Rate rate(10); // 10 Hz
@@ -642,6 +687,22 @@ int main(int argc, char **argv)
         {
             RCLCPP_ERROR(node->get_logger(), "No viewpoint found to move to, ending NBV planning");
             break;
+        }
+
+        // Evaluate the octomap if semantic labels are present
+        if (enable_evaluation && octomap_interface->isSemanticTree())
+        {
+            // Step 1: Cluster semantic voxels by class
+            auto latest_clusters = octomap_interface->clusterSemanticVoxels(false);
+
+            // Step 2: Match clusters to ground truth
+            auto match_result = octomap_interface->matchClustersToGroundTruth(latest_clusters, eval_threshold_radius, false);
+            visualizer->publishMatchResults(match_result, eval_threshold_radius*2, 0.8f); // Visualizer uses diameter
+
+            // Step 3: Evaluate and print metrics
+            std::vector<ClassMetrics> eval_results = octomap_interface->evaluateMatchResults(match_result, false);
+            all_metrics.push_back(eval_results);
+            visualizer->plotMetrics(all_metrics, "NBV Metrics", {}, "./nbv_metrics_plot.png");
         }
 
         // Clear all markers and spin

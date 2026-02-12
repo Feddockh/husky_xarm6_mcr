@@ -1,3 +1,4 @@
+import os
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
@@ -15,7 +16,10 @@ def launch_setup(context, *args, **kwargs):
     octomap_topic = LaunchConfiguration('octomap_topic')
     min_unknown_neighbors = LaunchConfiguration('min_unknown_neighbors')
     n_clusters = LaunchConfiguration('n_clusters')
-    gt_points_file = LaunchConfiguration('gt_points_file')
+    gt_points_file = os.path.join(
+        LaunchConfiguration('gt_points_dir').perform(context),
+        LaunchConfiguration('gt_points_file').perform(context)
+    )
     enable_evaluation = LaunchConfiguration('enable_evaluation')
     eval_threshold_radius = LaunchConfiguration('eval_threshold_radius')
 
@@ -28,7 +32,7 @@ def launch_setup(context, *args, **kwargs):
             'use_sim_time': use_sim_time,
             'octomap_topic': octomap_topic,
             'visualization_topic': 'nbv_markers',
-            'map_frame': 'map',
+            'map_frame': LaunchConfiguration('map_frame'),
             'min_unknown_neighbors': min_unknown_neighbors,
             'n_clusters': n_clusters,
             'min_unknown_neighbors': 1,
@@ -67,11 +71,16 @@ def generate_launch_description():
             description='Number of clusters (0 = auto-select based on frontier count)'
         ),
         DeclareLaunchArgument(
-            'gt_points_file',
+            'gt_points_dir',
             default_value=PathJoinSubstitution([
                 FindPackageShare('husky_xarm6_mcr_nbv_planner'),
-                'metrics', 'gt_points', 'sim_aruco_gt_points.yaml'
+                'metrics', 'gt_points'
             ]),
+            description='Directory containing ground truth points YAML files for semantic evaluation'
+        ),
+        DeclareLaunchArgument(
+            'gt_points_file',
+            default_value='sim_aruco_gt_points.yaml',
             description='Path to the ground truth points YAML file for semantic evaluation'
         ),
         DeclareLaunchArgument(
@@ -83,6 +92,11 @@ def generate_launch_description():
             'eval_threshold_radius',
             default_value='0.1',
             description='Threshold radius (meters) for matching clusters to ground truth points'
+        ),
+        DeclareLaunchArgument(
+            'map_frame',
+            default_value='map',
+            description='Map frame for the octomap interface demo'
         ),
         OpaqueFunction(function=launch_setup),
     ])
