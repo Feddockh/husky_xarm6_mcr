@@ -5,6 +5,9 @@
     <xacro:macro name="x_rail_riser" params="namespace:='' prefix:='' parent_link *origin">
         <!-- Build namespace prefix -->
         <xacro:property name="ns_prefix" value="${namespace}/${prefix}"/>
+        <xacro:property name="height" value="0.33" />
+        <xacro:property name="width" value="0.46" />
+        <xacro:property name="depth" value="1.1" />
 
         <!-- X-Rail Riser Link -->
         <link name="${ns_prefix}x_rail_riser_link">
@@ -16,10 +19,9 @@
                 </geometry>
             </visual>
             <collision>
-                <origin xyz="0 0 0" rpy="0 0 0"/>
+                <origin xyz="0 0 ${height/2}" rpy="0 0 0"/>
                 <geometry>
-                    <!-- <mesh filename="package://husky_xarm6_mcr_description/meshes/x_rail_riser_collision.stl" scale="1 1 1"/> -->
-                    <mesh filename="file://$(find husky_xarm6_mcr_description)/meshes/x_rail_riser_collision.stl"/>
+                    <box size="${width} ${depth} ${height}"/>
                 </geometry>
             </collision>
             <inertial>
