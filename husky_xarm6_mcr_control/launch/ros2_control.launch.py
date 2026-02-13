@@ -118,8 +118,11 @@ def launch_setup(context, *args, **kwargs):
                 '-z', '0.3', # slight z offset to avoid collision with ground plane
                 # Initial joint positions to avoid collision
                 '-j', 'xarm6_joint1', '0.0',
-                '-j', 'xarm6_joint2', '-0.5',
-                '-j', 'xarm6_joint3', '0.5',
+                '-j', 'xarm6_joint2', '-0.7854',
+                '-j', 'xarm6_joint3', '-0.7854',
+                '-j', 'xarm6_joint4', '0.0',
+                '-j', 'xarm6_joint5', '0.0',
+                '-j', 'xarm6_joint6', '1.5708',
             ],
             parameters=[{'use_sim_time': use_sim_time}],
         )
