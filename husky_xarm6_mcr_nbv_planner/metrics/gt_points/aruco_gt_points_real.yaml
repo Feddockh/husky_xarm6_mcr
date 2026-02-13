@@ -1,6 +1,7 @@
 # ArUco Marker Positions
 # Generated at: 1.77083e+09
-# Relative to the husky base link frame
+# Reference frame: husky/a200_base_link
+frame_id: husky/a200_base_link
 markers:
   - id: 0
     class_id: 0

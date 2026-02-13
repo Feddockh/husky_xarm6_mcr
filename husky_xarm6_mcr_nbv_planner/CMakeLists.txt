@@ -19,6 +19,8 @@ find_package(octomap_msgs REQUIRED)
 find_package(semantic_octomap REQUIRED)
 find_package(vision_msgs REQUIRED)
 find_package(husky_xarm6_mcr_occupancy_map REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 find_package(yaml-cpp REQUIRED)
 
 # Check for gnuplot (required by matplotplusplus)
@@ -67,6 +69,8 @@ ament_target_dependencies(octomap_interface
   octomap_msgs
   visualization_msgs
   husky_xarm6_mcr_occupancy_map
+  tf2_ros
+  tf2_geometry_msgs
 )
 
 # Define the NBV visualizer library

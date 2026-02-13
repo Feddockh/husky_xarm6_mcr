@@ -6,6 +6,8 @@
 #include "husky_xarm6_mcr_occupancy_map/msg/custom_octomap.hpp"
 #include "husky_xarm6_mcr_occupancy_map/semantic_occupancy_map_tree.hpp"
 #include "husky_xarm6_mcr_nbv_planner/nbv_types.hpp"
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
 
 #include <shared_mutex>
 #include <memory>
@@ -146,6 +148,21 @@ namespace husky_xarm6_mcr_nbv_planner
         const std::vector<SemanticPoint> &getGroundTruthPoints() const { return gt_points_; }
 
         /**
+         * @brief Get the frame ID of the loaded ground truth points
+         * @return Frame ID string (empty if no GT loaded)
+         */
+        std::string getGroundTruthFrameId() const { return gt_frame_id_; }
+
+        /**
+         * @brief Get the frame ID of the current octomap
+         * @return Frame ID string (empty if no octomap loaded)
+         */
+        std::string getOctomapFrameId() const { 
+            std::shared_lock lk(mtx_);
+            return octomap_frame_id_;
+        }
+
+        /**
          * @brief Cluster semantic voxels by class using connected component analysis
          * @param verbose If true, print cluster statistics
          * @return Vector of semantic clusters (excludes background class)
@@ -182,6 +199,14 @@ namespace husky_xarm6_mcr_nbv_planner
         // Ground truth data
         std::vector<SemanticPoint> gt_points_;
         std::vector<int> gt_classes_;
+        std::string gt_frame_id_;  // Frame ID for ground truth points
+        
+        // Octomap frame
+        std::string octomap_frame_id_;  // Frame ID for octomap
+        
+        // TF2 for coordinate transformations
+        std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+        std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
     };
 
 } // namespace husky_xarm6_mcr_nbv_planner

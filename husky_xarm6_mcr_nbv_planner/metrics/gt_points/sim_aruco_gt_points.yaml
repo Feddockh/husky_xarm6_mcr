@@ -1,5 +1,7 @@
 # ArUco Marker Positions
 # Generated at: 11034
+# Reference frame: map
+frame_id: map
 markers:
   - id: 0
     class_id: 0

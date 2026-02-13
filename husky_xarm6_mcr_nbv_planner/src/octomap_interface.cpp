@@ -2,6 +2,7 @@
 #include "husky_xarm6_mcr_occupancy_map/semantic_occupancy_map_tree.hpp"
 
 #include <octomap_msgs/conversions.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <cmath>
 #include <limits>
 #include <random>
@@ -26,6 +27,10 @@ namespace husky_xarm6_mcr_nbv_planner
         sub_ = node_->create_subscription<husky_xarm6_mcr_occupancy_map::msg::CustomOctomap>(
             octomap_topic, qos,
             std::bind(&OctoMapInterface::onOctomap, this, std::placeholders::_1));
+
+        // Initialize TF2 for coordinate transformations
+        tf_buffer_ = std::make_shared<tf2_ros::Buffer>(node_->get_clock());
+        tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
         RCLCPP_INFO(node_->get_logger(), "OctoMapInterface subscribing to %s", octomap_topic.c_str());
     }
@@ -85,6 +90,7 @@ namespace husky_xarm6_mcr_nbv_planner
 
         resolution_ = msg->octomap.resolution;
         last_update_time_ = node_->now();
+        octomap_frame_id_ = msg->header.frame_id;
 
         // Use bounding box from message if provided
         if (msg->has_bounding_box)
@@ -472,6 +478,18 @@ namespace husky_xarm6_mcr_nbv_planner
                 return false;
             }
 
+            // Read frame_id if present
+            if (config["frame_id"])
+            {
+                gt_frame_id_ = config["frame_id"].as<std::string>();
+                RCLCPP_INFO(node_->get_logger(), "Ground truth frame_id: %s", gt_frame_id_.c_str());
+            }
+            else
+            {
+                RCLCPP_WARN(node_->get_logger(), "No 'frame_id' field in YAML, frame consistency cannot be verified");
+                gt_frame_id_ = "";
+            }
+
             gt_points_.clear();
             gt_classes_.clear();
             std::set<int32_t> unique_classes;
@@ -658,19 +676,88 @@ namespace husky_xarm6_mcr_nbv_planner
             return result;
         }
 
+        // Get octomap frame (need to copy since we're const)
+        std::string octomap_frame;
+        {
+            std::shared_lock lk(mtx_);
+            octomap_frame = octomap_frame_id_;
+        }
+
+        // Transform GT points to octomap frame if necessary
+        std::vector<SemanticPoint> transformed_gt_points = gt_points_;
+        
+        if (!gt_frame_id_.empty() && !octomap_frame.empty())
+        {
+            if (gt_frame_id_ != octomap_frame)
+            {
+                RCLCPP_INFO(node_->get_logger(), 
+                    "Transforming ground truth from frame '%s' to octomap frame '%s'",
+                    gt_frame_id_.c_str(), octomap_frame.c_str());
+                
+                try
+                {
+                    // Get transform from GT frame to octomap frame
+                    geometry_msgs::msg::TransformStamped transform_stamped = 
+                        tf_buffer_->lookupTransform(octomap_frame, gt_frame_id_, 
+                                                   tf2::TimePointZero);
+                    
+                    // Transform each GT point
+                    for (auto& gt_point : transformed_gt_points)
+                    {
+                        geometry_msgs::msg::PointStamped point_in, point_out;
+                        point_in.header.frame_id = gt_frame_id_;
+                        point_in.point.x = gt_point.position.x();
+                        point_in.point.y = gt_point.position.y();
+                        point_in.point.z = gt_point.position.z();
+                        
+                        tf2::doTransform(point_in, point_out, transform_stamped);
+                        
+                        gt_point.position = octomap::point3d(
+                            point_out.point.x,
+                            point_out.point.y,
+                            point_out.point.z);
+                    }
+                    
+                    RCLCPP_INFO(node_->get_logger(), 
+                        "Successfully transformed %zu ground truth points",
+                        transformed_gt_points.size());
+                }
+                catch (const tf2::TransformException& ex)
+                {
+                    RCLCPP_ERROR(node_->get_logger(), 
+                        "Failed to transform ground truth points: %s. "
+                        "Proceeding with original coordinates (may produce incorrect results).",
+                        ex.what());
+                    // Keep original points if transform fails
+                }
+            }
+            else
+            {
+                RCLCPP_INFO(node_->get_logger(), 
+                    "Ground truth and octomap are in same frame '%s'", 
+                    gt_frame_id_.c_str());
+            }
+        }
+        else
+        {
+            RCLCPP_WARN(node_->get_logger(), 
+                "Frame IDs not available (GT: '%s', octomap: '%s') - assuming same frame",
+                gt_frame_id_.c_str(), octomap_frame.c_str());
+        }
+
         if (verbose)
         {
             RCLCPP_INFO(node_->get_logger(), "Matching %zu clusters to %zu ground truth points (threshold: %.3f m)",
-                        clusters.size(), gt_points_.size(), threshold_radius);
+                        clusters.size(), transformed_gt_points.size(), threshold_radius);
         }
 
         double threshold_sq = threshold_radius * threshold_radius;
         std::set<size_t> matched_cluster_indices;
 
         // For each GT point, find all clusters within threshold
-        for (size_t j = 0; j < gt_points_.size(); ++j)
+        for (size_t j = 0; j < transformed_gt_points.size(); ++j)
         {
-            const auto &gt_point = gt_points_[j];
+            const auto &gt_point = transformed_gt_points[j];
 
             std::vector<Cluster> matching_class_clusters;
             std::vector<double> matching_class_distances;
