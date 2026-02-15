@@ -44,6 +44,19 @@ def launch_setup(context, *args, **kwargs):
     data_dir = os.path.join(package_share_dir, 'data')
     os.makedirs(data_dir, exist_ok=True)
     
+    # Setup metrics directory structure
+    metrics_dir = LaunchConfiguration('metrics_dir').perform(context)
+    if not os.path.isabs(metrics_dir):
+        metrics_dir = os.path.join(package_share_dir, metrics_dir)
+    
+    metrics_plots_dir = os.path.join(metrics_dir, 'runs', 'plots')
+    metrics_data_dir = os.path.join(metrics_dir, 'runs', 'data')
+    os.makedirs(metrics_plots_dir, exist_ok=True)
+    os.makedirs(metrics_data_dir, exist_ok=True)
+    
+    print(f"[nbv_volumetric_planner_demo.launch.py] Metrics plots directory: {metrics_plots_dir}")
+    print(f"[nbv_volumetric_planner_demo.launch.py] Metrics data directory: {metrics_data_dir}")
+    
     # Determine workspace file path
     learn_workspace_val = learn_workspace.perform(context).lower() == 'true'
     
@@ -180,6 +193,9 @@ def launch_setup(context, *args, **kwargs):
             {'gt_points_file': gt_points_file},
             {'enable_evaluation': LaunchConfiguration('enable_evaluation')},
             {'eval_threshold_radius': LaunchConfiguration('eval_threshold_radius')},
+            # Metrics Output Directories
+            {'metrics_plots_dir': metrics_plots_dir},
+            {'metrics_data_dir': metrics_data_dir},
         ],
     )
 
@@ -250,5 +266,7 @@ def generate_launch_description():
                             description='Enable semantic octomap evaluation against ground truth'),
         DeclareLaunchArgument('eval_threshold_radius', default_value='0.1',
                             description='Threshold radius (meters) for matching clusters to ground truth points'),
+        DeclareLaunchArgument('metrics_dir', default_value='metrics',
+                            description='Directory for saving metrics (plots and CSV data)'),
         OpaqueFunction(function=launch_setup),
     ])

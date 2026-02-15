@@ -10,6 +10,7 @@
 #include <cmath>
 #include <sstream>
 #include <iomanip>
+#include <fstream>
 #include <set>
 #include <algorithm>
 #include <matplot/matplot.h>
@@ -1446,6 +1447,60 @@ namespace husky_xarm6_mcr_nbv_planner
 
         // Call the more general plotMetrics function
         return plotMetrics(y_data, x_data, series_labels, plot_title, "Iteration", "Metric Value", colors, save_path, 0.0, 1.0);
+    }
+
+    bool NBVVisualizer::logMetricsToCSV(
+        const std::vector<std::vector<ClassMetrics>> &all_metrics,
+        const std::string &file_path)
+    {
+        if (all_metrics.empty())
+        {
+            RCLCPP_WARN(logger_, "No metrics to log to CSV");
+            return false;
+        }
+
+        // Open file for writing
+        std::ofstream csv_file(file_path);
+        if (!csv_file.is_open())
+        {
+            RCLCPP_ERROR(logger_, "Failed to open CSV file: %s", file_path.c_str());
+            return false;
+        }
+
+        try
+        {
+            // Write CSV header
+            csv_file << "Run,Class_ID,TP_Clusters,FP_Clusters,TP_Points,FN_Points,Precision,Recall,F1_Score\n";
+
+            // Write data for each run and class
+            for (size_t run_idx = 0; run_idx < all_metrics.size(); ++run_idx)
+            {
+                const auto &metrics_for_run = all_metrics[run_idx];
+                
+                for (const auto &class_metrics : metrics_for_run)
+                {
+                    csv_file << run_idx << ","
+                             << class_metrics.class_id << ","
+                             << class_metrics.tp_clusters << ","
+                             << class_metrics.fp_clusters << ","
+                             << class_metrics.tp_points << ","
+                             << class_metrics.fn_points << ","
+                             << std::fixed << std::setprecision(4) << class_metrics.precision << ","
+                             << std::fixed << std::setprecision(4) << class_metrics.recall << ","
+                             << std::fixed << std::setprecision(4) << class_metrics.f1_score << "\n";
+                }
+            }
+
+            csv_file.close();
+            RCLCPP_INFO(logger_, "Successfully logged metrics to CSV: %s", file_path.c_str());
+            return true;
+        }
+        catch (const std::exception &e)
+        {
+            RCLCPP_ERROR(logger_, "Error writing to CSV file: %s", e.what());
+            csv_file.close();
+            return false;
+        }
     }
 
 } // namespace husky_xarm6_mcr_nbv_planner

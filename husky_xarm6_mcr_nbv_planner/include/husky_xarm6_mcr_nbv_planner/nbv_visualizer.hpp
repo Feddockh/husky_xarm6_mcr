@@ -339,6 +339,17 @@ namespace husky_xarm6_mcr_nbv_planner
         );
 
         /**
+         * @brief Log metrics to csv file
+         * @param all_metrics 2D vector of ClassMetrics (outer: different runs, inner: classes)
+         * @param file_path Path to the csv file
+         * @return true if successful, false otherwise
+         */
+        bool logMetricsToCSV(
+            const std::vector<std::vector<ClassMetrics>> &all_metrics,
+            const std::string &file_path = "/tmp/metrics.csv"
+        );
+
+        /**
          * @brief Clear specific visualization namespace
          */
         void clearVoxels();
@@ -347,15 +358,6 @@ namespace husky_xarm6_mcr_nbv_planner
         void clearCandidateViews();
         void clearBestView();
         void clearTargetRegion();
-
-        /**
-         * 
-         */
-        void plotMatchResults(
-            std::vector<MatchResult> &match_result,
-            double point_size = 0.02,
-            float alpha = 0.8f,
-            const std::string &ns = "match_results");
 
         /**
          * @brief Generate deterministic color from cluster label

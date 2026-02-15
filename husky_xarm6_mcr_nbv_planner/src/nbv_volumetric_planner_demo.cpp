@@ -80,6 +80,8 @@ struct NBVPlannerConfig {
     std::string gt_points_file;
     bool enable_evaluation;
     double eval_threshold_radius;
+    std::string metrics_plots_dir;
+    std::string metrics_data_dir;
 };
 
 struct TriggerClients {
@@ -145,6 +147,8 @@ NBVPlannerConfig loadConfiguration(const std::shared_ptr<rclcpp::Node>& node)
     config.gt_points_file = node->get_parameter("gt_points_file").as_string();
     config.enable_evaluation = node->get_parameter("enable_evaluation").as_bool();
     config.eval_threshold_radius = node->get_parameter("eval_threshold_radius").as_double();
+    config.metrics_plots_dir = node->get_parameter("metrics_plots_dir").as_string();
+    config.metrics_data_dir = node->get_parameter("metrics_data_dir").as_string();
     return config;
 }
 
@@ -171,6 +175,8 @@ void printConfiguration(const NBVPlannerConfig& config, const rclcpp::Logger& lo
     RCLCPP_INFO(logger, "GT points file: %s", config.gt_points_file.c_str());
     RCLCPP_INFO(logger, "Enable evaluation: %s", config.enable_evaluation ? "true" : "false");
     RCLCPP_INFO(logger, "Evaluation threshold radius: %.2f m", config.eval_threshold_radius);
+    RCLCPP_INFO(logger, "Metrics plots directory: %s", config.metrics_plots_dir.c_str());
+    RCLCPP_INFO(logger, "Metrics data directory: %s", config.metrics_data_dir.c_str());
     RCLCPP_INFO(logger, "============================================\n");
 }
 
@@ -396,7 +402,8 @@ bool initializeEvaluation(
     all_metrics.push_back(eval_results);
     
     if (visualizer) {
-        visualizer->plotMetrics(all_metrics, "NBV Metrics", {}, "./nbv_metrics_plot.png");
+        std::string plot_path = config.metrics_plots_dir + "/nbv_metrics_initial.png";
+        visualizer->plotMetrics(all_metrics, "NBV Metrics - Initial", {}, plot_path);
     }
     
     return true;
@@ -746,9 +753,11 @@ void performEvaluation(
     std::vector<ClassMetrics> eval_results = octomap_interface->evaluateMatchResults(match_result, false);
     all_metrics.push_back(eval_results);
     
-    if (visualizer) {
-        visualizer->plotMetrics(all_metrics, "NBV Metrics", {}, "./nbv_metrics_plot.png");
-    }
+    // Save the metrics to file and plot
+    std::string csv_path = config.metrics_data_dir + "/nbv_metrics.csv";
+    std::string plot_path = config.metrics_plots_dir + "/nbv_metrics_final.png";
+    visualizer->logMetricsToCSV(all_metrics, csv_path);
+    visualizer->plotMetrics(all_metrics, "NBV Metrics - Final", {}, plot_path);
 }
 
 // ============================================================================
