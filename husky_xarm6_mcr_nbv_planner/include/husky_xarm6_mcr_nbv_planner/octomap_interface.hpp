@@ -53,26 +53,60 @@ namespace husky_xarm6_mcr_nbv_planner
             std::shared_lock lk(mtx_);
             return resolution_;
         }
+        // WARNING: This bbx returned will not have rotation information
         // Bounding box returned in specified frame (default: octomap frame)
         bool getBoundingBox(octomap::point3d &min_out, octomap::point3d &max_out,
-                           const std::string &frame_id = "") const {
+                        const std::string &frame_id = "") const {
             if (!has_valid_bbox_) {
                 return false;
             }
-            octomap::point3d min_transformed = bbox_min_;
-            octomap::point3d max_transformed = bbox_max_;
             
-            // Transform if different frame requested
+            // Determine target frame
             std::string target_frame = frame_id.empty() ? octomap_frame_id_ : frame_id;
-            if (target_frame != octomap_frame_id_) {
-                if (!transformPoint(bbox_min_, octomap_frame_id_, target_frame, min_transformed) ||
-                    !transformPoint(bbox_max_, octomap_frame_id_, target_frame, max_transformed)) {
-                    return false;
-                }
+            
+            // If same frame, just return the stored bbox
+            if (target_frame == octomap_frame_id_) {
+                min_out = bbox_min_;
+                max_out = bbox_max_;
+                return true;
             }
             
-            min_out = min_transformed;
-            max_out = max_transformed;
+            // Transform all 8 corners of the bounding box
+            std::vector<octomap::point3d> corners = {
+                octomap::point3d(bbox_min_.x(), bbox_min_.y(), bbox_min_.z()),
+                octomap::point3d(bbox_max_.x(), bbox_min_.y(), bbox_min_.z()),
+                octomap::point3d(bbox_min_.x(), bbox_max_.y(), bbox_min_.z()),
+                octomap::point3d(bbox_max_.x(), bbox_max_.y(), bbox_min_.z()),
+                octomap::point3d(bbox_min_.x(), bbox_min_.y(), bbox_max_.z()),
+                octomap::point3d(bbox_max_.x(), bbox_min_.y(), bbox_max_.z()),
+                octomap::point3d(bbox_min_.x(), bbox_max_.y(), bbox_max_.z()),
+                octomap::point3d(bbox_max_.x(), bbox_max_.y(), bbox_max_.z())
+            };
+            
+            // Transform all corners to target frame
+            std::vector<octomap::point3d> transformed_corners;
+            transformed_corners.reserve(8);
+            for (const auto& corner : corners) {
+                octomap::point3d transformed;
+                if (!transformPoint(corner, octomap_frame_id_, target_frame, transformed)) {
+                    return false;
+                }
+                transformed_corners.push_back(transformed);
+            }
+            
+            // Compute axis-aligned bounding box in target frame
+            min_out = transformed_corners[0];
+            max_out = transformed_corners[0];
+            for (size_t i = 1; i < transformed_corners.size(); ++i) {
+                min_out.x() = std::min(min_out.x(), transformed_corners[i].x());
+                min_out.y() = std::min(min_out.y(), transformed_corners[i].y());
+                min_out.z() = std::min(min_out.z(), transformed_corners[i].z());
+                
+                max_out.x() = std::max(max_out.x(), transformed_corners[i].x());
+                max_out.y() = std::max(max_out.y(), transformed_corners[i].y());
+                max_out.z() = std::max(max_out.z(), transformed_corners[i].z());
+            }
+            
             return true;
         }
         // Point accepted in specified frame (default: octomap frame)
