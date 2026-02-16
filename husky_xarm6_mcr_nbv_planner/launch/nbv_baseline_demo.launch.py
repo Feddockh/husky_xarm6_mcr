@@ -152,7 +152,7 @@ def launch_setup(context, *args, **kwargs):
     )
     nbv_volumetric_planner_demo = Node(
         package='husky_xarm6_mcr_nbv_planner',
-        executable='nbv_volumetric_planner_demo',
+        executable='nbv_baseline_demo',
         output='screen',
         parameters=[
             {'use_sim_time': use_sim_time},
