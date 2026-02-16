@@ -142,10 +142,6 @@ namespace husky_xarm6_mcr_nbv_planner
         void setPoseReferenceFrame(const std::string &frame);
         std::string getEndEffectorLink() const;
         void setEndEffectorLink(const std::string &link);
-        
-        // Default reference frame for cartesian operations
-        std::string getDefaultReferenceFrame() const;
-        void setDefaultReferenceFrame(const std::string &frame);
 
         // Robot structure queries
         std::vector<std::string> getManipulatorLinks() const;
@@ -187,7 +183,6 @@ namespace husky_xarm6_mcr_nbv_planner
         double max_acceleration_scaling_factor_{0.1};
         std::string pose_reference_frame_;
         std::string end_effector_link_;
-        std::string default_reference_frame_;  // Default for cartesian operations (initialized from robot model)
     };
 
 } // namespace husky_xarm6_mcr_nbv_planner

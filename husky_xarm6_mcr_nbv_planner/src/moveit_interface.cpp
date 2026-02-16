@@ -73,13 +73,13 @@ namespace husky_xarm6_mcr_nbv_planner
             const moveit::core::RobotModelConstPtr &robot_model = scene->getRobotModel();
             if (robot_model)
             {
-                default_reference_frame_ = robot_model->getRootLinkName();
-                RCLCPP_INFO(node_->get_logger(), "Default reference frame set to robot root link: '%s'",
-                           default_reference_frame_.c_str());
+                pose_reference_frame_ = robot_model->getRootLinkName();
+                RCLCPP_INFO(node_->get_logger(), "Pose reference frame set to robot root link: '%s'",
+                           pose_reference_frame_.c_str());
             }
             else
             {
-                RCLCPP_WARN(node_->get_logger(), "Could not get robot model, default reference frame not set");
+                RCLCPP_WARN(node_->get_logger(), "Could not get robot model, pose reference frame not set");
             }
         }
     }
@@ -256,7 +256,7 @@ namespace husky_xarm6_mcr_nbv_planner
         tf2::fromMsg(target_pose, target_eigen);
         
         // Determine the reference frame to use
-        std::string ref_frame = reference_frame.empty() ? default_reference_frame_ : reference_frame;
+        std::string ref_frame = reference_frame.empty() ? pose_reference_frame_ : reference_frame;
         
         // If a specific reference frame is provided, transform the target pose
         if (!ref_frame.empty() && state.knowsFrameTransform(ref_frame))
@@ -344,7 +344,7 @@ namespace husky_xarm6_mcr_nbv_planner
         const Eigen::Isometry3d &pose_world = current_state->getGlobalLinkTransform(move_group_->getEndEffectorLink());
         
         // Determine the reference frame to use
-        std::string ref_frame = reference_frame.empty() ? default_reference_frame_ : reference_frame;
+        std::string ref_frame = reference_frame.empty() ? pose_reference_frame_ : reference_frame;
         
         // If a specific reference frame is provided, transform the pose
         if (!ref_frame.empty() && current_state->knowsFrameTransform(ref_frame))
@@ -459,7 +459,7 @@ namespace husky_xarm6_mcr_nbv_planner
         tf2::fromMsg(cam_pose, T_ref_cam);
         
         // Determine the reference frame to use
-        std::string ref_frame = reference_frame.empty() ? default_reference_frame_ : reference_frame;
+        std::string ref_frame = reference_frame.empty() ? pose_reference_frame_ : reference_frame;
         
         // If a specific reference frame is provided, we need to transform to world frame first
         if (!ref_frame.empty() && isPSMValid(false))
@@ -697,18 +697,6 @@ namespace husky_xarm6_mcr_nbv_planner
         }
     }
 
-    // Default reference frame for cartesian operations
-    std::string MoveItInterface::getDefaultReferenceFrame() const
-    {
-        return default_reference_frame_;
-    }
-
-    void MoveItInterface::setDefaultReferenceFrame(const std::string &frame)
-    {
-        default_reference_frame_ = frame;
-        RCLCPP_INFO(node_->get_logger(), "Set default reference frame to: %s", frame.c_str());
-    }
-
     // Robot structure queries
     std::vector<std::string> MoveItInterface::getManipulatorLinks() const
     {
@@ -819,7 +807,7 @@ namespace husky_xarm6_mcr_nbv_planner
         const Eigen::Isometry3d &pose_world = state.getGlobalLinkTransform(link_name);
         
         // Determine the reference frame to use
-        std::string ref_frame = reference_frame.empty() ? default_reference_frame_ : reference_frame;
+        std::string ref_frame = reference_frame.empty() ? pose_reference_frame_ : reference_frame;
         
         // If a specific reference frame is provided, transform the pose
         if (!ref_frame.empty() && state.knowsFrameTransform(ref_frame))
