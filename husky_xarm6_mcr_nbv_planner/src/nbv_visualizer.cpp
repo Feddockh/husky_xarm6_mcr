@@ -30,6 +30,10 @@ namespace husky_xarm6_mcr_nbv_planner
         marker_pub_ = node_->create_publisher<visualization_msgs::msg::MarkerArray>(
             topic, rclcpp::QoS(10));
 
+        // Initialize TF2 for coordinate transformations
+        tf_buffer_ = std::make_shared<tf2_ros::Buffer>(node_->get_clock());
+        tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+
         RCLCPP_INFO(logger_, "NBVVisualizer created for frame '%s', publishing to '%s'",
                     map_frame_.c_str(), topic.c_str());
     }
@@ -107,12 +111,94 @@ namespace husky_xarm6_mcr_nbv_planner
         return point;
     }
 
+    bool NBVVisualizer::transformPoint(const octomap::point3d &point,
+                                       const std::string &source_frame,
+                                       octomap::point3d &point_out) const
+    {
+        // If frames are the same, no transformation needed
+        if (source_frame == map_frame_ || source_frame.empty())
+        {
+            point_out = point;
+            return true;
+        }
+
+        try
+        {
+            // Look up transform from source to map frame
+            geometry_msgs::msg::TransformStamped transform_stamped =
+                tf_buffer_->lookupTransform(map_frame_, source_frame, tf2::TimePointZero);
+
+            // Create PointStamped for transformation
+            geometry_msgs::msg::PointStamped point_in, point_out_msg;
+            point_in.header.frame_id = source_frame;
+            point_in.point.x = point.x();
+            point_in.point.y = point.y();
+            point_in.point.z = point.z();
+
+            // Transform
+            tf2::doTransform(point_in, point_out_msg, transform_stamped);
+
+            // Convert back to octomap point
+            point_out = octomap::point3d(
+                point_out_msg.point.x,
+                point_out_msg.point.y,
+                point_out_msg.point.z);
+
+            return true;
+        }
+        catch (const tf2::TransformException &ex)
+        {
+            RCLCPP_WARN(logger_, "Failed to transform point from '%s' to '%s': %s",
+                        source_frame.c_str(), map_frame_.c_str(), ex.what());
+            point_out = point; // Return original point on failure
+            return false;
+        }
+    }
+
+    bool NBVVisualizer::transformPose(const geometry_msgs::msg::Pose &pose,
+                                      const std::string &source_frame,
+                                      geometry_msgs::msg::Pose &pose_out) const
+    {
+        // If frames are the same, no transformation needed
+        if (source_frame == map_frame_ || source_frame.empty())
+        {
+            pose_out = pose;
+            return true;
+        }
+
+        try
+        {
+            // Look up transform from source to map frame
+            geometry_msgs::msg::TransformStamped transform_stamped =
+                tf_buffer_->lookupTransform(map_frame_, source_frame, tf2::TimePointZero);
+
+            // Create PoseStamped for transformation
+            geometry_msgs::msg::PoseStamped pose_in, pose_out_msg;
+            pose_in.header.frame_id = source_frame;
+            pose_in.pose = pose;
+
+            // Transform
+            tf2::doTransform(pose_in, pose_out_msg, transform_stamped);
+
+            pose_out = pose_out_msg.pose;
+            return true;
+        }
+        catch (const tf2::TransformException &ex)
+        {
+            RCLCPP_WARN(logger_, "Failed to transform pose from '%s' to '%s': %s",
+                        source_frame.c_str(), map_frame_.c_str(), ex.what());
+            pose_out = pose; // Return original pose on failure
+            return false;
+        }
+    }
+
     void NBVVisualizer::publishVoxels(
         const std::vector<octomap::point3d> &voxels,
         double voxel_size,
         const std_msgs::msg::ColorRGBA &color,
         float alpha,
-        const std::string &ns)
+        const std::string &ns,
+        const std::string &frame_id)
     {
         if (voxels.empty())
         {
@@ -125,7 +211,7 @@ namespace husky_xarm6_mcr_nbv_planner
         std::vector<std_msgs::msg::ColorRGBA> colors(voxels.size(), actual_color);
 
         // Call the more general function
-        publishVoxels(voxels, voxel_size, colors, alpha, ns);
+        publishVoxels(voxels, voxel_size, colors, alpha, ns, frame_id);
     }
 
     void NBVVisualizer::publishVoxels(
@@ -133,13 +219,35 @@ namespace husky_xarm6_mcr_nbv_planner
         double voxel_size,
         const std::vector<std_msgs::msg::ColorRGBA> &colors,
         float alpha,
-        const std::string &ns)
+        const std::string &ns,
+        const std::string &frame_id)
     {
         if (colors.size() != voxels.size())
         {
             RCLCPP_ERROR(logger_, "publishVoxels: colors vector size (%zu) must match voxels size (%zu)",
                          colors.size(), voxels.size());
             return;
+        }
+
+        // Transform voxels to map frame if needed
+        std::vector<octomap::point3d> transformed_voxels;
+        std::string source_frame = frame_id.empty() ? map_frame_ : frame_id;
+        
+        if (source_frame != map_frame_)
+        {
+            transformed_voxels.reserve(voxels.size());
+            for (const auto &v : voxels)
+            {
+                octomap::point3d v_transformed;
+                if (transformPoint(v, source_frame, v_transformed))
+                {
+                    transformed_voxels.push_back(v_transformed);
+                }
+            }
+        }
+        else
+        {
+            transformed_voxels = voxels;
         }
 
         auto now = node_->now();
@@ -154,14 +262,14 @@ namespace husky_xarm6_mcr_nbv_planner
         del_marker.action = visualization_msgs::msg::Marker::DELETEALL;
         marker_array.markers.push_back(del_marker);
 
-        if (voxels.empty())
+        if (transformed_voxels.empty())
         {
             marker_pub_->publish(marker_array);
             return;
         }
 
         // Create individual CUBE markers for each voxel (to support per-voxel colors)
-        for (size_t i = 0; i < voxels.size(); ++i)
+        for (size_t i = 0; i < transformed_voxels.size(); ++i)
         {
             visualization_msgs::msg::Marker marker;
             marker.header.frame_id = map_frame_;
@@ -170,7 +278,7 @@ namespace husky_xarm6_mcr_nbv_planner
             marker.id = static_cast<int>(i + 1);
             marker.type = visualization_msgs::msg::Marker::CUBE;
             marker.action = visualization_msgs::msg::Marker::ADD;
-            marker.pose.position = toPoint(voxels[i]);
+            marker.pose.position = toPoint(transformed_voxels[i]);
             marker.pose.orientation.w = 1.0;
             marker.scale.x = marker.scale.y = marker.scale.z = voxel_size;
             marker.color = colors[i];
@@ -179,7 +287,7 @@ namespace husky_xarm6_mcr_nbv_planner
         }
 
         marker_pub_->publish(marker_array);
-        RCLCPP_DEBUG(logger_, "Published %zu voxels with individual colors", voxels.size());
+        RCLCPP_DEBUG(logger_, "Published %zu voxels with individual colors", transformed_voxels.size());
     }
 
     void NBVVisualizer::publishClusteredVoxels(
@@ -187,7 +295,8 @@ namespace husky_xarm6_mcr_nbv_planner
         double voxel_size,
         bool plot_centers,
         float alpha,
-        const std::string &ns)
+        const std::string &ns,
+        const std::string &frame_id)
     {
         if (clusters.empty())
         {
@@ -204,7 +313,7 @@ namespace husky_xarm6_mcr_nbv_planner
         }
 
         // Call the more general function
-        publishClusteredVoxels(clusters, voxel_size, colors, plot_centers, alpha, ns);
+        publishClusteredVoxels(clusters, voxel_size, colors, plot_centers, alpha, ns, frame_id);
     }
 
     void NBVVisualizer::publishClusteredVoxels(
@@ -213,7 +322,8 @@ namespace husky_xarm6_mcr_nbv_planner
         const std_msgs::msg::ColorRGBA &color,
         bool plot_centers,
         float alpha,
-        const std::string &ns)
+        const std::string &ns,
+        const std::string &frame_id)
     {
         if (clusters.empty())
         {
@@ -226,7 +336,7 @@ namespace husky_xarm6_mcr_nbv_planner
         std::vector<std_msgs::msg::ColorRGBA> colors(clusters.size(), actual_color);
 
         // Call the more general function
-        publishClusteredVoxels(clusters, voxel_size, colors, plot_centers, alpha, ns);
+        publishClusteredVoxels(clusters, voxel_size, colors, plot_centers, alpha, ns, frame_id);
     }
 
     void NBVVisualizer::publishClusteredVoxels(
@@ -235,13 +345,41 @@ namespace husky_xarm6_mcr_nbv_planner
         const std::vector<std_msgs::msg::ColorRGBA> &colors,
         bool plot_centers,
         float alpha,
-        const std::string &ns)
+        const std::string &ns,
+        const std::string &frame_id)
     {
         if (colors.size() != clusters.size())
         {
             RCLCPP_ERROR(logger_, "publishClusteredVoxels: colors vector size (%zu) must match clusters size (%zu)",
                          colors.size(), clusters.size());
             return;
+        }
+
+        // Transform clusters to map frame if needed
+        std::vector<Cluster> transformed_clusters = clusters;
+        std::string source_frame = frame_id.empty() ? map_frame_ : frame_id;
+        
+        if (source_frame != map_frame_)
+        {
+            for (auto &cluster : transformed_clusters)
+            {
+                // Transform center
+                octomap::point3d center_transformed;
+                if (transformPoint(cluster.center, source_frame, center_transformed))
+                {
+                    cluster.center = center_transformed;
+                }
+                
+                // Transform all points
+                for (auto &pt : cluster.points)
+                {
+                    octomap::point3d pt_transformed;
+                    if (transformPoint(pt, source_frame, pt_transformed))
+                    {
+                        pt = pt_transformed;
+                    }
+                }
+            }
         }
 
         auto now = node_->now();
@@ -267,7 +405,7 @@ namespace husky_xarm6_mcr_nbv_planner
             marker_array.markers.push_back(del_centers);
         }
 
-        if (clusters.empty())
+        if (transformed_clusters.empty())
         {
             marker_pub_->publish(marker_array);
             return;
@@ -275,9 +413,9 @@ namespace husky_xarm6_mcr_nbv_planner
 
         // Create one CUBE_LIST marker per cluster
         int id = 1;
-        for (size_t i = 0; i < clusters.size(); ++i)
+        for (size_t i = 0; i < transformed_clusters.size(); ++i)
         {
-            const auto &cluster = clusters[i];
+            const auto &cluster = transformed_clusters[i];
             if (cluster.points.empty())
                 continue;
 
@@ -318,7 +456,7 @@ namespace husky_xarm6_mcr_nbv_planner
             centers.color.b = 1.0f;
             centers.color.a = 1.0f;
 
-            for (const auto &cluster : clusters)
+            for (const auto &cluster : transformed_clusters)
             {
                 if (!cluster.points.empty())
                 {
@@ -330,7 +468,7 @@ namespace husky_xarm6_mcr_nbv_planner
         }
 
         marker_pub_->publish(marker_array);
-        RCLCPP_DEBUG(logger_, "Published %zu clusters with individual colors", clusters.size());
+        RCLCPP_DEBUG(logger_, "Published %zu clusters with individual colors", transformed_clusters.size());
     }
 
     visualization_msgs::msg::Marker NBVVisualizer::createAxisTriad(
@@ -489,8 +627,30 @@ namespace husky_xarm6_mcr_nbv_planner
         double axis_length,
         double axis_radius,
         float alpha,
-        const std::string &ns)
+        const std::string &ns,
+        const std::string &frame_id)
     {
+        // Transform poses to map frame if needed
+        std::vector<geometry_msgs::msg::Pose> transformed_poses;
+        std::string source_frame = frame_id.empty() ? map_frame_ : frame_id;
+        
+        if (source_frame != map_frame_)
+        {
+            transformed_poses.reserve(poses.size());
+            for (const auto &pose : poses)
+            {
+                geometry_msgs::msg::Pose pose_transformed;
+                if (transformPose(pose, source_frame, pose_transformed))
+                {
+                    transformed_poses.push_back(pose_transformed);
+                }
+            }
+        }
+        else
+        {
+            transformed_poses = poses;
+        }
+
         auto now = node_->now();
         visualization_msgs::msg::MarkerArray marker_array;
 
@@ -503,17 +663,17 @@ namespace husky_xarm6_mcr_nbv_planner
         // del_marker.action = visualization_msgs::msg::Marker::DELETEALL;
         // marker_array.markers.push_back(del_marker);
 
-        if (poses.empty())
+        if (transformed_poses.empty())
         {
             marker_pub_->publish(marker_array);
             return;
         }
 
         // Create axis triad cylinders for each pose
-        for (size_t i = 0; i < poses.size(); ++i)
+        for (size_t i = 0; i < transformed_poses.size(); ++i)
         {
             auto cylinders = createAxisTriadCylinders(
-                poses[i],
+                transformed_poses[i],
                 static_cast<int>(i + 1),
                 axis_length,
                 axis_radius,
@@ -528,7 +688,7 @@ namespace husky_xarm6_mcr_nbv_planner
         }
 
         marker_pub_->publish(marker_array);
-        RCLCPP_DEBUG(logger_, "Published %zu candidate views", poses.size());
+        RCLCPP_DEBUG(logger_, "Published %zu candidate views", transformed_poses.size());
     }
 
     void NBVVisualizer::publishCoordinate(
@@ -536,11 +696,12 @@ namespace husky_xarm6_mcr_nbv_planner
         double axis_length,
         double axis_radius,
         float alpha,
-        const std::string &ns)
+        const std::string &ns,
+        const std::string &frame_id)
     {
         // Single pose - wrap in vector and call multi-pose version
         std::vector<geometry_msgs::msg::Pose> poses = {pose};
-        publishCoordinates(poses, axis_length, axis_radius, alpha, ns);
+        publishCoordinates(poses, axis_length, axis_radius, alpha, ns, frame_id);
     }
 
     void NBVVisualizer::publishCoordinate(
@@ -549,7 +710,8 @@ namespace husky_xarm6_mcr_nbv_planner
         double axis_length,
         double axis_radius,
         float alpha,
-        const std::string &ns)
+        const std::string &ns,
+        const std::string &frame_id)
     {
         // Convert Eigen types to geometry_msgs::Pose
         geometry_msgs::msg::Pose pose;
@@ -561,7 +723,7 @@ namespace husky_xarm6_mcr_nbv_planner
         pose.orientation.z = orientation[2];
         pose.orientation.w = orientation[3];
 
-        publishCoordinate(pose, axis_length, axis_radius, alpha, ns);
+        publishCoordinate(pose, axis_length, axis_radius, alpha, ns, frame_id);
     }
 
     void NBVVisualizer::publishViewpoint(
@@ -569,7 +731,8 @@ namespace husky_xarm6_mcr_nbv_planner
         double axis_length,
         double axis_radius,
         float alpha,
-        const std::string &ns)
+        const std::string &ns,
+        const std::string &frame_id)
     {
         // Convert Viewpoint to geometry_msgs::Pose
         geometry_msgs::msg::Pose pose;
@@ -582,7 +745,7 @@ namespace husky_xarm6_mcr_nbv_planner
         pose.orientation.w = viewpoint.orientation[3];
 
         // Publish using existing publishCoordinate function
-        publishCoordinate(pose, axis_length, axis_radius, alpha, ns);
+        publishCoordinate(pose, axis_length, axis_radius, alpha, ns, frame_id);
     }
 
     visualization_msgs::msg::Marker NBVVisualizer::createWireframeSphere(
@@ -666,8 +829,22 @@ namespace husky_xarm6_mcr_nbv_planner
         const octomap::point3d &center,
         double radius,
         double line_width,
-        const std::string &ns)
+        const std::string &ns,
+        const std::string &frame_id)
     {
+        // Transform center to map frame if needed
+        octomap::point3d center_transformed = center;
+        std::string source_frame = frame_id.empty() ? map_frame_ : frame_id;
+        
+        if (source_frame != map_frame_)
+        {
+            if (!transformPoint(center, source_frame, center_transformed))
+            {
+                RCLCPP_WARN(logger_, "Failed to transform target region center");
+                return;
+            }
+        }
+
         auto now = node_->now();
         visualization_msgs::msg::MarkerArray marker_array;
 
@@ -687,7 +864,7 @@ namespace husky_xarm6_mcr_nbv_planner
         color.b = 0.0f;
         color.a = 0.8f;
 
-        auto sphere = createWireframeSphere(center, radius, line_width, color, ns);
+        auto sphere = createWireframeSphere(center_transformed, radius, line_width, color, ns);
         marker_array.markers.push_back(sphere);
 
         marker_pub_->publish(marker_array);
@@ -699,8 +876,24 @@ namespace husky_xarm6_mcr_nbv_planner
         const octomap::point3d &bbx_max,
         const std::string &ns,
         double line_width,
-        const std_msgs::msg::ColorRGBA &color)
+        const std_msgs::msg::ColorRGBA &color,
+        const std::string &frame_id)
     {
+        // Transform bounding box corners to map frame if needed
+        octomap::point3d bbx_min_transformed = bbx_min;
+        octomap::point3d bbx_max_transformed = bbx_max;
+        std::string source_frame = frame_id.empty() ? map_frame_ : frame_id;
+        
+        if (source_frame != map_frame_)
+        {
+            if (!transformPoint(bbx_min, source_frame, bbx_min_transformed) ||
+                !transformPoint(bbx_max, source_frame, bbx_max_transformed))
+            {
+                RCLCPP_WARN(logger_, "Failed to transform bounding box");
+                return;
+            }
+        }
+
         auto now = node_->now();
         visualization_msgs::msg::MarkerArray marker_array;
 
@@ -741,32 +934,32 @@ namespace husky_xarm6_mcr_nbv_planner
         std::array<geometry_msgs::msg::Point, 8> corners;
 
         // Bottom face (z = min)
-        corners[0].x = bbx_min.x();
-        corners[0].y = bbx_min.y();
-        corners[0].z = bbx_min.z();
-        corners[1].x = bbx_max.x();
-        corners[1].y = bbx_min.y();
-        corners[1].z = bbx_min.z();
-        corners[2].x = bbx_max.x();
-        corners[2].y = bbx_max.y();
-        corners[2].z = bbx_min.z();
-        corners[3].x = bbx_min.x();
-        corners[3].y = bbx_max.y();
-        corners[3].z = bbx_min.z();
+        corners[0].x = bbx_min_transformed.x();
+        corners[0].y = bbx_min_transformed.y();
+        corners[0].z = bbx_min_transformed.z();
+        corners[1].x = bbx_max_transformed.x();
+        corners[1].y = bbx_min_transformed.y();
+        corners[1].z = bbx_min_transformed.z();
+        corners[2].x = bbx_max_transformed.x();
+        corners[2].y = bbx_max_transformed.y();
+        corners[2].z = bbx_min_transformed.z();
+        corners[3].x = bbx_min_transformed.x();
+        corners[3].y = bbx_max_transformed.y();
+        corners[3].z = bbx_min_transformed.z();
 
         // Top face (z = max)
-        corners[4].x = bbx_min.x();
-        corners[4].y = bbx_min.y();
-        corners[4].z = bbx_max.z();
-        corners[5].x = bbx_max.x();
-        corners[5].y = bbx_min.y();
-        corners[5].z = bbx_max.z();
-        corners[6].x = bbx_max.x();
-        corners[6].y = bbx_max.y();
-        corners[6].z = bbx_max.z();
-        corners[7].x = bbx_min.x();
-        corners[7].y = bbx_max.y();
-        corners[7].z = bbx_max.z();
+        corners[4].x = bbx_min_transformed.x();
+        corners[4].y = bbx_min_transformed.y();
+        corners[4].z = bbx_max_transformed.z();
+        corners[5].x = bbx_max_transformed.x();
+        corners[5].y = bbx_min_transformed.y();
+        corners[5].z = bbx_max_transformed.z();
+        corners[6].x = bbx_max_transformed.x();
+        corners[6].y = bbx_max_transformed.y();
+        corners[6].z = bbx_max_transformed.z();
+        corners[7].x = bbx_min_transformed.x();
+        corners[7].y = bbx_max_transformed.y();
+        corners[7].z = bbx_max_transformed.z();
 
         // Bottom face edges (4 edges)
         bbox_marker.points.push_back(corners[0]);
@@ -938,8 +1131,22 @@ namespace husky_xarm6_mcr_nbv_planner
         const std_msgs::msg::ColorRGBA &color,
         float alpha,
         const std::string &ns,
-        const std::string &text_label)
+        const std::string &text_label,
+        const std::string &frame_id)
     {
+        // Transform point to map frame if needed
+        octomap::point3d point_transformed = point;
+        std::string source_frame = frame_id.empty() ? map_frame_ : frame_id;
+        
+        if (source_frame != map_frame_)
+        {
+            if (!transformPoint(point, source_frame, point_transformed))
+            {
+                RCLCPP_WARN(logger_, "Failed to transform point");
+                return;
+            }
+        }
+
         visualization_msgs::msg::MarkerArray marker_array;
 
         // Create point marker
@@ -951,7 +1158,7 @@ namespace husky_xarm6_mcr_nbv_planner
         marker.type = visualization_msgs::msg::Marker::SPHERE;
         marker.action = visualization_msgs::msg::Marker::ADD;
 
-        marker.pose.position = toPoint(point);
+        marker.pose.position = toPoint(point_transformed);
         marker.pose.orientation.w = 1.0;
 
         marker.scale.x = size;
@@ -984,7 +1191,7 @@ namespace husky_xarm6_mcr_nbv_planner
             text_marker.id = id;
             text_marker.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
             text_marker.action = visualization_msgs::msg::Marker::ADD;
-            text_marker.pose.position = toPoint(point);
+            text_marker.pose.position = toPoint(point_transformed);
             text_marker.pose.position.z += size; // Position text above the point
             text_marker.pose.orientation.w = 1.0;
             text_marker.scale.z = 0.05; // Text height
@@ -1005,7 +1212,8 @@ namespace husky_xarm6_mcr_nbv_planner
         double size,
         const std_msgs::msg::ColorRGBA &color,
         float alpha,
-        const std::string &ns)
+        const std::string &ns,
+        const std::string &frame_id)
     {
         if (points.empty())
         {
@@ -1031,7 +1239,7 @@ namespace husky_xarm6_mcr_nbv_planner
         std::vector<std::string> labels; // Empty labels
 
         // Call the more general function
-        publishPoints(points, colors, labels, size, alpha, ns);
+        publishPoints(points, colors, labels, size, alpha, ns, frame_id);
     }
 
     void NBVVisualizer::publishPoints(
@@ -1040,11 +1248,33 @@ namespace husky_xarm6_mcr_nbv_planner
         const std::vector<std::string> &labels,
         double size,
         float alpha,
-        const std::string &ns)
+        const std::string &ns,
+        const std::string &frame_id)
     {
         if (points.empty())
         {
             return;
+        }
+
+        // Transform points to map frame if needed
+        std::vector<octomap::point3d> transformed_points;
+        std::string source_frame = frame_id.empty() ? map_frame_ : frame_id;
+        
+        if (source_frame != map_frame_)
+        {
+            transformed_points.reserve(points.size());
+            for (const auto &pt : points)
+            {
+                octomap::point3d pt_transformed;
+                if (transformPoint(pt, source_frame, pt_transformed))
+                {
+                    transformed_points.push_back(pt_transformed);
+                }
+            }
+        }
+        else
+        {
+            transformed_points = points;
         }
 
         if (colors.size() != points.size())
@@ -1065,7 +1295,7 @@ namespace husky_xarm6_mcr_nbv_planner
         auto stamp = node_->now();
 
         // Create individual sphere markers for each point (to support per-point colors)
-        for (size_t i = 0; i < points.size(); ++i)
+        for (size_t i = 0; i < transformed_points.size(); ++i)
         {
             visualization_msgs::msg::Marker marker;
             marker.header.frame_id = map_frame_;
@@ -1074,7 +1304,7 @@ namespace husky_xarm6_mcr_nbv_planner
             marker.id = static_cast<int>(i);
             marker.type = visualization_msgs::msg::Marker::SPHERE;
             marker.action = visualization_msgs::msg::Marker::ADD;
-            marker.pose.position = toPoint(points[i]);
+            marker.pose.position = toPoint(transformed_points[i]);
             marker.pose.orientation.w = 1.0;
             marker.scale.x = size;
             marker.scale.y = size;
@@ -1093,7 +1323,7 @@ namespace husky_xarm6_mcr_nbv_planner
                 text_marker.id = static_cast<int>(i);
                 text_marker.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
                 text_marker.action = visualization_msgs::msg::Marker::ADD;
-                text_marker.pose.position = toPoint(points[i]);
+                text_marker.pose.position = toPoint(transformed_points[i]);
                 text_marker.pose.position.z += size; // Position text above point
                 text_marker.pose.orientation.w = 1.0;
                 text_marker.scale.z = 0.05; // Text height
@@ -1110,7 +1340,7 @@ namespace husky_xarm6_mcr_nbv_planner
         marker_pub_->publish(marker_array);
 
         RCLCPP_DEBUG(logger_, "Published %zu points with individual colors in namespace '%s'",
-                     points.size(), ns.c_str());
+                     transformed_points.size(), ns.c_str());
     }
 
     void NBVVisualizer::publishSemanticPoints(
@@ -1118,7 +1348,8 @@ namespace husky_xarm6_mcr_nbv_planner
         double size,
         float alpha,
         bool show_labels,
-        const std::string &ns)
+        const std::string &ns,
+        const std::string &frame_id)
     {
         if (semantic_points.empty())
         {
@@ -1148,7 +1379,7 @@ namespace husky_xarm6_mcr_nbv_planner
         }
 
         // Use the existing publishPoints function
-        publishPoints(positions, colors, labels, size, alpha, ns);
+        publishPoints(positions, colors, labels, size, alpha, ns, frame_id);
 
         RCLCPP_DEBUG(logger_, "Published %zu semantic points in namespace '%s'",
                      semantic_points.size(), ns.c_str());
@@ -1158,7 +1389,8 @@ namespace husky_xarm6_mcr_nbv_planner
         const MatchResult &match_result,
         double size,
         float alpha,
-        const std::string &ns)
+        const std::string &ns,
+        const std::string &frame_id)
     {
         // Keep track of all the gt points (correct, incorrect, both, and missed) and their labels/colors
         std::vector<SemanticPoint> correct_gt_points;
@@ -1265,7 +1497,7 @@ namespace husky_xarm6_mcr_nbv_planner
         }
 
         // Publish all the gt points with their corresponding colors
-        publishPoints(gt_points, colors, labels, size, alpha, ns);
+        publishPoints(gt_points, colors, labels, size, alpha, ns, frame_id);
     }
 
     bool NBVVisualizer::plotMetrics(

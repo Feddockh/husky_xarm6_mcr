@@ -63,21 +63,27 @@ namespace husky_xarm6_mcr_nbv_planner
         bool planAndExecute(const std::vector<double> &joint_positions);
 
         // Forward kinematics
+        // Returns pose in reference_frame (default: robot base_link)
         bool getEndEffectorPose(const std::vector<double> &joint_positions,
-                                Eigen::Isometry3d &ee_pose_out) const;
+                                Eigen::Isometry3d &ee_pose_out,
+                                const std::string &reference_frame = "") const;
 
         bool getEndEffectorPose(const std::vector<double> &joint_positions,
-                                geometry_msgs::msg::Pose &ee_pose_out) const;
+                                geometry_msgs::msg::Pose &ee_pose_out,
+                                const std::string &reference_frame = "") const;
 
         // Inverse kinematics
+        // Target pose is interpreted in reference_frame (default: robot base_link)
         std::vector<double> computeIK(const std::vector<double> &seed_positions,
                                       const geometry_msgs::msg::Pose &target_pose,
-                                      double timeout = 0.1, int attempts = 5);
+                                      double timeout = 0.1, int attempts = 5,
+                                      const std::string &reference_frame = "");
         
         std::vector<double> computeIK(const std::vector<double> &seed_positions,
                                       const Eigen::Vector3d &target_position,
                                       const std::array<double, 4> &target_orientation,
-                                      double timeout = 0.1, int attempts = 5);
+                                      double timeout = 0.1, int attempts = 5,
+                                      const std::string &reference_frame = "");
 
         // Validate IK solution by checking FK error
         bool validateIKSolution(const std::vector<double> &joint_angles,
@@ -92,15 +98,18 @@ namespace husky_xarm6_mcr_nbv_planner
                                     Eigen::Isometry3d &T_ee_cam_out) const;
 
         // Camera pose to end-effector pose
-        bool cameraPoseToEEPose(const geometry_msgs::msg::Pose &cam_pose_in_world,
+        // All poses interpreted/returned in reference_frame (default: robot base_link)
+        bool cameraPoseToEEPose(const geometry_msgs::msg::Pose &cam_pose,
                                 const std::string &camera_link,
-                                geometry_msgs::msg::Pose &ee_pose_out_world) const;
+                                geometry_msgs::msg::Pose &ee_pose_out,
+                                const std::string &reference_frame = "") const;
         
         bool cameraPoseToEEPose(const Eigen::Vector3d &cam_position,
                                 const std::array<double, 4> &cam_orientation,
                                 const std::string &camera_link,
                                 Eigen::Vector3d &ee_position_out,
-                                std::array<double, 4> &ee_orientation_out) const;
+                                std::array<double, 4> &ee_orientation_out,
+                                const std::string &reference_frame = "") const;
 
         // IK configuration
         double getIKTimeout() const;
@@ -133,6 +142,10 @@ namespace husky_xarm6_mcr_nbv_planner
         void setPoseReferenceFrame(const std::string &frame);
         std::string getEndEffectorLink() const;
         void setEndEffectorLink(const std::string &link);
+        
+        // Default reference frame for cartesian operations
+        std::string getDefaultReferenceFrame() const;
+        void setDefaultReferenceFrame(const std::string &frame);
 
         // Robot structure queries
         std::vector<std::string> getManipulatorLinks() const;
@@ -144,12 +157,16 @@ namespace husky_xarm6_mcr_nbv_planner
         bool getTransformBetweenLinks(const std::string &from_link,
                                       const std::string &to_link,
                                       Eigen::Isometry3d &transform) const;
+        
+        // Returns pose of link_name in reference_frame (default: robot base_link)
         bool getLinkPose(const std::string &link_name,
-                         geometry_msgs::msg::Pose &pose) const;
+                         geometry_msgs::msg::Pose &pose,
+                         const std::string &reference_frame = "") const;
         
         bool getLinkPose(const std::string &link_name,
                          Eigen::Vector3d &position,
-                         std::array<double, 4> &orientation) const;
+                         std::array<double, 4> &orientation,
+                         const std::string &reference_frame = "") const;
 
         // Allow access to PSM for workspace computation
         std::shared_ptr<planning_scene_monitor::PlanningSceneMonitor> getPlanningSceneMonitor() const { return psm_; }
@@ -170,6 +187,7 @@ namespace husky_xarm6_mcr_nbv_planner
         double max_acceleration_scaling_factor_{0.1};
         std::string pose_reference_frame_;
         std::string end_effector_link_;
+        std::string default_reference_frame_;  // Default for cartesian operations (initialized from robot model)
     };
 
 } // namespace husky_xarm6_mcr_nbv_planner

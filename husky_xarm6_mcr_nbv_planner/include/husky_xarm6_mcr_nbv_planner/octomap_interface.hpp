@@ -33,13 +33,17 @@ namespace husky_xarm6_mcr_nbv_planner
         // Common operations (work with both tree types)
         std::shared_ptr<octomap::AbstractOcTree> getTreeSnapshot() const;
 
+        // Points returned in specified frame (default: octomap frame)
         std::vector<octomap::point3d> findFrontiers(int min_unknown_neighbors = 1,
-                                                    bool use_bbox = false) const;
+                                                    bool use_bbox = false,
+                                                    const std::string &frame_id = "") const;
 
+        // Points accepted and returned in specified frame (default: octomap frame)
         std::vector<Cluster> kmeansCluster(const std::vector<octomap::point3d> &points,
                                            int n_clusters = 0,
                                            int max_iters = 50,
-                                           double tol = 1e-4) const;
+                                           double tol = 1e-4,
+                                           const std::string &frame_id = "") const;
 
         bool isTreeAvailable() const {
             std::shared_lock lk(mtx_);
@@ -49,16 +53,34 @@ namespace husky_xarm6_mcr_nbv_planner
             std::shared_lock lk(mtx_);
             return resolution_;
         }
-        bool getBoundingBox(octomap::point3d &min_out, octomap::point3d &max_out) const {
+        // Bounding box returned in specified frame (default: octomap frame)
+        bool getBoundingBox(octomap::point3d &min_out, octomap::point3d &max_out,
+                           const std::string &frame_id = "") const {
             if (!has_valid_bbox_) {
                 return false;
             }
-            min_out = bbox_min_;
-            max_out = bbox_max_;
+            octomap::point3d min_transformed = bbox_min_;
+            octomap::point3d max_transformed = bbox_max_;
+            
+            // Transform if different frame requested
+            std::string target_frame = frame_id.empty() ? octomap_frame_id_ : frame_id;
+            if (target_frame != octomap_frame_id_) {
+                if (!transformPoint(bbox_min_, octomap_frame_id_, target_frame, min_transformed) ||
+                    !transformPoint(bbox_max_, octomap_frame_id_, target_frame, max_transformed)) {
+                    return false;
+                }
+            }
+            
+            min_out = min_transformed;
+            max_out = max_transformed;
             return true;
         }
-        bool isVoxelOccupied(const octomap::point3d &point) const;
-        bool searchOctree(const octomap::point3d &point, octomap::OcTreeNode *&node_out) const;
+        // Point accepted in specified frame (default: octomap frame)
+        bool isVoxelOccupied(const octomap::point3d &point,
+                            const std::string &frame_id = "") const;
+        // Point accepted in specified frame (default: octomap frame)
+        bool searchOctree(const octomap::point3d &point, octomap::OcTreeNode *&node_out,
+                         const std::string &frame_id = "") const;
         int getOctreeDepth() const;
         rclcpp::Time getLastUpdateTime() const {
             std::shared_lock lk(mtx_);
@@ -79,14 +101,18 @@ namespace husky_xarm6_mcr_nbv_planner
         }
 
         // Semantic-specific operations (return false if not semantic tree)
+        // Point accepted in specified frame (default: octomap frame)
         bool getVoxelSemantic(const octomap::point3d &point,
                               int32_t &class_id,
-                              float &confidence) const;
+                              float &confidence,
+                              const std::string &frame_id = "") const;
 
+        // Points returned in specified frame (default: octomap frame)
         std::vector<octomap::point3d> findFrontiersByClass(int32_t class_id,
                                                            float min_confidence = 0.5f,
                                                            int min_unknown_neighbors = 1,
-                                                           bool use_bbox = false) const;
+                                                           bool use_bbox = false,
+                                                           const std::string &frame_id = "") const;
 
         // Get counts of occupied voxels per semantic class
         // Returns map of class_id -> count. Returns empty map if not semantic tree.
@@ -112,20 +138,24 @@ namespace husky_xarm6_mcr_nbv_planner
         /**
          * @brief Load ground truth semantic points from YAML file
          * @param yaml_file_path Path to the YAML file containing marker positions
+         * @param frame_id Frame in which ground truth points are specified (if empty, uses frame from YAML or defaults to octomap frame)
          * @return true if loaded successfully, false otherwise
          */
-        bool loadGroundTruthSemantics(const std::string &yaml_file_path);
+        bool loadGroundTruthSemantics(const std::string &yaml_file_path,
+                                     const std::string &frame_id = "");
 
         /**
          * @brief Match semantic clusters to ground truth points
          * @param clusters Vector of semantic clusters to match
          * @param threshold_radius Maximum distance between cluster centroid and ground truth point for a match
          * @param verbose If true, print detailed matching information
+         * @param frame_id Frame in which clusters are specified (default: octomap frame)
          * @return MatchResult containing correct matches, class mismatches, and unmatched points/clusters
          */
         MatchResult matchClustersToGroundTruth(const std::vector<Cluster> &clusters,
                                                double threshold_radius = 0.2,
-                                               bool verbose = false) const;
+                                               bool verbose = false,
+                                               const std::string &frame_id = "") const;
 
         /**
          * @brief Compute and print evaluation metrics from match results
@@ -138,14 +168,18 @@ namespace husky_xarm6_mcr_nbv_planner
          * @brief Evaluate semantic octomap against ground truth
          * @param threshold_radius Maximum distance between cluster centroid and ground truth point for a match
          * @param verbose If true, print detailed evaluation information
+         * @param frame_id Frame in which to perform evaluation (default: octomap frame)
          */
-        std::vector<ClassMetrics> evaluateSemanticOctomap(double threshold_radius = 0.2, bool verbose = false);
+        std::vector<ClassMetrics> evaluateSemanticOctomap(double threshold_radius = 0.2, 
+                                                          bool verbose = false,
+                                                          const std::string &frame_id = "");
 
         /**
          * @brief Get the loaded ground truth points
+         * @param frame_id Frame in which to return points (default: octomap frame)
          * @return Vector of ground truth semantic points
          */
-        const std::vector<SemanticPoint> &getGroundTruthPoints() const { return gt_points_; }
+        std::vector<SemanticPoint> getGroundTruthPoints(const std::string &frame_id = "") const;
 
         /**
          * @brief Get the frame ID of the loaded ground truth points
@@ -165,9 +199,11 @@ namespace husky_xarm6_mcr_nbv_planner
         /**
          * @brief Cluster semantic voxels by class using connected component analysis
          * @param verbose If true, print cluster statistics
+         * @param frame_id Frame in which to return clusters (default: octomap frame)
          * @return Vector of semantic clusters (excludes background class)
          */
-        std::vector<Cluster> clusterSemanticVoxels(bool verbose = false) const;
+        std::vector<Cluster> clusterSemanticVoxels(bool verbose = false,
+                                                   const std::string &frame_id = "") const;
 
         /**
          * @brief Print statistics about the current octomap
@@ -177,6 +213,19 @@ namespace husky_xarm6_mcr_nbv_planner
 
     private:
         void onOctomap(const husky_xarm6_mcr_occupancy_map::msg::CustomOctomap::SharedPtr msg);
+        
+        /**
+         * @brief Transform a point between coordinate frames using TF2
+         * @param point_in Input point
+         * @param source_frame Frame the point is currently in
+         * @param target_frame Frame to transform the point to
+         * @param point_out Output transformed point
+         * @return true if transformation successful, false otherwise
+         */
+        bool transformPoint(const octomap::point3d &point_in,
+                           const std::string &source_frame,
+                           const std::string &target_frame,
+                           octomap::point3d &point_out) const;
 
         rclcpp::Node::SharedPtr node_;
         rclcpp::Subscription<husky_xarm6_mcr_occupancy_map::msg::CustomOctomap>::SharedPtr sub_;

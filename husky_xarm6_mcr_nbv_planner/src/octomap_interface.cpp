@@ -98,16 +98,64 @@ namespace husky_xarm6_mcr_nbv_planner
             bbox_min_ = octomap::point3d(msg->bbx_min.x, msg->bbx_min.y, msg->bbx_min.z);
             bbox_max_ = octomap::point3d(msg->bbx_max.x, msg->bbx_max.y, msg->bbx_max.z);
             has_valid_bbox_ = true;
-            RCLCPP_DEBUG(node_->get_logger(), "Octomap received: type=%s, resolution=%.4f, bbox=[%.2f,%.2f,%.2f] to [%.2f,%.2f,%.2f]",
-                         msg->octomap.id.c_str(), resolution_,
+            RCLCPP_DEBUG(node_->get_logger(), "Octomap received: type=%s, frame=%s, resolution=%.4f, bbox=[%.2f,%.2f,%.2f] to [%.2f,%.2f,%.2f]",
+                         msg->octomap.id.c_str(), octomap_frame_id_.c_str(), resolution_,
                          bbox_min_.x(), bbox_min_.y(), bbox_min_.z(),
                          bbox_max_.x(), bbox_max_.y(), bbox_max_.z());
         }
         else
         {
             has_valid_bbox_ = false;
-            RCLCPP_DEBUG(node_->get_logger(), "Octomap received: type=%s, resolution=%.4f (no bounding box)",
-                         msg->octomap.id.c_str(), resolution_);
+            RCLCPP_DEBUG(node_->get_logger(), "Octomap received: type=%s, frame=%s, resolution=%.4f (no bounding box)",
+                         msg->octomap.id.c_str(), octomap_frame_id_.c_str(), resolution_);
+        }
+    }
+
+    bool OctoMapInterface::transformPoint(const octomap::point3d &point_in,
+                                          const std::string &source_frame,
+                                          const std::string &target_frame,
+                                          octomap::point3d &point_out) const
+    {
+        if (source_frame.empty() || target_frame.empty())
+        {
+            RCLCPP_WARN(node_->get_logger(), "Transform called with empty frame ID");
+            point_out = point_in;
+            return false;
+        }
+
+        if (source_frame == target_frame)
+        {
+            point_out = point_in;
+            return true;
+        }
+
+        try
+        {
+            geometry_msgs::msg::TransformStamped transform_stamped = 
+                tf_buffer_->lookupTransform(target_frame, source_frame, tf2::TimePointZero);
+            
+            geometry_msgs::msg::PointStamped point_stamped_in, point_stamped_out;
+            point_stamped_in.header.frame_id = source_frame;
+            point_stamped_in.point.x = point_in.x();
+            point_stamped_in.point.y = point_in.y();
+            point_stamped_in.point.z = point_in.z();
+            
+            tf2::doTransform(point_stamped_in, point_stamped_out, transform_stamped);
+            
+            point_out = octomap::point3d(
+                point_stamped_out.point.x,
+                point_stamped_out.point.y,
+                point_stamped_out.point.z);
+            
+            return true;
+        }
+        catch (const tf2::TransformException& ex)
+        {
+            RCLCPP_WARN(node_->get_logger(), 
+                "Failed to transform point from '%s' to '%s': %s",
+                source_frame.c_str(), target_frame.c_str(), ex.what());
+            point_out = point_in;
+            return false;
         }
     }
 
@@ -120,13 +168,26 @@ namespace husky_xarm6_mcr_nbv_planner
 
     bool OctoMapInterface::getVoxelSemantic(const octomap::point3d &point,
                                             int32_t &class_id,
-                                            float &confidence) const
+                                            float &confidence,
+                                            const std::string &frame_id) const
     {
         auto sem_tree = getSemanticTree();
         if (!sem_tree)
             return false;
 
-        octomap::SemanticOcTreeNode *node = sem_tree->search(point);
+        // Transform point to octomap frame if necessary
+        std::string target_frame = frame_id.empty() ? octomap_frame_id_ : frame_id;
+        octomap::point3d point_in_octomap = point;
+        
+        if (target_frame != octomap_frame_id_)
+        {
+            if (!transformPoint(point, target_frame, octomap_frame_id_, point_in_octomap))
+            {
+                return false;
+            }
+        }
+
+        octomap::SemanticOcTreeNode *node = sem_tree->search(point_in_octomap);
         if (!node)
             return false;
 
@@ -139,7 +200,8 @@ namespace husky_xarm6_mcr_nbv_planner
         int32_t class_id,
         float min_confidence,
         int min_unknown_neighbors,
-        bool use_bbox) const
+        bool use_bbox,
+        const std::string &frame_id) const
     {
         std::vector<octomap::point3d> filtered;
 
@@ -150,8 +212,8 @@ namespace husky_xarm6_mcr_nbv_planner
             return filtered;
         }
 
-        // Get all frontiers first
-        auto frontiers = findFrontiers(min_unknown_neighbors, use_bbox);
+        // Get all frontiers first (in octomap frame)
+        auto frontiers = findFrontiers(min_unknown_neighbors, use_bbox, "");
 
         // Filter by semantic class
         for (const auto &pt : frontiers)
@@ -163,6 +225,24 @@ namespace husky_xarm6_mcr_nbv_planner
             {
                 filtered.push_back(pt);
             }
+        }
+
+        // Transform to requested frame if different from octomap frame
+        std::string target_frame = frame_id.empty() ? octomap_frame_id_ : frame_id;
+        if (target_frame != octomap_frame_id_)
+        {
+            std::vector<octomap::point3d> transformed_filtered;
+            transformed_filtered.reserve(filtered.size());
+            
+            for (const auto &pt : filtered)
+            {
+                octomap::point3d pt_transformed;
+                if (transformPoint(pt, octomap_frame_id_, target_frame, pt_transformed))
+                {
+                    transformed_filtered.push_back(pt_transformed);
+                }
+            }
+            return transformed_filtered;
         }
 
         return filtered;
@@ -192,7 +272,8 @@ namespace husky_xarm6_mcr_nbv_planner
     }
 
     std::vector<octomap::point3d> OctoMapInterface::findFrontiers(int min_unknown_neighbors,
-                                                                  bool use_bbox) const
+                                                                  bool use_bbox,
+                                                                  const std::string &frame_id) const
     {
         std::vector<octomap::point3d> frontiers;
 
@@ -290,6 +371,24 @@ namespace husky_xarm6_mcr_nbv_planner
                 }
             } }, tree_);
 
+        // Transform to requested frame if different from octomap frame
+        std::string target_frame = frame_id.empty() ? octomap_frame_id_ : frame_id;
+        if (target_frame != octomap_frame_id_)
+        {
+            std::vector<octomap::point3d> transformed_frontiers;
+            transformed_frontiers.reserve(frontiers.size());
+            
+            for (const auto &pt : frontiers)
+            {
+                octomap::point3d pt_transformed;
+                if (transformPoint(pt, octomap_frame_id_, target_frame, pt_transformed))
+                {
+                    transformed_frontiers.push_back(pt_transformed);
+                }
+            }
+            return transformed_frontiers;
+        }
+
         return frontiers;
     }
 
@@ -304,36 +403,63 @@ namespace husky_xarm6_mcr_nbv_planner
     std::vector<Cluster> OctoMapInterface::kmeansCluster(const std::vector<octomap::point3d> &points,
                                                          int n_clusters,
                                                          int max_iters,
-                                                         double tol) const
+                                                         double tol,
+                                                         const std::string &frame_id) const
     {
         std::vector<Cluster> clusters;
         const int N = static_cast<int>(points.size());
         if (N == 0)
             return clusters;
 
+        // Determine the frame the points are in
+        std::string input_frame = frame_id.empty() ? octomap_frame_id_ : frame_id;
+        
+        // Transform points to octomap frame if needed
+        std::vector<octomap::point3d> points_in_octomap_frame;
+        if (input_frame != octomap_frame_id_)
+        {
+            points_in_octomap_frame.reserve(points.size());
+            for (const auto &pt : points)
+            {
+                octomap::point3d pt_transformed;
+                if (transformPoint(pt, input_frame, octomap_frame_id_, pt_transformed))
+                {
+                    points_in_octomap_frame.push_back(pt_transformed);
+                }
+            }
+        }
+        else
+        {
+            points_in_octomap_frame = points;
+        }
+
+        const int N_transformed = static_cast<int>(points_in_octomap_frame.size());
+        if (N_transformed == 0)
+            return clusters;
+
         // Heuristic: ~1 cluster per 50 points
         if (n_clusters <= 0)
-            n_clusters = std::max(1, N / 50);
+            n_clusters = std::max(1, N_transformed / 50);
 
-        const int K = std::min(n_clusters, N);
+        const int K = std::min(n_clusters, N_transformed);
 
         // Working data structures for k-means algorithm
-        std::vector<int> labels(N, -1);
+        std::vector<int> labels(N_transformed, -1);
         std::vector<octomap::point3d> centers(K);
         std::vector<int> sizes(K, 0);
 
         // K-means++ initialization for faster convergence
         std::mt19937 rng(42); // Deterministic seed
-        centers[0] = points[rng() % N];
+        centers[0] = points_in_octomap_frame[rng() % N_transformed];
 
         for (int k = 1; k < K; ++k)
         {
-            std::vector<double> min_dists(N, std::numeric_limits<double>::infinity());
+            std::vector<double> min_dists(N_transformed, std::numeric_limits<double>::infinity());
 
             // Update min distances to existing centers
-            for (int i = 0; i < N; ++i)
+            for (int i = 0; i < N_transformed; ++i)
             {
-                double d = sqdist(points[i], centers[k - 1]);
+                double d = sqdist(points_in_octomap_frame[i], centers[k - 1]);
                 min_dists[i] = std::min(min_dists[i], d);
             }
 
@@ -343,12 +469,12 @@ namespace husky_xarm6_mcr_nbv_planner
             double target = dist(rng);
 
             double cumsum = 0.0;
-            for (int i = 0; i < N; ++i)
+            for (int i = 0; i < N_transformed; ++i)
             {
                 cumsum += min_dists[i];
                 if (cumsum >= target)
                 {
-                    centers[k] = points[i];
+                    centers[k] = points_in_octomap_frame[i];
                     break;
                 }
             }
@@ -367,14 +493,14 @@ namespace husky_xarm6_mcr_nbv_planner
             std::fill(sum_z.begin(), sum_z.end(), 0.0);
 
             // Assignment step: assign each point to nearest center
-            for (int i = 0; i < N; ++i)
+            for (int i = 0; i < N_transformed; ++i)
             {
                 int best_k = 0;
-                double best_d = sqdist(points[i], centers[0]);
+                double best_d = sqdist(points_in_octomap_frame[i], centers[0]);
 
                 for (int k = 1; k < K; ++k)
                 {
-                    double d = sqdist(points[i], centers[k]);
+                    double d = sqdist(points_in_octomap_frame[i], centers[k]);
                     if (d < best_d)
                     {
                         best_d = d;
@@ -384,9 +510,9 @@ namespace husky_xarm6_mcr_nbv_planner
 
                 labels[i] = best_k;
                 sizes[best_k]++;
-                sum_x[best_k] += points[i].x();
-                sum_y[best_k] += points[i].y();
-                sum_z[best_k] += points[i].z();
+                sum_x[best_k] += points_in_octomap_frame[i].x();
+                sum_y[best_k] += points_in_octomap_frame[i].y();
+                sum_z[best_k] += points_in_octomap_frame[i].z();
             }
 
             // Update step: recompute centers and check convergence
@@ -417,39 +543,96 @@ namespace husky_xarm6_mcr_nbv_planner
         }
 
         // Populate points for each cluster
-        for (int i = 0; i < N; ++i)
+        for (int i = 0; i < N_transformed; ++i)
         {
-            clusters[labels[i]].points.push_back(points[i]);
+            clusters[labels[i]].points.push_back(points_in_octomap_frame[i]);
+        }
+
+        // Transform back to input frame if needed
+        if (input_frame != octomap_frame_id_)
+        {
+            for (auto &cluster : clusters)
+            {
+                // Transform center
+                octomap::point3d center_transformed;
+                if (transformPoint(cluster.center, octomap_frame_id_, input_frame, center_transformed))
+                {
+                    cluster.center = center_transformed;
+                }
+                
+                // Transform points
+                std::vector<octomap::point3d> points_transformed;
+                points_transformed.reserve(cluster.points.size());
+                for (const auto &pt : cluster.points)
+                {
+                    octomap::point3d pt_transformed;
+                    if (transformPoint(pt, octomap_frame_id_, input_frame, pt_transformed))
+                    {
+                        points_transformed.push_back(pt_transformed);
+                    }
+                }
+                cluster.points = points_transformed;
+                cluster.size = static_cast<int>(cluster.points.size());
+            }
         }
 
         return clusters;
     }
 
-    bool OctoMapInterface::isVoxelOccupied(const octomap::point3d &point) const
+    bool OctoMapInterface::isVoxelOccupied(const octomap::point3d &point,
+                                           const std::string &frame_id) const
     {
         std::shared_lock lk(mtx_);
 
-        return std::visit([&point](auto &&tree) -> bool
+        // Determine source frame
+        std::string source_frame = frame_id.empty() ? octomap_frame_id_ : frame_id;
+        
+        // Transform point to octomap frame if needed
+        octomap::point3d point_in_octomap_frame = point;
+        if (source_frame != octomap_frame_id_)
+        {
+            if (!transformPoint(point, source_frame, octomap_frame_id_, point_in_octomap_frame))
+            {
+                return false;
+            }
+        }
+
+        return std::visit([&point_in_octomap_frame](auto &&tree) -> bool
                           {
             if (!tree)
                 return false;
-            auto *node = tree->search(point);
+            auto *node = tree->search(point_in_octomap_frame);
             return node != nullptr && tree->isNodeOccupied(node); }, tree_);
     }
 
     bool OctoMapInterface::searchOctree(const octomap::point3d &point,
-                                        octomap::OcTreeNode *&node_out) const
+                                        octomap::OcTreeNode *&node_out,
+                                        const std::string &frame_id) const
     {
         std::shared_lock lk(mtx_);
 
-        return std::visit([&point, &node_out](auto &&tree) -> bool
+        // Determine source frame
+        std::string source_frame = frame_id.empty() ? octomap_frame_id_ : frame_id;
+        
+        // Transform point to octomap frame if needed
+        octomap::point3d point_in_octomap_frame = point;
+        if (source_frame != octomap_frame_id_)
+        {
+            if (!transformPoint(point, source_frame, octomap_frame_id_, point_in_octomap_frame))
+            {
+                node_out = nullptr;
+                return false;
+            }
+        }
+
+        return std::visit([&point_in_octomap_frame, &node_out](auto &&tree) -> bool
                           {
             if (!tree)
             {
                 node_out = nullptr;
                 return false;
             }
-            node_out = tree->search(point);
+            node_out = tree->search(point_in_octomap_frame);
             return node_out != nullptr; }, tree_);
     }
 
@@ -464,7 +647,8 @@ namespace husky_xarm6_mcr_nbv_planner
             return static_cast<int>(tree->getTreeDepth()); }, tree_);
     }
 
-    bool OctoMapInterface::loadGroundTruthSemantics(const std::string &yaml_file_path)
+    bool OctoMapInterface::loadGroundTruthSemantics(const std::string &yaml_file_path,
+                                                    const std::string &frame_id)
     {
         try
         {
@@ -478,16 +662,21 @@ namespace husky_xarm6_mcr_nbv_planner
                 return false;
             }
 
-            // Read frame_id if present
-            if (config["frame_id"])
+            // Read frame_id from YAML if present, or use parameter
+            if (!frame_id.empty())
+            {
+                gt_frame_id_ = frame_id;
+                RCLCPP_INFO(node_->get_logger(), "Using specified ground truth frame_id: %s", gt_frame_id_.c_str());
+            }
+            else if (config["frame_id"])
             {
                 gt_frame_id_ = config["frame_id"].as<std::string>();
-                RCLCPP_INFO(node_->get_logger(), "Ground truth frame_id: %s", gt_frame_id_.c_str());
+                RCLCPP_INFO(node_->get_logger(), "Ground truth frame_id from YAML: %s", gt_frame_id_.c_str());
             }
             else
             {
-                RCLCPP_WARN(node_->get_logger(), "No 'frame_id' field in YAML, frame consistency cannot be verified");
-                gt_frame_id_ = "";
+                RCLCPP_WARN(node_->get_logger(), "No 'frame_id' field in YAML or parameter, using octomap frame");
+                gt_frame_id_ = octomap_frame_id_;
             }
 
             gt_points_.clear();
@@ -542,7 +731,8 @@ namespace husky_xarm6_mcr_nbv_planner
         }
     }
 
-    std::vector<Cluster> OctoMapInterface::clusterSemanticVoxels(bool verbose) const
+    std::vector<Cluster> OctoMapInterface::clusterSemanticVoxels(bool verbose,
+                                                                 const std::string &frame_id) const
     {
         std::vector<Cluster> clusters;
 
@@ -641,6 +831,35 @@ namespace husky_xarm6_mcr_nbv_planner
             }
         }
 
+        // Transform to requested frame if different from octomap frame
+        std::string target_frame = frame_id.empty() ? octomap_frame_id_ : frame_id;
+        if (target_frame != octomap_frame_id_)
+        {
+            for (auto &cluster : clusters)
+            {
+                // Transform center
+                octomap::point3d center_transformed;
+                if (transformPoint(cluster.center, octomap_frame_id_, target_frame, center_transformed))
+                {
+                    cluster.center = center_transformed;
+                }
+                
+                // Transform points
+                std::vector<octomap::point3d> points_transformed;
+                points_transformed.reserve(cluster.points.size());
+                for (const auto &pt : cluster.points)
+                {
+                    octomap::point3d pt_transformed;
+                    if (transformPoint(pt, octomap_frame_id_, target_frame, pt_transformed))
+                    {
+                        points_transformed.push_back(pt_transformed);
+                    }
+                }
+                cluster.points = points_transformed;
+                cluster.size = static_cast<int>(cluster.points.size());
+            }
+        }
+
         if (verbose)
         {
             RCLCPP_INFO(node_->get_logger(), "Found %zu semantic clusters", clusters.size());
@@ -663,7 +882,8 @@ namespace husky_xarm6_mcr_nbv_planner
 
     MatchResult OctoMapInterface::matchClustersToGroundTruth(const std::vector<Cluster> &clusters,
                                                              double threshold_radius,
-                                                             bool verbose) const
+                                                             bool verbose,
+                                                             const std::string &frame_id) const
     {
         MatchResult result;
 
@@ -676,11 +896,46 @@ namespace husky_xarm6_mcr_nbv_planner
             return result;
         }
 
+        // Determine the frame clusters are in
+        std::string cluster_frame = frame_id.empty() ? octomap_frame_id_ : frame_id;
+
         // Get octomap frame (need to copy since we're const)
         std::string octomap_frame;
         {
             std::shared_lock lk(mtx_);
             octomap_frame = octomap_frame_id_;
+        }
+
+        // Transform clusters to octomap frame if necessary
+        std::vector<Cluster> transformed_clusters = clusters;
+        if (cluster_frame != octomap_frame)
+        {
+            RCLCPP_INFO(node_->get_logger(),
+                "Transforming clusters from frame '%s' to octomap frame '%s'",
+                cluster_frame.c_str(), octomap_frame.c_str());
+            
+            for (auto &cluster : transformed_clusters)
+            {
+                // Transform center
+                octomap::point3d center_transformed;
+                if (transformPoint(cluster.center, cluster_frame, octomap_frame, center_transformed))
+                {
+                    cluster.center = center_transformed;
+                }
+                
+                // Transform points
+                std::vector<octomap::point3d> points_transformed;
+                points_transformed.reserve(cluster.points.size());
+                for (const auto &pt : cluster.points)
+                {
+                    octomap::point3d pt_transformed;
+                    if (transformPoint(pt, cluster_frame, octomap_frame, pt_transformed))
+                    {
+                        points_transformed.push_back(pt_transformed);
+                    }
+                }
+                cluster.points = points_transformed;
+            }
         }
 
         // Transform GT points to octomap frame if necessary
@@ -748,7 +1003,7 @@ namespace husky_xarm6_mcr_nbv_planner
         if (verbose)
         {
             RCLCPP_INFO(node_->get_logger(), "Matching %zu clusters to %zu ground truth points (threshold: %.3f m)",
-                        clusters.size(), transformed_gt_points.size(), threshold_radius);
+                        transformed_clusters.size(), transformed_gt_points.size(), threshold_radius);
         }
 
         double threshold_sq = threshold_radius * threshold_radius;
@@ -765,9 +1020,9 @@ namespace husky_xarm6_mcr_nbv_planner
             std::vector<double> mismatching_class_distances;
 
             // Find all clusters within threshold of this GT point
-            for (size_t i = 0; i < clusters.size(); ++i)
+            for (size_t i = 0; i < transformed_clusters.size(); ++i)
             {
-                const auto &cluster = clusters[i];
+                const auto &cluster = transformed_clusters[i];
                 double dist_sq = sqdist(cluster.center, gt_point.position);
 
                 if (dist_sq <= threshold_sq)
@@ -1079,7 +1334,9 @@ namespace husky_xarm6_mcr_nbv_planner
         RCLCPP_INFO(node_->get_logger(), "==========================\n");
     }
 
-    std::vector<ClassMetrics> OctoMapInterface::evaluateSemanticOctomap(double threshold_radius, bool verbose)
+    std::vector<ClassMetrics> OctoMapInterface::evaluateSemanticOctomap(double threshold_radius, 
+                                                                        bool verbose,
+                                                                        const std::string &frame_id)
     {
         if (!isSemanticTree())
         {
@@ -1101,13 +1358,75 @@ namespace husky_xarm6_mcr_nbv_planner
         }
 
         // Step 1: Cluster semantic voxels by class
-        auto clusters = clusterSemanticVoxels(verbose);
+        auto clusters = clusterSemanticVoxels(verbose, frame_id);
 
         // Step 2: Match clusters to ground truth
-        auto match_result = matchClustersToGroundTruth(clusters, threshold_radius, verbose);
+        auto match_result = matchClustersToGroundTruth(clusters, threshold_radius, verbose, frame_id);
 
         // Step 3: Evaluate and print metrics
         return evaluateMatchResults(match_result, verbose);
+    }
+
+    std::vector<SemanticPoint> OctoMapInterface::getGroundTruthPoints(const std::string &frame_id) const
+    {
+        if (gt_points_.empty())
+        {
+            return {};
+        }
+
+        // Determine target frame
+        std::string target_frame = frame_id.empty() ? octomap_frame_id_ : frame_id;
+
+        // If target frame is same as ground truth frame, return directly
+        if (target_frame == gt_frame_id_)
+        {
+            return gt_points_;
+        }
+
+        // Transform ground truth points to target frame
+        std::vector<SemanticPoint> transformed_points = gt_points_;
+        
+        if (!gt_frame_id_.empty() && !target_frame.empty())
+        {
+            if (gt_frame_id_ != target_frame)
+            {
+                try
+                {
+                    // Get transform from GT frame to target frame
+                    geometry_msgs::msg::TransformStamped transform_stamped = 
+                        tf_buffer_->lookupTransform(target_frame, gt_frame_id_, 
+                                                   tf2::TimePointZero);
+                    
+                    // Transform each GT point
+                    for (auto& gt_point : transformed_points)
+                    {
+                        geometry_msgs::msg::PointStamped point_in, point_out;
+                        point_in.header.frame_id = gt_frame_id_;
+                        point_in.point.x = gt_point.position.x();
+                        point_in.point.y = gt_point.position.y();
+                        point_in.point.z = gt_point.position.z();
+                        
+                        tf2::doTransform(point_in, point_out, transform_stamped);
+                        
+                        gt_point.position = octomap::point3d(
+                            point_out.point.x,
+                            point_out.point.y,
+                            point_out.point.z);
+                    }
+                }
+                catch (const tf2::TransformException& ex)
+                {
+                    RCLCPP_ERROR(node_->get_logger(), 
+                        "Failed to transform ground truth points from '%s' to '%s': %s. "
+                        "Returning points in original frame.",
+                        gt_frame_id_.c_str(), target_frame.c_str(), ex.what());
+                    // Return original points if transform fails
+                    return gt_points_;
+                }
+            }
+        }
+
+        return transformed_points;
     }
 
 }

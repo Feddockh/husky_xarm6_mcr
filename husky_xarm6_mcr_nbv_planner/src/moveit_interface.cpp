@@ -65,6 +65,23 @@ namespace husky_xarm6_mcr_nbv_planner
             move_group_->setMaxVelocityScalingFactor(max_velocity_scaling_factor_);
             move_group_->setMaxAccelerationScalingFactor(max_acceleration_scaling_factor_);
         }
+        
+        // Initialize default reference frame from robot model
+        if (isPSMValid(false))
+        {
+            planning_scene_monitor::LockedPlanningSceneRO scene(psm_);
+            const moveit::core::RobotModelConstPtr &robot_model = scene->getRobotModel();
+            if (robot_model)
+            {
+                default_reference_frame_ = robot_model->getRootLinkName();
+                RCLCPP_INFO(node_->get_logger(), "Default reference frame set to robot root link: '%s'",
+                           default_reference_frame_.c_str());
+            }
+            else
+            {
+                RCLCPP_WARN(node_->get_logger(), "Could not get robot model, default reference frame not set");
+            }
+        }
     }
 
     bool MoveItInterface::isPSMValid(bool verbose) const
@@ -216,7 +233,8 @@ namespace husky_xarm6_mcr_nbv_planner
 
     std::vector<double> MoveItInterface::computeIK(const std::vector<double> &seed_positions,
                                                    const geometry_msgs::msg::Pose &target_pose,
-                                                   double timeout, int attempts)
+                                                   double timeout, int attempts,
+                                                   const std::string &reference_frame)
     {
         std::vector<double> ik_solution;
 
@@ -233,8 +251,19 @@ namespace husky_xarm6_mcr_nbv_planner
         state.setJointGroupPositions(jmg.get(), seed_positions);
         state.update();
 
+        // Convert target pose to Eigen
         Eigen::Isometry3d target_eigen;
         tf2::fromMsg(target_pose, target_eigen);
+        
+        // Determine the reference frame to use
+        std::string ref_frame = reference_frame.empty() ? default_reference_frame_ : reference_frame;
+        
+        // If a specific reference frame is provided, transform the target pose
+        if (!ref_frame.empty() && state.knowsFrameTransform(ref_frame))
+        {
+            const Eigen::Isometry3d T_world_ref = state.getGlobalLinkTransform(ref_frame);
+            target_eigen = T_world_ref * target_eigen;
+        }
 
         const std::string &ee_link = jmg->getLinkModelNames().back();
 
@@ -255,7 +284,8 @@ namespace husky_xarm6_mcr_nbv_planner
             if (!res.collision)
             {
                 state.copyJointGroupPositions(jmg.get(), ik_solution);
-                RCLCPP_DEBUG(node_->get_logger(), "IK solution found (collision-free).");
+                RCLCPP_DEBUG(node_->get_logger(), "IK solution found (collision-free) for frame '%s'.", 
+                            ref_frame.c_str());
             }
             else
             {
@@ -264,7 +294,7 @@ namespace husky_xarm6_mcr_nbv_planner
         }
         else
         {
-            RCLCPP_DEBUG(node_->get_logger(), "IK solution not found.");
+            RCLCPP_DEBUG(node_->get_logger(), "IK solution not found for frame '%s'.", ref_frame.c_str());
         }
 
         return ik_solution;
@@ -273,7 +303,8 @@ namespace husky_xarm6_mcr_nbv_planner
     std::vector<double> MoveItInterface::computeIK(const std::vector<double> &seed_positions,
                                                    const Eigen::Vector3d &target_position,
                                                    const std::array<double, 4> &target_orientation,
-                                                   double timeout, int attempts)
+                                                   double timeout, int attempts,
+                                                   const std::string &reference_frame)
     {
         // Convert Eigen types to geometry_msgs::Pose
         geometry_msgs::msg::Pose target_pose;
@@ -285,11 +316,12 @@ namespace husky_xarm6_mcr_nbv_planner
         target_pose.orientation.z = target_orientation[2];
         target_pose.orientation.w = target_orientation[3];
         
-        return computeIK(seed_positions, target_pose, timeout, attempts);
+        return computeIK(seed_positions, target_pose, timeout, attempts, reference_frame);
     }
 
     bool MoveItInterface::getEndEffectorPose(const std::vector<double> &joint_positions,
-                                             Eigen::Isometry3d &ee_pose_out) const
+                                             Eigen::Isometry3d &ee_pose_out,
+                                             const std::string &reference_frame) const
     {
         if (!isMoveGroupValid(false))
         {
@@ -307,17 +339,33 @@ namespace husky_xarm6_mcr_nbv_planner
         }
 
         current_state->setJointGroupPositions(jmg, joint_positions);
-        const Eigen::Isometry3d &pose = current_state->getGlobalLinkTransform(move_group_->getEndEffectorLink());
-        ee_pose_out = pose;
+        current_state->update();
+        
+        const Eigen::Isometry3d &pose_world = current_state->getGlobalLinkTransform(move_group_->getEndEffectorLink());
+        
+        // Determine the reference frame to use
+        std::string ref_frame = reference_frame.empty() ? default_reference_frame_ : reference_frame;
+        
+        // If a specific reference frame is provided, transform the pose
+        if (!ref_frame.empty() && current_state->knowsFrameTransform(ref_frame))
+        {
+            const Eigen::Isometry3d T_world_ref = current_state->getGlobalLinkTransform(ref_frame);
+            ee_pose_out = T_world_ref.inverse() * pose_world;
+        }
+        else
+        {
+            ee_pose_out = pose_world;
+        }
 
         return true;
     }
 
     bool MoveItInterface::getEndEffectorPose(const std::vector<double> &joint_positions,
-                                             geometry_msgs::msg::Pose &ee_pose_out) const
+                                             geometry_msgs::msg::Pose &ee_pose_out,
+                                             const std::string &reference_frame) const
     {
         Eigen::Isometry3d pose_eigen;
-        if (!getEndEffectorPose(joint_positions, pose_eigen))
+        if (!getEndEffectorPose(joint_positions, pose_eigen, reference_frame))
         {
             return false;
         }
@@ -396,9 +444,10 @@ namespace husky_xarm6_mcr_nbv_planner
         return true;
     }
 
-    bool MoveItInterface::cameraPoseToEEPose(const geometry_msgs::msg::Pose &cam_pose_in_world,
+    bool MoveItInterface::cameraPoseToEEPose(const geometry_msgs::msg::Pose &cam_pose,
                                              const std::string &camera_link,
-                                             geometry_msgs::msg::Pose &ee_pose_out_world) const
+                                             geometry_msgs::msg::Pose &ee_pose_out,
+                                             const std::string &reference_frame) const
     {
         Eigen::Isometry3d T_ee_cam;
         if (!getEEToCameraTransform(camera_link, T_ee_cam))
@@ -406,11 +455,34 @@ namespace husky_xarm6_mcr_nbv_planner
             return false;
         }
 
-        Eigen::Isometry3d T_world_cam;
-        tf2::fromMsg(cam_pose_in_world, T_world_cam);
-
-        const Eigen::Isometry3d T_world_ee = T_world_cam * T_ee_cam.inverse();
-        ee_pose_out_world = tf2::toMsg(T_world_ee);
+        Eigen::Isometry3d T_ref_cam;
+        tf2::fromMsg(cam_pose, T_ref_cam);
+        
+        // Determine the reference frame to use
+        std::string ref_frame = reference_frame.empty() ? default_reference_frame_ : reference_frame;
+        
+        // If a specific reference frame is provided, we need to transform to world frame first
+        if (!ref_frame.empty() && isPSMValid(false))
+        {
+            planning_scene_monitor::LockedPlanningSceneRO scene(psm_);
+            const moveit::core::RobotState &state = scene->getCurrentState();
+            
+            if (state.knowsFrameTransform(ref_frame))
+            {
+                const Eigen::Isometry3d T_world_ref = state.getGlobalLinkTransform(ref_frame);
+                const Eigen::Isometry3d T_world_cam = T_world_ref * T_ref_cam;
+                const Eigen::Isometry3d T_world_ee = T_world_cam * T_ee_cam.inverse();
+                
+                // Transform back to reference frame
+                const Eigen::Isometry3d T_ref_ee = T_world_ref.inverse() * T_world_ee;
+                ee_pose_out = tf2::toMsg(T_ref_ee);
+                return true;
+            }
+        }
+        
+        // No frame transform needed, cam_pose is already in world frame
+        const Eigen::Isometry3d T_world_ee = T_ref_cam * T_ee_cam.inverse();
+        ee_pose_out = tf2::toMsg(T_world_ee);
         return true;
     }
 
@@ -418,7 +490,8 @@ namespace husky_xarm6_mcr_nbv_planner
                                              const std::array<double, 4> &cam_orientation,
                                              const std::string &camera_link,
                                              Eigen::Vector3d &ee_position_out,
-                                             std::array<double, 4> &ee_orientation_out) const
+                                             std::array<double, 4> &ee_orientation_out,
+                                             const std::string &reference_frame) const
     {
         // Convert Eigen types to geometry_msgs::Pose
         geometry_msgs::msg::Pose cam_pose;
@@ -431,7 +504,7 @@ namespace husky_xarm6_mcr_nbv_planner
         cam_pose.orientation.w = cam_orientation[3];
         
         geometry_msgs::msg::Pose ee_pose;
-        if (!cameraPoseToEEPose(cam_pose, camera_link, ee_pose))
+        if (!cameraPoseToEEPose(cam_pose, camera_link, ee_pose, reference_frame))
         {
             return false;
         }
@@ -624,6 +697,18 @@ namespace husky_xarm6_mcr_nbv_planner
         }
     }
 
+    // Default reference frame for cartesian operations
+    std::string MoveItInterface::getDefaultReferenceFrame() const
+    {
+        return default_reference_frame_;
+    }
+
+    void MoveItInterface::setDefaultReferenceFrame(const std::string &frame)
+    {
+        default_reference_frame_ = frame;
+        RCLCPP_INFO(node_->get_logger(), "Set default reference frame to: %s", frame.c_str());
+    }
+
     // Robot structure queries
     std::vector<std::string> MoveItInterface::getManipulatorLinks() const
     {
@@ -716,7 +801,8 @@ namespace husky_xarm6_mcr_nbv_planner
     }
 
     bool MoveItInterface::getLinkPose(const std::string &link_name,
-                                      geometry_msgs::msg::Pose &pose) const
+                                      geometry_msgs::msg::Pose &pose,
+                                      const std::string &reference_frame) const
     {
         if (!isPSMValid(false))
             return false;
@@ -730,18 +816,33 @@ namespace husky_xarm6_mcr_nbv_planner
             return false;
         }
 
-        const Eigen::Isometry3d &transform = state.getGlobalLinkTransform(link_name);
-        pose = tf2::toMsg(transform);
+        const Eigen::Isometry3d &pose_world = state.getGlobalLinkTransform(link_name);
+        
+        // Determine the reference frame to use
+        std::string ref_frame = reference_frame.empty() ? default_reference_frame_ : reference_frame;
+        
+        // If a specific reference frame is provided, transform the pose
+        if (!ref_frame.empty() && state.knowsFrameTransform(ref_frame))
+        {
+            const Eigen::Isometry3d T_world_ref = state.getGlobalLinkTransform(ref_frame);
+            const Eigen::Isometry3d pose_in_ref = T_world_ref.inverse() * pose_world;
+            pose = tf2::toMsg(pose_in_ref);
+        }
+        else
+        {
+            pose = tf2::toMsg(pose_world);
+        }
 
         return true;
     }
 
     bool MoveItInterface::getLinkPose(const std::string &link_name,
                                       Eigen::Vector3d &position,
-                                      std::array<double, 4> &orientation) const
+                                      std::array<double, 4> &orientation,
+                                      const std::string &reference_frame) const
     {
         geometry_msgs::msg::Pose pose;
-        if (!getLinkPose(link_name, pose))
+        if (!getLinkPose(link_name, pose, reference_frame))
         {
             return false;
         }

@@ -10,8 +10,13 @@
 #include <visualization_msgs/msg/marker.hpp>
 #include <geometry_msgs/msg/point.hpp>
 #include <geometry_msgs/msg/pose.hpp>
+#include <geometry_msgs/msg/point_stamped.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
 #include <std_msgs/msg/color_rgba.hpp>
 #include <octomap/octomap.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include "husky_xarm6_mcr_nbv_planner/nbv_types.hpp"
 #include "husky_xarm6_mcr_nbv_planner/viewpoint.hpp"
 
@@ -53,13 +58,15 @@ namespace husky_xarm6_mcr_nbv_planner
          * @param color RGBA color for all voxels
          * @param alpha Alpha value for transparency (default: 0.85)
          * @param ns Namespace for the markers (default: "voxels")
+         * @param frame_id Frame ID for input voxels (default: empty = map_frame)
          */
         void publishVoxels(
             const std::vector<octomap::point3d> &voxels,
             double voxel_size,
             const std_msgs::msg::ColorRGBA &color,
             float alpha = 0.85f,
-            const std::string &ns = "voxels");
+            const std::string &ns = "voxels",
+            const std::string &frame_id = "");
 
         /**
          * @brief Publish voxels with individual colors per voxel
@@ -68,13 +75,15 @@ namespace husky_xarm6_mcr_nbv_planner
          * @param colors Vector of colors (must match size of voxels)
          * @param alpha Alpha value for transparency (default: 0.85)
          * @param ns Namespace for the markers (default: "voxels")
+         * @param frame_id Frame ID for input voxels (default: empty = map_frame)
          */
         void publishVoxels(
             const std::vector<octomap::point3d> &voxels,
             double voxel_size,
             const std::vector<std_msgs::msg::ColorRGBA> &colors,
             float alpha = 0.85f,
-            const std::string &ns = "voxels");
+            const std::string &ns = "voxels",
+            const std::string &frame_id = "");
 
         /**
          * @brief Publish clustered voxels with per-cluster colors
@@ -83,13 +92,15 @@ namespace husky_xarm6_mcr_nbv_planner
          * @param plot_centers Whether to plot cluster centers as small 0.1 diameter spheres
          * @param alpha Alpha value for transparency (default: 0.85)
          * @param ns Namespace for the markers (default: "clustered_voxels")
+         * @param frame_id Frame ID for input clusters (default: empty = map_frame)
          */
         void publishClusteredVoxels(
             const std::vector<Cluster> &clusters,
             double voxel_size,
             bool plot_centers = false,
             float alpha = 0.85f,
-            const std::string &ns = "clustered_voxels");
+            const std::string &ns = "clustered_voxels",
+            const std::string &frame_id = "");
 
         /**
          * @brief Publish clustered voxels with a single color for all clusters
@@ -99,6 +110,7 @@ namespace husky_xarm6_mcr_nbv_planner
          * @param plot_centers Whether to plot cluster centers
          * @param alpha Alpha value for transparency (default: 0.85)
          * @param ns Namespace for the markers
+         * @param frame_id Frame ID for input clusters (default: empty = map_frame)
          */
         void publishClusteredVoxels(
             const std::vector<Cluster> &clusters,
@@ -106,7 +118,8 @@ namespace husky_xarm6_mcr_nbv_planner
             const std_msgs::msg::ColorRGBA &color,
             bool plot_centers = false,
             float alpha = 0.85f,
-            const std::string &ns = "clustered_voxels");
+            const std::string &ns = "clustered_voxels",
+            const std::string &frame_id = "");
 
         /**
          * @brief Publish clustered voxels with individual colors per cluster
@@ -116,6 +129,7 @@ namespace husky_xarm6_mcr_nbv_planner
          * @param plot_centers Whether to plot cluster centers
          * @param alpha Alpha value for transparency (default: 0.85)
          * @param ns Namespace for the markers
+         * @param frame_id Frame ID for input clusters (default: empty = map_frame)
          */
         void publishClusteredVoxels(
             const std::vector<Cluster> &clusters,
@@ -123,7 +137,8 @@ namespace husky_xarm6_mcr_nbv_planner
             const std::vector<std_msgs::msg::ColorRGBA> &colors,
             bool plot_centers = false,
             float alpha = 0.85f,
-            const std::string &ns = "clustered_voxels");
+            const std::string &ns = "clustered_voxels",
+            const std::string &frame_id = "");
 
         /**
          * @brief Publish geometry poses as axes
@@ -132,13 +147,15 @@ namespace husky_xarm6_mcr_nbv_planner
          * @param axis_radius Thickness of axes
          * @param alpha Alpha value for transparency (default: 0.5)
          * @param ns Namespace for the markers (default: "coordinate")
+         * @param frame_id Frame ID for input poses (default: empty = map_frame)
          */
         void publishCoordinates(
             const std::vector<geometry_msgs::msg::Pose> &poses,
             double axis_length = 0.15,
             double axis_radius = 0.01,
             float alpha = 0.5f,
-            const std::string &ns = "coordinate");
+            const std::string &ns = "coordinate",
+            const std::string &frame_id = "");
 
         /**
          * @brief Publish geometry pose as axes
@@ -147,13 +164,15 @@ namespace husky_xarm6_mcr_nbv_planner
          * @param axis_radius Thickness of axes
          * @param alpha Alpha value for transparency (default: 1.0)
          * @param ns Namespace for the marker (default: "coordinate")
+         * @param frame_id Frame ID for input pose (default: empty = map_frame)
          */
         void publishCoordinate(
             const geometry_msgs::msg::Pose &pose,
             double axis_length = 0.15,
             double axis_radius = 0.01,
             float alpha = 1.0f,
-            const std::string &ns = "coordinate");
+            const std::string &ns = "coordinate",
+            const std::string &frame_id = "");
         
         void publishCoordinate(
             const Eigen::Vector3d &position,
@@ -161,7 +180,8 @@ namespace husky_xarm6_mcr_nbv_planner
             double axis_length = 0.15,
             double axis_radius = 0.01,
             float alpha = 1.0f,
-            const std::string &ns = "coordinate");
+            const std::string &ns = "coordinate",
+            const std::string &frame_id = "");
 
         /**
          * @brief Publish viewpoint coordinate frame
@@ -170,13 +190,15 @@ namespace husky_xarm6_mcr_nbv_planner
          * @param axis_radius Thickness of axes
          * @param alpha Alpha value for transparency (default: 1.0)
          * @param ns Namespace for the marker (default: "viewpoint")
+         * @param frame_id Frame ID for input viewpoint (default: empty = map_frame)
          */
         void publishViewpoint(
             const Viewpoint &viewpoint,
             double axis_length = 0.15,
             double axis_radius = 0.01,
             float alpha = 1.0f,
-            const std::string &ns = "viewpoint");
+            const std::string &ns = "viewpoint",
+            const std::string &frame_id = "");
 
         /**
          * @brief Publish target region as wireframe sphere
@@ -184,12 +206,14 @@ namespace husky_xarm6_mcr_nbv_planner
          * @param radius Radius of target region
          * @param line_width Width of wireframe lines
          * @param ns Namespace for the marker (default: "target_region")
+         * @param frame_id Frame ID for input center (default: empty = map_frame)
          */
         void publishTargetRegion(
             const octomap::point3d &center,
             double radius,
             double line_width = 0.02,
-            const std::string &ns = "target_region");
+            const std::string &ns = "target_region",
+            const std::string &frame_id = "");
 
         /**
          * @brief Publish bounding box as LINE_LIST marker
@@ -198,13 +222,15 @@ namespace husky_xarm6_mcr_nbv_planner
          * @param ns Namespace for the marker (default: "bounding_box")
          * @param line_width Width of the lines (default: 0.02)
          * @param color RGBA color for the box lines
+         * @param frame_id Frame ID for input bounds (default: empty = map_frame)
          */
         void publishBoundingBox(
             const octomap::point3d &bbx_min,
             const octomap::point3d &bbx_max,
             const std::string &ns = "bounding_box",
             double line_width = 0.02,
-            const std_msgs::msg::ColorRGBA &color = std_msgs::msg::ColorRGBA());
+            const std_msgs::msg::ColorRGBA &color = std_msgs::msg::ColorRGBA(),
+            const std::string &frame_id = "");
 
         /**
          * @brief Clear all visualizations in a namespace
@@ -226,6 +252,7 @@ namespace husky_xarm6_mcr_nbv_planner
          * @param alpha Alpha value for transparency (default: 0.8)
          * @param ns Namespace for the marker (default: "points")
          * @param text_label Optional text label to display above the point
+         * @param frame_id Frame ID for input point (default: empty = map_frame)
          */
         void publishPoint(
             const octomap::point3d &point,
@@ -234,7 +261,8 @@ namespace husky_xarm6_mcr_nbv_planner
             const std_msgs::msg::ColorRGBA &color = std_msgs::msg::ColorRGBA(),
             float alpha = 0.8f,
             const std::string &ns = "points",
-            const std::string &text_label = "");
+            const std::string &text_label = "",
+            const std::string &frame_id = "");
 
         /**
          * @brief Publish multiple points as a single marker (more efficient)
@@ -243,13 +271,15 @@ namespace husky_xarm6_mcr_nbv_planner
          * @param color Optional color for all points (default: green)
          * @param alpha Alpha value for transparency (default: 0.8)
          * @param ns Namespace for the marker (default: "points")
+         * @param frame_id Frame ID for input points (default: empty = map_frame)
          */
         void publishPoints(
             const std::vector<octomap::point3d> &points,
             double size = 0.02,
             const std_msgs::msg::ColorRGBA &color = std_msgs::msg::ColorRGBA(),
             float alpha = 0.8f,
-            const std::string &ns = "points");
+            const std::string &ns = "points",
+            const std::string &frame_id = "");
 
         /**
          * @brief Publish multiple points with individual colors and optional text labels
@@ -259,6 +289,7 @@ namespace husky_xarm6_mcr_nbv_planner
          * @param size Size of each point sphere (default: 0.02m)
          * @param alpha Alpha value for transparency (default: 0.8)
          * @param ns Namespace for the markers (default: "points")
+         * @param frame_id Frame ID for input points (default: empty = map_frame)
          */
         void publishPoints(
             const std::vector<octomap::point3d> &points,
@@ -266,7 +297,8 @@ namespace husky_xarm6_mcr_nbv_planner
             const std::vector<std::string> &labels = {},
             double size = 0.02,
             float alpha = 0.8f,
-            const std::string &ns = "points");
+            const std::string &ns = "points",
+            const std::string &frame_id = "");
 
         /**
          * @brief Publish semantic points with colors based on class_id
@@ -275,13 +307,15 @@ namespace husky_xarm6_mcr_nbv_planner
          * @param alpha Alpha value for transparency (default: 0.8)
          * @param show_labels Whether to display ID labels above points (default: true)
          * @param ns Namespace for the markers (default: "semantic_points")
+         * @param frame_id Frame ID for input points (default: empty = map_frame)
          */
         void publishSemanticPoints(
             const std::vector<SemanticPoint> &semantic_points,
             double size = 0.02,
             float alpha = 0.8f,
             bool show_labels = true,
-            const std::string &ns = "semantic_points");
+            const std::string &ns = "semantic_points",
+            const std::string &frame_id = "");
 
         /**
          * @brief Publish match results with different colors for correct matches, class mismatches, and incorrect matches
@@ -289,12 +323,14 @@ namespace husky_xarm6_mcr_nbv_planner
          * @param point_size Size of each point sphere (default: 0.02m
          * @param alpha Alpha value for transparency (default: 0.8)
          * @param ns Namespace for the markers (default: "match_results")
+         * @param frame_id Frame ID for input points (default: empty = map_frame)
          */
         void publishMatchResults(
             const MatchResult &match_result,
             double point_size = 0.02,
             float alpha = 0.8f,
-            const std::string &ns = "match_results");
+            const std::string &ns = "match_results",
+            const std::string &frame_id = "");
 
         /**
          * @brief Plot generic data as line chart with customizable labels and colors
@@ -365,7 +401,19 @@ namespace husky_xarm6_mcr_nbv_planner
          * @param alpha Alpha value for transparency (default: 0.85)
          * @return RGBA color corresponding to the label
          */
-        static std_msgs::msg::ColorRGBA colorForLabel(int label, float alpha = 0.85f);        
+        static std_msgs::msg::ColorRGBA colorForLabel(int label, float alpha = 0.85f);
+
+        /**
+         * @brief Get the current map frame
+         * @return Current map frame ID
+         */
+        std::string getMapFrame() const { return map_frame_; }
+
+        /**
+         * @brief Set the map frame for marker publishing
+         * @param frame_id New map frame ID
+         */
+        void setMapFrame(const std::string &frame_id) { map_frame_ = frame_id; }
 
     private:
 
@@ -407,10 +455,36 @@ namespace husky_xarm6_mcr_nbv_planner
          */
         geometry_msgs::msg::Point toPoint(const octomap::point3d &p);
 
+        /**
+         * @brief Transform point from source frame to map frame
+         * @param point Point in source frame
+         * @param source_frame Source frame ID
+         * @param point_out Transformed point in map frame
+         * @return true if transformation successful, false otherwise
+         */
+        bool transformPoint(const octomap::point3d &point,
+                           const std::string &source_frame,
+                           octomap::point3d &point_out) const;
+
+        /**
+         * @brief Transform pose from source frame to map frame
+         * @param pose Pose in source frame
+         * @param source_frame Source frame ID
+         * @param pose_out Transformed pose in map frame
+         * @return true if transformation successful, false otherwise
+         */
+        bool transformPose(const geometry_msgs::msg::Pose &pose,
+                          const std::string &source_frame,
+                          geometry_msgs::msg::Pose &pose_out) const;
+
         rclcpp::Node::SharedPtr node_;
         std::string map_frame_;
         rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
         rclcpp::Logger logger_;
+        
+        // TF2 for coordinate transformations
+        std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+        std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
     };
 
     using NBVVisualizerPtr = std::shared_ptr<NBVVisualizer>;
