@@ -997,6 +997,102 @@ namespace husky_xarm6_mcr_nbv_planner
         RCLCPP_DEBUG(logger_, "Published bounding box visualization");
     }
 
+    void NBVVisualizer::publishPlane(
+        const std::vector<octomap::point3d> &corners,
+        const std::string &ns,
+        double line_width,
+        const std_msgs::msg::ColorRGBA &color,
+        const std::string &frame_id)
+    {
+        if (corners.size() < 3)
+        {
+            RCLCPP_ERROR(logger_, "publishPlane: need at least 3 corners to define a plane");
+            return;
+        }
+
+        // Transform corners to map frame if needed
+        std::vector<octomap::point3d> transformed_corners;
+        std::string source_frame = frame_id.empty() ? map_frame_ : frame_id;
+        
+        if (source_frame != map_frame_)
+        {
+            transformed_corners.reserve(corners.size());
+            for (const auto &corner : corners)
+            {
+                octomap::point3d corner_transformed;
+                if (transformPoint(corner, source_frame, corner_transformed))
+                {
+                    transformed_corners.push_back(corner_transformed);
+                }
+            }
+        }
+        else
+        {
+            transformed_corners = corners;
+        }
+
+        if (transformed_corners.size() < 3)
+        {
+            RCLCPP_WARN(logger_, "Failed to transform plane corners");
+            return;
+        }
+
+        auto now = node_->now();
+        visualization_msgs::msg::MarkerArray marker_array;
+
+        // Delete previous markers
+        visualization_msgs::msg::Marker del_marker;
+        del_marker.header.frame_id = map_frame_;
+        del_marker.header.stamp = now;
+        del_marker.ns = ns;
+        del_marker.id = 0;
+        del_marker.action = visualization_msgs::msg::Marker::DELETEALL;
+        marker_array.markers.push_back(del_marker);
+
+        // Create LINE_LIST marker for plane edges and grid
+        visualization_msgs::msg::Marker plane_marker;
+        plane_marker.header.frame_id = map_frame_;
+        plane_marker.header.stamp = now;
+        plane_marker.ns = ns;
+        plane_marker.id = 1;
+        plane_marker.type = visualization_msgs::msg::Marker::LINE_LIST;
+        plane_marker.action = visualization_msgs::msg::Marker::ADD;
+        plane_marker.scale.x = line_width; // Line width
+        plane_marker.pose.orientation.w = 1.0;
+
+        // Set color (use provided color or default to cyan)
+        if (color.a == 0.0 && color.r == 0.0 && color.g == 0.0 && color.b == 0.0)
+        {
+            plane_marker.color.r = 0.0;
+            plane_marker.color.g = 1.0;
+            plane_marker.color.b = 1.0;
+            plane_marker.color.a = 0.8;
+        }
+        else
+        {
+            plane_marker.color = color;
+        }
+
+        // Convert transformed corners to geometry_msgs::Point
+        std::vector<geometry_msgs::msg::Point> points;
+        points.reserve(transformed_corners.size());
+        for (const auto &corner : transformed_corners)
+        {
+            points.push_back(toPoint(corner));
+        }
+
+        // Draw plane border (connect all corners in sequence, then close the loop)
+        for (size_t i = 0; i < points.size(); ++i)
+        {
+            plane_marker.points.push_back(points[i]);
+            plane_marker.points.push_back(points[(i + 1) % points.size()]);
+        }
+
+        marker_array.markers.push_back(plane_marker);
+        marker_pub_->publish(marker_array);
+        RCLCPP_DEBUG(logger_, "Published plane visualization with %zu corners", points.size());
+    }
+
     void NBVVisualizer::clearAll(const std::string &ns_suffix)
     {
         auto now = node_->now();

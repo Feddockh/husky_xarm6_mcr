@@ -233,6 +233,23 @@ namespace husky_xarm6_mcr_nbv_planner
             const std::string &frame_id = "");
 
         /**
+         * @brief Publish a plane defined by corner points
+         * @param corners Vector of corner points (typically 4 corners defining a quadrilateral)
+         * @param ns Namespace for the marker (default: "plane")
+         * @param line_width Width of the lines (default: 0.02)
+         * @param color RGBA color for the plane lines
+         * @param draw_grid Whether to draw a grid on the plane (default: false)
+         * @param grid_divisions Number of grid divisions per axis (default: 10)
+         * @param frame_id Frame ID for input corners (default: empty = map_frame)
+         */
+        void publishPlane(
+            const std::vector<octomap::point3d> &corners,
+            const std::string &ns = "plane",
+            double line_width = 0.02,
+            const std_msgs::msg::ColorRGBA &color = std_msgs::msg::ColorRGBA(),
+            const std::string &frame_id = "");
+
+        /**
          * @brief Clear all visualizations in a namespace
          * @param ns_suffix Namespace suffix (empty = all namespaces)
          */
