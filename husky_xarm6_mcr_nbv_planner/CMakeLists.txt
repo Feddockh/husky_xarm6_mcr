@@ -162,6 +162,22 @@ ament_target_dependencies(nbv_volumetric_planner_demo
   geometry_msgs
 )
 
+# Define the NBV Baseline demo executable
+add_executable(nbv_baseline_demo src/nbv_baseline_demo.cpp)
+target_link_libraries(nbv_baseline_demo 
+  moveit_interface 
+  manipulation_workspace
+  octomap_interface
+  nbv_visualizer
+  viewpoint_generation
+)
+ament_target_dependencies(nbv_baseline_demo
+  rclcpp
+  moveit_ros_planning_interface
+  moveit_ros_planning
+  geometry_msgs
+)
+
 # Install rules
 install(TARGETS 
   moveit_interface 
@@ -172,6 +188,7 @@ install(TARGETS
   moveit_interface_demo
   octomap_interface_demo
   nbv_volumetric_planner_demo
+  nbv_baseline_demo
   DESTINATION lib/${PROJECT_NAME})
 
 install(DIRECTORY include/
