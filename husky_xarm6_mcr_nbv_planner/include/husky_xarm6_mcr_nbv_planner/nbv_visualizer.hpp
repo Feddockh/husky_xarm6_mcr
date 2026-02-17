@@ -14,9 +14,6 @@
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <std_msgs/msg/color_rgba.hpp>
 #include <octomap/octomap.h>
-#include <tf2_ros/buffer.h>
-#include <tf2_ros/transform_listener.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include "husky_xarm6_mcr_nbv_planner/nbv_types.hpp"
 #include "husky_xarm6_mcr_nbv_planner/viewpoint.hpp"
 
@@ -467,41 +464,12 @@ namespace husky_xarm6_mcr_nbv_planner
             float alpha = 1.0f,
             const std::string &ns = "coordinate");
 
-        /**
-         * @brief Helper to create geometry_msgs::Point
-         */
-        geometry_msgs::msg::Point toPoint(const octomap::point3d &p);
 
-        /**
-         * @brief Transform point from source frame to map frame
-         * @param point Point in source frame
-         * @param source_frame Source frame ID
-         * @param point_out Transformed point in map frame
-         * @return true if transformation successful, false otherwise
-         */
-        bool transformPoint(const octomap::point3d &point,
-                           const std::string &source_frame,
-                           octomap::point3d &point_out) const;
-
-        /**
-         * @brief Transform pose from source frame to map frame
-         * @param pose Pose in source frame
-         * @param source_frame Source frame ID
-         * @param pose_out Transformed pose in map frame
-         * @return true if transformation successful, false otherwise
-         */
-        bool transformPose(const geometry_msgs::msg::Pose &pose,
-                          const std::string &source_frame,
-                          geometry_msgs::msg::Pose &pose_out) const;
 
         rclcpp::Node::SharedPtr node_;
         std::string map_frame_;
         rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
         rclcpp::Logger logger_;
-        
-        // TF2 for coordinate transformations
-        std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
-        std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
     };
 
     using NBVVisualizerPtr = std::shared_ptr<NBVVisualizer>;

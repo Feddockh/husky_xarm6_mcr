@@ -88,8 +88,6 @@ ament_target_dependencies(nbv_visualizer
   visualization_msgs
   geometry_msgs
   std_msgs
-  tf2_ros
-  tf2_geometry_msgs
 )
 
 # Define the Manipulation Workspace library
