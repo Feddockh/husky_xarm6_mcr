@@ -216,7 +216,7 @@ int main(int argc, char **argv)
     }
 
     // Main NBV Planning Loop - use the filtered reachable_viewpoints from above
-    for (size_t i = 1; i < reachable_viewpoints.size(); i++) {
+    for (size_t i = 0; i < reachable_viewpoints.size(); i++) {
         RCLCPP_INFO(node->get_logger(), "\n********** NBV Baseline Iteration %ld **********", i);
 
         // Select best viewpoint with valid plan
