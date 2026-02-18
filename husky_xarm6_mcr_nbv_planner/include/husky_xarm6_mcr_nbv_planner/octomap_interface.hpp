@@ -1,11 +1,13 @@
 #pragma once
 
-#include <rclcpp/rclcpp.hpp>
-#include <octomap/OcTree.h>
-#include <octomap_msgs/msg/octomap.hpp>
 #include "husky_xarm6_mcr_occupancy_map/msg/custom_octomap.hpp"
 #include "husky_xarm6_mcr_occupancy_map/semantic_occupancy_map_tree.hpp"
 #include "husky_xarm6_mcr_nbv_planner/nbv_types.hpp"
+#include "husky_xarm6_mcr_nbv_planner/conversions.hpp"
+
+#include <rclcpp/rclcpp.hpp>
+#include <octomap/OcTree.h>
+#include <octomap_msgs/msg/octomap.hpp>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 
