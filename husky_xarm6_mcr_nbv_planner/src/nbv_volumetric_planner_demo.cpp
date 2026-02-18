@@ -1,37 +1,6 @@
 /**
  * @file nbv_volumetric_planner_demo.cpp
  * @brief Next-Best-View volumetric planner demo for manipulation workspace
- * 
- * This file implements a modular NBV planner organized into discrete functions:
- * 
- * Configuration & Setup:
- *   - loadConfiguration()         - Load ROS parameters into config struct
- *   - printConfiguration()        - Display configuration
- *   - setupMoveItInterface()      - Initialize MoveIt planning interface
- *   - moveToInitialPose()         - Move manipulator to starting position
- *   - getInitialCameraPose()      - Get initial camera pose
- *   - setupWorkspace()            - Learn or load manipulation workspace
- * 
- * Camera Triggering:
- *   - createTriggerClients()      - Create ROS service clients for camera
- *   - startContinuousCapture()    - Start continuous video mode
- *   - stopVideoCapture()          - Stop video capture
- *   - waitForOctomapWithTriggers()- Wait for octomap with camera triggers
- *   - waitForOctomapUpdate()      - Wait for octomap to update after motion
- * 
- * Evaluation:
- *   - initializeEvaluation()      - Load GT and perform initial evaluation
- *   - performEvaluation()         - Evaluate semantic clustering
- * 
- * NBV Planning Steps:
- *   - computeAndClusterFrontiers()      - Find and cluster frontier voxels
- *   - generateAndFilterViewpoints()     - Generate and filter candidate views
- *   - computeViewpointUtilities()       - Compute IG, cost, and utility
- *   - selectBestViewpointWithPlan()     - Select best viewpoint with valid IK/plan
- *   - executeAndWaitForMotion()         - Execute motion and wait for completion
- * 
- * Main:
- *   - main()                      - Clean main loop orchestrating all steps
  */
 
 #include <rclcpp/rclcpp.hpp>

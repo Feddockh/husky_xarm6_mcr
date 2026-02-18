@@ -23,22 +23,22 @@ namespace husky_xarm6_mcr_nbv_planner
         psm_->startStateMonitor();
         psm_->startWorldGeometryMonitor();
 
-        RCLCPP_INFO(node_->get_logger(), "Waiting for current robot state...");
+        RCLCPP_DEBUG(node_->get_logger(), "Waiting for current robot state...");
         if (!psm_->waitForCurrentRobotState(node_->now(), 5.0))
         {
             RCLCPP_WARN(node_->get_logger(), "Timed out waiting for robot state.");
         }
         else
         {
-            RCLCPP_INFO(node_->get_logger(), "Robot state received successfully.");
+            RCLCPP_DEBUG(node_->get_logger(), "Robot state received successfully.");
         }
 
         planning_scene_monitor::LockedPlanningSceneRO scene(psm_);
         auto world_objects = scene->getWorld()->getObjectIds();
-        RCLCPP_INFO(node_->get_logger(), "Planning scene has %zu world objects", world_objects.size());
+        RCLCPP_DEBUG(node_->get_logger(), "Planning scene has %zu world objects", world_objects.size());
         for (const auto &obj_id : world_objects)
         {
-            RCLCPP_INFO(node_->get_logger(), "  - %s", obj_id.c_str());
+            RCLCPP_DEBUG(node_->get_logger(), "  - %s", obj_id.c_str());
         }
 
         // Initialize cached configuration with MoveGroup defaults
@@ -55,10 +55,7 @@ namespace husky_xarm6_mcr_nbv_planner
 
             // Set default planner if not already configured
             if (planner_id_.empty())
-            {
                 move_group_->setPlannerId(planner_id_);
-                RCLCPP_INFO(node_->get_logger(), "Set default planner to: %s", planner_id_.c_str());
-            }
 
             // Set our default values
             move_group_->setNumPlanningAttempts(num_planning_attempts_);
@@ -74,7 +71,7 @@ namespace husky_xarm6_mcr_nbv_planner
             if (robot_model)
             {
                 pose_reference_frame_ = robot_model->getRootLinkName();
-                RCLCPP_INFO(node_->get_logger(), "Pose reference frame set to robot root link: '%s'",
+                RCLCPP_DEBUG(node_->get_logger(), "Pose reference frame set to robot root link: '%s'",
                            pose_reference_frame_.c_str());
             }
             else
@@ -197,7 +194,7 @@ namespace husky_xarm6_mcr_nbv_planner
 
         if (result == moveit::core::MoveItErrorCode::SUCCESS)
         {
-            RCLCPP_INFO(node_->get_logger(), "Planning succeeded. Trajectory: %zu waypoints, %.2fs",
+            RCLCPP_DEBUG(node_->get_logger(), "Planning succeeded. Trajectory: %zu waypoints, %.2fs",
                         plan.trajectory_.joint_trajectory.points.size(),
                         rclcpp::Duration(plan.trajectory_.joint_trajectory.points.back().time_from_start).seconds());
             return true;
@@ -212,12 +209,12 @@ namespace husky_xarm6_mcr_nbv_planner
         if (!isMoveGroupValid())
             return false;
 
-        RCLCPP_INFO(node_->get_logger(), "Executing trajectory...");
+        RCLCPP_DEBUG(node_->get_logger(), "Executing trajectory...");
         moveit::core::MoveItErrorCode result = move_group_->execute(plan);
 
         if (result == moveit::core::MoveItErrorCode::SUCCESS)
         {
-            RCLCPP_INFO(node_->get_logger(), "Trajectory execution succeeded.");
+            RCLCPP_DEBUG(node_->get_logger(), "Trajectory execution succeeded.");
             return true;
         }
 
@@ -559,7 +556,7 @@ namespace husky_xarm6_mcr_nbv_planner
         planner_id_ = planner_id;
         if (isMoveGroupValid(false)) {
             move_group_->setPlannerId(planner_id);
-            RCLCPP_INFO(node_->get_logger(), "Set planner to: %s", planner_id.c_str());
+            RCLCPP_DEBUG(node_->get_logger(), "Set planner to: %s", planner_id.c_str());
         }
     }
 
@@ -575,7 +572,7 @@ namespace husky_xarm6_mcr_nbv_planner
         planning_time_ = seconds;
         if (isMoveGroupValid(false)) {
             move_group_->setPlanningTime(seconds);
-            RCLCPP_INFO(node_->get_logger(), "Set planning time to: %.2f seconds", seconds);
+            RCLCPP_DEBUG(node_->get_logger(), "Set planning time to: %.2f seconds", seconds);
         }
     }
 
@@ -589,7 +586,7 @@ namespace husky_xarm6_mcr_nbv_planner
         num_planning_attempts_ = num_attempts;
         if (isMoveGroupValid(false)) {
             move_group_->setNumPlanningAttempts(num_attempts);
-            RCLCPP_INFO(node_->get_logger(), "Set number of planning attempts to: %d", num_attempts);
+            RCLCPP_DEBUG(node_->get_logger(), "Set number of planning attempts to: %d", num_attempts);
         }
     }
 
@@ -608,7 +605,7 @@ namespace husky_xarm6_mcr_nbv_planner
         max_velocity_scaling_factor_ = scale;
         if (isMoveGroupValid(false)) {
             move_group_->setMaxVelocityScalingFactor(scale);
-            RCLCPP_INFO(node_->get_logger(), "Set max velocity scaling factor to: %.2f", scale);
+            RCLCPP_DEBUG(node_->get_logger(), "Set max velocity scaling factor to: %.2f", scale);
         }
     }
 
@@ -627,7 +624,7 @@ namespace husky_xarm6_mcr_nbv_planner
         max_acceleration_scaling_factor_ = scale;
         if (isMoveGroupValid(false)) {
             move_group_->setMaxAccelerationScalingFactor(scale);
-            RCLCPP_INFO(node_->get_logger(), "Set max acceleration scaling factor to: %.2f", scale);
+            RCLCPP_DEBUG(node_->get_logger(), "Set max acceleration scaling factor to: %.2f", scale);
         }
     }
 
@@ -651,7 +648,7 @@ namespace husky_xarm6_mcr_nbv_planner
         constraints.orientation_constraints.push_back(ocm);
         move_group_->setPathConstraints(constraints);
 
-        RCLCPP_INFO(node_->get_logger(), "Set orientation constraints for link '%s' with tolerances [R:%.2f, P:%.2f, Y:%.2f] rad",
+        RCLCPP_DEBUG(node_->get_logger(), "Set orientation constraints for link '%s' with tolerances [R:%.2f, P:%.2f, Y:%.2f] rad",
                     link_name.c_str(), tolerance_roll, tolerance_pitch, tolerance_yaw);
     }
 
@@ -661,7 +658,7 @@ namespace husky_xarm6_mcr_nbv_planner
             return;
         
         move_group_->clearPathConstraints();
-        RCLCPP_INFO(node_->get_logger(), "Cleared all path constraints");
+        RCLCPP_DEBUG(node_->get_logger(), "Cleared all path constraints");
     }
 
     // Frame configuration
@@ -677,7 +674,7 @@ namespace husky_xarm6_mcr_nbv_planner
         pose_reference_frame_ = frame;
         if (isMoveGroupValid(false)) {
             move_group_->setPoseReferenceFrame(frame);
-            RCLCPP_INFO(node_->get_logger(), "Set pose reference frame to: %s", frame.c_str());
+            RCLCPP_DEBUG(node_->get_logger(), "Set pose reference frame to: %s", frame.c_str());
         }
     }
 
@@ -693,7 +690,7 @@ namespace husky_xarm6_mcr_nbv_planner
         end_effector_link_ = link;
         if (isMoveGroupValid(false)) {
             move_group_->setEndEffectorLink(link);
-            RCLCPP_INFO(node_->get_logger(), "Set end effector link to: %s", link.c_str());
+            RCLCPP_DEBUG(node_->get_logger(), "Set end effector link to: %s", link.c_str());
         }
     }
 

@@ -935,7 +935,7 @@ namespace husky_xarm6_mcr_nbv_planner
                 }
             }
             
-            RCLCPP_INFO(node_->get_logger(), "  Final counts for class %d: TP_clusters=%d, FP_clusters=%d, TP_points=%d, FN_points=%d",
+            RCLCPP_DEBUG(node_->get_logger(), "Final counts for class %d: TP_clusters=%d, FP_clusters=%d, TP_points=%d, FN_points=%d",
                         cm.class_id, cm.tp_clusters, cm.fp_clusters, cm.tp_points, cm.fn_points);
             
             // Compute the precision, recall, and F1 score for this class
@@ -945,16 +945,6 @@ namespace husky_xarm6_mcr_nbv_planner
             
             // Push the completed metrics object to the vector AFTER all modifications
             metrics.push_back(cm);
-        }
-
-        // Print results
-        RCLCPP_INFO(node_->get_logger(), "\n=== Evaluation Results ===");
-        RCLCPP_INFO(node_->get_logger(), "Class ID | TP Clusters | FP Clusters | TP Points | FN Points | Precision | Recall | F1 Score");
-        RCLCPP_INFO(node_->get_logger(), "---------------------------------------------------------------------------------------------");
-        for (const auto &cm : metrics)
-        {            RCLCPP_INFO(node_->get_logger(), "  %6d | %11d | %12d | %9d | %9d | %9.2f%% | %6.2f%% | %8.2f%%",
-                         cm.class_id, cm.tp_clusters, cm.fp_clusters, cm.tp_points, cm.fn_points,
-                         cm.precision * 100.0, cm.recall * 100.0, cm.f1_score * 100.0);
         }
 
         // Verbose output
@@ -1027,8 +1017,7 @@ namespace husky_xarm6_mcr_nbv_planner
                 }
             }
         }
-
-        RCLCPP_INFO(node_->get_logger(), "=================================\n");
+        
         return metrics;
     }
 
