@@ -454,16 +454,14 @@ std::vector<Cluster> computeAndClusterFrontiers(
     return frontier_clusters;
 }
 
-std::vector<Viewpoint> generateAndFilterViewpoints(
+std::vector<Viewpoint> generateViewpoints(
     const std::vector<Cluster>& frontier_clusters,
-    const std::shared_ptr<ManipulationWorkspace>& workspace,
-    const std::shared_ptr<NBVVisualizer>& visualizer,
     const Eigen::Vector3d& init_cam_position,
     const std::array<double, 4>& init_cam_orientation,
     const NBVPlannerConfig& config,
     const rclcpp::Logger& logger)
 {
-    RCLCPP_INFO(logger, "\n=== Step 4-5: Generate & Filter Viewpoints ===");
+    RCLCPP_INFO(logger, "\n=== Step 4: Generate Viewpoints ===");
     
     // Generate spherical planar viewpoints
     std::vector<Viewpoint> spherical_planar_viewpoints = generatePlanarSphericalCapCandidates(
@@ -497,24 +495,26 @@ std::vector<Viewpoint> generateAndFilterViewpoints(
     total_viewpoints.insert(total_viewpoints.end(), spherical_planar_viewpoints.begin(), spherical_planar_viewpoints.end());
     total_viewpoints.insert(total_viewpoints.end(), frontier_viewpoints.begin(), frontier_viewpoints.end());
     
+    RCLCPP_INFO(logger, "Total generated viewpoints: %zu", total_viewpoints.size());
+    return total_viewpoints;
+}
+
+std::vector<Viewpoint> filterReachableViewpoints(
+    const std::vector<Viewpoint>& viewpoints,
+    const std::shared_ptr<ManipulationWorkspace>& workspace,
+    const rclcpp::Logger& logger)
+{
+    RCLCPP_INFO(logger, "\n=== Step 5: Filter Reachable Viewpoints ===");
+    
     // Filter by reachability
     std::vector<Viewpoint> reachable_viewpoints;
-    for (const auto& vp : total_viewpoints) {
+    for (const auto& vp : viewpoints) {
         if (workspace->isPoseReachable(eigenToPose(vp.position, vp.orientation))) {
             reachable_viewpoints.push_back(vp);
         }
     }
     RCLCPP_INFO(logger, "%zu out of %zu viewpoints are reachable",
-                reachable_viewpoints.size(), total_viewpoints.size());
-    
-    if (visualizer && !reachable_viewpoints.empty()) {
-        std::vector<geometry_msgs::msg::Pose> viewpoint_poses;
-        for (const auto& vp : reachable_viewpoints) {
-            viewpoint_poses.push_back(eigenToPose(vp.position, vp.orientation));
-        }
-        visualizer->publishCoordinates(viewpoint_poses, 0.1, 0.005, 0.5f, "reachable_viewpoints");
-        RCLCPP_INFO(logger, "Visualization complete!");
-    }
+                reachable_viewpoints.size(), viewpoints.size());
     
     return reachable_viewpoints;
 }
@@ -857,13 +857,31 @@ int main(int argc, char **argv)
             break;
         }
 
-        // Generate and filter viewpoints
-        auto reachable_viewpoints = generateAndFilterViewpoints(
-            frontier_clusters, workspace, visualizer, init_cam_position, init_cam_orientation,
+        // Generate viewpoints
+        auto all_viewpoints = generateViewpoints(
+            frontier_clusters, init_cam_position, init_cam_orientation,
             config, node->get_logger());
-        if (reachable_viewpoints.empty()) {
-            RCLCPP_WARN(node->get_logger(), "No reachable viewpoints generated!");
+        if (all_viewpoints.empty()) {
+            RCLCPP_WARN(node->get_logger(), "No viewpoints generated!");
             break;
+        }
+
+        // Filter reachable viewpoints
+        auto reachable_viewpoints = filterReachableViewpoints(
+            all_viewpoints, workspace, node->get_logger());
+        if (reachable_viewpoints.empty()) {
+            RCLCPP_WARN(node->get_logger(), "No reachable viewpoints found!");
+            break;
+        }
+
+        // Visualize reachable viewpoints
+        if (visualizer && !reachable_viewpoints.empty()) {
+            std::vector<geometry_msgs::msg::Pose> viewpoint_poses;
+            for (const auto& vp : reachable_viewpoints) {
+                viewpoint_poses.push_back(eigenToPose(vp.position, vp.orientation));
+            }
+            visualizer->publishCoordinates(viewpoint_poses, 0.1, 0.005, 0.5f, "reachable_viewpoints");
+            RCLCPP_INFO(node->get_logger(), "Reachable viewpoints visualized");
         }
 
         // Compute utilities
