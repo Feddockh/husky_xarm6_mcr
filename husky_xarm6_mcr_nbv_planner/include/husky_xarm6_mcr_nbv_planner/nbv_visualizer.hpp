@@ -5,6 +5,10 @@
 
 #pragma once
 
+#include "husky_xarm6_mcr_nbv_planner/nbv_types.hpp"
+#include "husky_xarm6_mcr_nbv_planner/viewpoint.hpp"
+#include "husky_xarm6_mcr_nbv_planner/conversions.hpp"
+
 #include <rclcpp/rclcpp.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 #include <visualization_msgs/msg/marker.hpp>
@@ -14,12 +18,19 @@
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <std_msgs/msg/color_rgba.hpp>
 #include <octomap/octomap.h>
-#include "husky_xarm6_mcr_nbv_planner/nbv_types.hpp"
-#include "husky_xarm6_mcr_nbv_planner/viewpoint.hpp"
 
 #include <vector>
 #include <string>
 #include <memory>
+#include <Eigen/Geometry>
+#include <unordered_map>
+#include <numeric>
+#include <cmath>
+#include <sstream>
+#include <iomanip>
+#include <fstream>
+#include <set>
+#include <algorithm>
 
 namespace husky_xarm6_mcr_nbv_planner
 {
@@ -240,7 +251,7 @@ namespace husky_xarm6_mcr_nbv_planner
          * @param frame_id Frame ID for input corners (default: empty = map_frame)
          */
         void publishPlane(
-            const std::vector<octomap::point3d> &corners,
+            const std::vector<Eigen::Vector3d> &corners,
             const std::string &ns = "plane",
             double line_width = 0.02,
             const std_msgs::msg::ColorRGBA &color = std_msgs::msg::ColorRGBA(),

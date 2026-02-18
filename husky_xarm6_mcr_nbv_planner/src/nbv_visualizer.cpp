@@ -4,15 +4,7 @@
  */
 
 #include "husky_xarm6_mcr_nbv_planner/nbv_visualizer.hpp"
-#include <Eigen/Geometry>
-#include <unordered_map>
-#include <numeric>
-#include <cmath>
-#include <sstream>
-#include <iomanip>
-#include <fstream>
-#include <set>
-#include <algorithm>
+
 #include <matplot/matplot.h>
 
 namespace husky_xarm6_mcr_nbv_planner
@@ -838,7 +830,7 @@ namespace husky_xarm6_mcr_nbv_planner
     }
 
     void NBVVisualizer::publishPlane(
-        const std::vector<octomap::point3d> &corners,
+        const std::vector<Eigen::Vector3d> &corners,
         const std::string &ns,
         double line_width,
         const std_msgs::msg::ColorRGBA &color,
@@ -894,10 +886,7 @@ namespace husky_xarm6_mcr_nbv_planner
         points.reserve(corners.size());
         for (const auto &corner : corners)
         {
-            geometry_msgs::msg::Point p;
-            p.x = corner.x();
-            p.y = corner.y();
-            p.z = corner.z();
+            geometry_msgs::msg::Point p = conversions::eigenToPoint(corner);
             points.push_back(p);
         }
 
