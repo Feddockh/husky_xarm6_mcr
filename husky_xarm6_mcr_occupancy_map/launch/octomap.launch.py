@@ -88,12 +88,19 @@ def generate_launch_description():
 
             # Bounding box (limits octomap updates to this region)
             'use_bounding_box': LaunchConfiguration('use_bbox'),
-            # Side Box
-            'bbx_min_x': -1.0,
-            'bbx_min_y': -2.0,
+            # # Side Box
+            # 'bbx_min_x': -1.0,
+            # 'bbx_min_y': -2.0,
+            # 'bbx_min_z': 0.0,
+            # 'bbx_max_x': 1.0,
+            # 'bbx_max_y': -0.5,
+            # 'bbx_max_z': 2.0,
+            # Side Box (smaller)
+            'bbx_min_x': -0.6,
+            'bbx_min_y': -1.8,
             'bbx_min_z': 0.0,
-            'bbx_max_x': 1.0,
-            'bbx_max_y': -0.5,
+            'bbx_max_x': 0.6,
+            'bbx_max_y': -0.6,
             'bbx_max_z': 2.0,
             # # Rear Box
             # 'bbx_min_x': -2.0,
