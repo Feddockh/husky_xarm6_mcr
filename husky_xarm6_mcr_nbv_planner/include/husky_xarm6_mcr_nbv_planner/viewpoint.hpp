@@ -9,7 +9,7 @@ namespace husky_xarm6_mcr_nbv_planner
 {
 
 /**
- * @brief Represents a candidate viewpoint for NBV planning
+ * @brief Represents a candidate viewpoint for NBV planning (moveit planning frame!)
  */
 struct Viewpoint
 {
