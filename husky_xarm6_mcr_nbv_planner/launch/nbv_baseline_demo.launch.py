@@ -46,8 +46,8 @@ def launch_setup(context, *args, **kwargs):
     
     # Setup metrics directory structure
     metrics_dir = LaunchConfiguration('metrics_dir').perform(context)
-    if not os.path.isabs(metrics_dir):
-        metrics_dir = os.path.join(package_share_dir, metrics_dir)
+    # if not os.path.isabs(metrics_dir):
+    #     metrics_dir = os.path.join(package_share_dir, metrics_dir)
     
     metrics_plots_dir = os.path.join(metrics_dir, 'runs', 'plots')
     metrics_data_dir = os.path.join(metrics_dir, 'runs', 'data')
