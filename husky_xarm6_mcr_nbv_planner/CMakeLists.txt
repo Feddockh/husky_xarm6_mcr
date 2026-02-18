@@ -194,7 +194,7 @@ install(TARGETS
 install(DIRECTORY include/
   DESTINATION include)
 
-install(DIRECTORY launch data metrics
+install(DIRECTORY launch metrics
   DESTINATION share/${PROJECT_NAME})
 
 if(BUILD_TESTING)
