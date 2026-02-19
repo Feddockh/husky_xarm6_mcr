@@ -189,6 +189,7 @@ namespace husky_xarm6_mcr_nbv_planner
         if (!isMoveGroupValid() || !validateJointPositions(joint_positions))
             return false;
 
+        // move_group_->setStartStateToCurrentState();
         move_group_->setJointValueTarget(joint_positions);
         moveit::core::MoveItErrorCode result = move_group_->plan(plan);
 
