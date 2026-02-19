@@ -112,6 +112,21 @@ std::vector<Viewpoint> sampleViewsFromHemisphere(
     const rclcpp::Logger& logger = rclcpp::get_logger("viewpoint_generation"));
 
 /**
+ * @brief Wrapper around the sample views from hemisphere to generate frontier-based viewpoints
+ */
+std::vector<Viewpoint> generateFrontierBasedViewpoints(
+    const std::vector<Eigen::Vector3d>& centers,
+    const std::array<double, 4>& base_orientation,
+    double min_radius,
+    double max_radius,
+    int num_samples = 20,
+    bool use_positive_z = false,
+    double z_bias_sigma = 0.3,
+    double min_distance = 0.1,
+    int max_attempts = 1000,
+    const rclcpp::Logger& logger = rclcpp::get_logger("viewpoint_generation"));
+
+/**
  * @brief Compute information gain for a viewpoint using geometric octomap
  * 
  * Information gain is the average number of unknown voxels discovered per ray.

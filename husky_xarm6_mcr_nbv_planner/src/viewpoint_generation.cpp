@@ -383,6 +383,37 @@ namespace husky_xarm6_mcr_nbv_planner
         return viewpoints;
     }
 
+    std::vector<Viewpoint> generateFrontierBasedViewpoints(
+        const std::vector<Eigen::Vector3d> &centers,
+        const std::array<double, 4> &base_orientation,
+        double min_radius,
+        double max_radius,
+        int num_samples,
+        bool use_positive_z,
+        double z_bias_sigma,
+        double min_distance,
+        int max_attempts,
+        const rclcpp::Logger &logger)
+    {
+        std::vector<Viewpoint> viewpoints;
+        for (const auto &center : centers)
+        {
+            std::vector<Viewpoint> center_viewpoints = sampleViewsFromHemisphere(
+                center,
+                base_orientation,
+                min_radius,
+                max_radius,
+                num_samples,
+                use_positive_z,
+                z_bias_sigma,
+                min_distance,
+                max_attempts,
+                logger);
+            viewpoints.insert(viewpoints.end(), center_viewpoints.begin(), center_viewpoints.end());
+        }
+        return viewpoints;
+    }
+
     double computeInformationGain(
         const Viewpoint &viewpoint,
         const std::shared_ptr<OctoMapInterface> &octomap_interface,
