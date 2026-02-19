@@ -166,7 +166,7 @@ namespace husky_xarm6_mcr_nbv_planner
         std::shared_ptr<MoveItInterface> moveit_interface_;
         std::shared_ptr<NBVVisualizer> visualizer_;
         std::unordered_set<uint64_t> reachable_voxels_;
-        double voxel_size_ = 0.02; // Default voxel size in meters (this is seperate from the octomap voxel size)
+        double voxel_size_ = 0.04; // Default voxel size in meters (this is seperate from the octomap voxel size)
         
         // Bounding sphere parameters
         Eigen::Vector3d sphere_center_ = Eigen::Vector3d::Zero();
