@@ -165,5 +165,55 @@ inline std::vector<double> rad2Deg(const std::vector<double>& radians)
     return degrees;
 }
 
+/**
+ * @brief Batch transform a vector of Eigen::Vector3d points using an Isometry3d transform.
+ * @param points Input points to transform
+ * @param transform Transformation to apply
+ * @return Transformed points
+ */
+std::vector<Eigen::Vector3d> transformPointsBatch(
+    const std::vector<Eigen::Vector3d>& points,
+    const Eigen::Isometry3d& transform)
+{
+    if (points.empty()) {
+        return {};
+    }
+    
+    // Pre-extract rotation and translation for efficiency
+    const Eigen::Matrix3d& rotation = transform.rotation();
+    const Eigen::Vector3d& translation = transform.translation();
+    
+    std::vector<Eigen::Vector3d> transformed_points;
+    transformed_points.reserve(points.size());
+    
+    for (const auto& pt : points) {
+        transformed_points.push_back(rotation * pt + translation);
+    }
+    
+    return transformed_points;
+}
+
+/**
+ * @brief Check if a transformation is (approximately) an identity transform
+ * 
+ * @param transform The Eigen::Isometry3d transform to check
+ * @param epsilon Tolerance for near-zero comparisons (default 1e-6)
+ * @return true if the transform is approximately identity, false otherwise
+ */
+inline bool isIdentityTransform(const Eigen::Isometry3d& transform, double epsilon = 1e-6)
+{
+    // Check if rotation is identity
+    if (!transform.rotation().isIdentity(epsilon)) {
+        return false;
+    }
+    
+    // Check if translation is zero
+    if (transform.translation().norm() > epsilon) {
+        return false;
+    }
+    
+    return true;
+}
+
 } // namespace geometry_utils
 } // namespace husky_xarm6_mcr_nbv_planner
