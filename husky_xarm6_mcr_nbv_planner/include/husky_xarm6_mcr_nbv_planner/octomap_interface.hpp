@@ -47,6 +47,10 @@ namespace husky_xarm6_mcr_nbv_planner
             std::shared_lock lk(mtx_);
             return std::visit([](auto&& tree) { return tree != nullptr; }, tree_);
         }
+        bool hasBoundingBox() const {
+            std::shared_lock lk(mtx_);
+            return has_valid_bbox_;
+        }
         double getResolution() const {
             std::shared_lock lk(mtx_);
             return resolution_;
