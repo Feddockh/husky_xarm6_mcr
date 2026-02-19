@@ -5,23 +5,47 @@
     <xacro:macro name="x_rail_riser" params="namespace:='' prefix:='' parent_link *origin">
         <!-- Build namespace prefix -->
         <xacro:property name="ns_prefix" value="${namespace}/${prefix}"/>
-        <xacro:property name="height" value="0.33" />
-        <xacro:property name="width" value="0.46" />
-        <xacro:property name="depth" value="1.1" />
+
+        <!-- Riser Size -->
+        <xacro:property name="riser_x_size" value="0.43" />
+        <xacro:property name="riser_y_extension" value="0.25" />
+        <xacro:property name="riser_y_size" value="0.55" />
+        <xacro:property name="riser_z_size" value="0.28" />
+
+        <!-- Riser Origin -->
+        <xacro:property name="riser_x_origin" value="0" />
+        <xacro:property name="riser_y_origin" value="-0.078" />
+        <xacro:property name="riser_z_origin" value="0" />
+
+        <xacro:property name="riser_y_offset" value="0.125" />
+        <xacro:property name="riser_z_offset" value="-0.02" />
+
+        <!-- Battery Size -->
+        <xacro:property name="battery_z_size" value="0.08" />
+        <xacro:property name="battery_z_origin" value="${0.26 + battery_z_size/2}" />
 
         <!-- X-Rail Riser Link -->
         <link name="${ns_prefix}x_rail_riser_link">
             <visual>
-                <origin xyz="0 0 0" rpy="0 0 0"/>
+                <origin xyz="${riser_x_origin} ${riser_y_origin} ${riser_z_origin}" rpy="0 0 0"/>
                 <geometry>
                     <!-- <mesh filename="package://husky_xarm6_mcr_description/meshes/x_rail_riser.dae" scale="1 1 1"/> -->
-                    <mesh filename="file://$(find husky_xarm6_mcr_description)/meshes/x_rail_riser.dae"/>
+                    <!-- <mesh filename="file://$(find husky_xarm6_mcr_description)/meshes/x_rail_riser.dae"/> -->
+                    <mesh filename="file://$(find husky_xarm6_mcr_description)/meshes/Platform_Electronics.dae"/>
                 </geometry>
             </visual>
+            <!-- X-rail collisions -->
             <collision>
-                <origin xyz="0 0 ${height/2}" rpy="0 0 0"/>
+                <origin xyz="${riser_x_origin} ${riser_y_offset} ${riser_z_origin + riser_z_offset + riser_z_size/2}" rpy="0 0 0"/>
                 <geometry>
-                    <box size="${width} ${depth} ${height}"/>
+                    <box size="${riser_x_size} ${riser_y_size + riser_y_extension} ${riser_z_size}"/>
+                </geometry>
+            </collision>
+            <!-- Mounted battery collisions -->
+            <collision>
+                <origin xyz="0 0 ${battery_z_origin}" rpy="0 0 0"/>
+                <geometry>
+                    <box size="${riser_x_size} ${riser_y_size} ${battery_z_size}"/>
                 </geometry>
             </collision>
             <inertial>
