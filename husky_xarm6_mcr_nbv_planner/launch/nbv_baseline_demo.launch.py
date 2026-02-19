@@ -48,9 +48,13 @@ def launch_setup(context, *args, **kwargs):
     metrics_dir = LaunchConfiguration('metrics_dir').perform(context)
     # if not os.path.isabs(metrics_dir):
     #     metrics_dir = os.path.join(package_share_dir, metrics_dir)
+    run_dir = LaunchConfiguration('run_dir').perform(context)
+    if run_dir == '':
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        run_dir = f'run_{timestamp}'
     
-    metrics_plots_dir = os.path.join(metrics_dir, 'runs', 'plots')
-    metrics_data_dir = os.path.join(metrics_dir, 'runs', 'data')
+    metrics_plots_dir = os.path.join(metrics_dir, run_dir, 'plots')
+    metrics_data_dir = os.path.join(metrics_dir, run_dir, 'data')
     os.makedirs(metrics_plots_dir, exist_ok=True)
     os.makedirs(metrics_data_dir, exist_ok=True)
     
@@ -163,39 +167,55 @@ def launch_setup(context, *args, **kwargs):
             planner_config,
             controller_config,
             planning_scene_monitor_config,
+            # Workspace Parameters
             {'manipulator_group_name': manipulator_group_name},
             {'learn_workspace': learn_workspace},
-            {'capture_type': LaunchConfiguration('capture_type')},
+            {'num_samples': 10000000},
             {'manipulation_workspace_file': workspace_file_path},
-            {'num_samples': LaunchConfiguration('num_samples')},
-            {'visualize': LaunchConfiguration('visualize')},
-            {'visualization_topic': LaunchConfiguration('visualization_topic')},
-            # NBV Planner Parameters
-            {'max_iterations': LaunchConfiguration('max_iterations')},
-            {'min_information_gain': LaunchConfiguration('min_information_gain')},
-            {'alpha_cost_weight': LaunchConfiguration('alpha_cost_weight')},
-            {'num_viewpoints_per_frontier': LaunchConfiguration('num_viewpoints_per_frontier')},
+            # Octomap Parameters
             {'octomap_topic': LaunchConfiguration('octomap_topic')},
+            {'min_unknown_neighbors': 1},
+            # Manipulation Parameters
+            {'planning_pipeline_id': 'ompl'},
+            {'planner_id': 'RRTConnectkConfigDefault'},
+            {'planning_time': 5.0},
+            {'num_planning_attempts': 10},
+            {'max_velocity_scaling_factor': 0.1},
+            {'max_acceleration_scaling_factor': 0.1},
             # Camera Parameters
+            {'capture_type': 'triggered'},
             {'camera_optical_link': LaunchConfiguration('camera_optical_link')},
-            {'camera_horizontal_fov': LaunchConfiguration('camera_horizontal_fov')},
-            {'camera_vertical_fov': LaunchConfiguration('camera_vertical_fov')},
+            {'camera_horizontal_fov_deg': 45.0},
+            {'camera_vertical_fov_deg': 35.0},
             {'camera_width': LaunchConfiguration('camera_width')},
             {'camera_height': LaunchConfiguration('camera_height')},
             {'camera_max_range': LaunchConfiguration('camera_max_range')},
             {'ideal_camera_distance': LaunchConfiguration('ideal_camera_distance')},
             {'num_camera_rays': LaunchConfiguration('num_camera_rays')},
-            {'map_frame': LaunchConfiguration('map_frame')},
-            # User Input Control Parameters
-            {'wait_for_user_input': LaunchConfiguration('wait_for_user_input')},
-            {'auto_continue_delay': LaunchConfiguration('auto_continue_delay')},
-            # Ground Truth Evaluation Parameters
-            {'gt_points_file': gt_points_file},
+            # Evaluation Parameters
             {'enable_evaluation': LaunchConfiguration('enable_evaluation')},
             {'eval_threshold_radius': LaunchConfiguration('eval_threshold_radius')},
-            # Metrics Output Directories
+            {'gt_points_file': gt_points_file},
             {'metrics_plots_dir': metrics_plots_dir},
             {'metrics_data_dir': metrics_data_dir},
+            # General Parameters
+            {'init_joint_angles_deg': [0.0, -45.0, -45.0, 0.0, 0.0, 90.0]},
+            {'map_frame': LaunchConfiguration('map_frame')},
+            # NBV Planning Parameters
+            {'max_iterations': LaunchConfiguration('max_iterations')},
+            {'min_information_gain': LaunchConfiguration('min_information_gain')},
+            {'alpha_cost_weight': LaunchConfiguration('alpha_cost_weight')},
+            # Viewpoint Parameters
+            {'plane_half_extent': 1.0},
+            {'plane_spatial_resolution': 0.1},
+            {'cap_max_theta_deg': 60.0},
+            {'cap_min_theta_deg': 15.0},
+            {'num_viewpoints_per_frontier': LaunchConfiguration('num_viewpoints_per_frontier')},
+            {'z_bias_sigma': 0.3},
+            {'ideal_distance_tolerance': 0.1},
+            # Debug Parameters
+            {'visualize': LaunchConfiguration('visualize')},
+            {'visualization_topic': LaunchConfiguration('visualization_topic')},
         ],
     )
 
@@ -214,10 +234,6 @@ def generate_launch_description():
         DeclareLaunchArgument('manipulator_group_name', default_value='xarm6_manipulator'),
         DeclareLaunchArgument('learn_workspace', default_value='false', 
                             description='True to learn new workspace, False to load existing'),
-        DeclareLaunchArgument('capture_type', default_value='triggered',
-                            description='Camera capture type: "continuous" or "triggered"'),
-        DeclareLaunchArgument('num_samples', default_value='10000000',
-                            description='Number of samples for workspace learning'),
         DeclareLaunchArgument('visualize', default_value='true',
                             description='Visualize nbv planner operation in RViz'),
         DeclareLaunchArgument('visualization_topic', default_value='nbv_planner_visualization',
@@ -246,16 +262,12 @@ def generate_launch_description():
                             description='Camera image height (pixels)'),
         DeclareLaunchArgument('camera_max_range', default_value='3.0',
                             description='Camera maximum sensing range (meters)'),
-        DeclareLaunchArgument('ideal_camera_distance', default_value='0.5',
+        DeclareLaunchArgument('ideal_camera_distance', default_value='0.2',
                             description='Ideal distance from camera to target surface for information gain computation'),
         DeclareLaunchArgument('num_camera_rays', default_value='25',
                             description='Number of rays for information gain computation'),
         DeclareLaunchArgument('map_frame', default_value='map',
                             description='Fixed frame for visualization markers'),
-        DeclareLaunchArgument('wait_for_user_input', default_value='false',
-                            description='Wait for user to press Enter at each step (incompatible with ros2 launch)'),
-        DeclareLaunchArgument('auto_continue_delay', default_value='3.0',
-                            description='Auto-continue delay in seconds when wait_for_user_input is false'),
 
         # Ground Truth Evaluation Parameters
         DeclareLaunchArgument('gt_points_dir', default_value=PathJoinSubstitution([FindPackageShare('husky_xarm6_mcr_nbv_planner'), 'metrics', 'gt_points']),
@@ -268,5 +280,7 @@ def generate_launch_description():
                             description='Threshold radius (meters) for matching clusters to ground truth points'),
         DeclareLaunchArgument('metrics_dir', default_value='metrics',
                             description='Directory for saving metrics (plots and CSV data)'),
+        DeclareLaunchArgument('run_dir', default_value='',
+                            description='Directory for saving run data'),
         OpaqueFunction(function=launch_setup),
     ])

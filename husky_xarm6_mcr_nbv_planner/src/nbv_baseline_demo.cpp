@@ -26,6 +26,7 @@
 using namespace husky_xarm6_mcr_nbv_planner;
 using namespace husky_xarm6_mcr_nbv_planner::conversions;
 
+
 int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
@@ -40,6 +41,10 @@ int main(int argc, char **argv)
     // Load configuration
     auto config = loadConfiguration(node);
     printConfiguration(config, node->get_logger());
+
+    // Create trigger clients and stop any ongoing video capture
+    auto trigger_clients = createTriggerClients(node);
+    stopVideoCapture(node, trigger_clients, node->get_logger());
 
     // Initialize MoveIt interface
     auto moveit_interface = setupMoveItInterface(node, config);
@@ -93,9 +98,6 @@ int main(int argc, char **argv)
     RCLCPP_DEBUG(node->get_logger(), "\nInitializing OctoMap Interface");
     auto octomap_interface = std::make_shared<OctoMapInterface>(node, config.octomap_topic, true);
 
-    // Create trigger clients
-    auto trigger_clients = createTriggerClients(node);
-
     // Handle camera triggering based on capture_type
     if (config.capture_type == "continuous")
     {
@@ -103,7 +105,6 @@ int main(int argc, char **argv)
     }
     else if (config.capture_type == "triggered")
     {
-        stopVideoCapture(node, trigger_clients, node->get_logger());
         if (!trigger_clients.send_trigger->wait_for_service(std::chrono::seconds(5)))
             RCLCPP_WARN(node->get_logger(), "send_trigger service not available, waiting for octomap anyway...");
     }
@@ -150,9 +151,17 @@ int main(int argc, char **argv)
         rclcpp::shutdown();
         return 1;
     }
+    Eigen::Isometry3d transform_eigen = tf2::transformToEigen(moveit_to_octomap_transform.transform);
+    // Check if the transform is identity (we must have aligned frames for this demo)
+    if (!geometry_utils::isIdentityTransform(transform_eigen))
+    {
+        RCLCPP_ERROR(node->get_logger(), "MoveIt and OctoMap frames are not aligned, they must be the same for this demo");
+        rclcpp::shutdown();
+        return 1;
+    }
 
     RCLCPP_INFO(node->get_logger(), "\n=== Generate NBV Viewpoints ===");
-    Eigen::Vector3d cam_pos_map = tf2::transformToEigen(moveit_to_octomap_transform.transform) * init_cam_position;
+    Eigen::Vector3d cam_pos_map = transform_eigen * init_cam_position;
     auto [plane_corners_map, distance] = computePlane(octomap_interface, cam_pos_map);
     if (config.visualize && visualizer)
     {
@@ -162,7 +171,6 @@ int main(int argc, char **argv)
         visualizer->publishPlane(plane_corners_map, "nbv_plane", 0.02, plane_color);
     }
     // Generate viewpoints on the plane
-    Eigen::Isometry3d transform_eigen = tf2::transformToEigen(moveit_to_octomap_transform.transform);
     Eigen::Quaterniond init_cam_quat_map = Eigen::Quaterniond(transform_eigen.rotation()) * geometry_utils::arrayToEigenQuat(init_cam_orientation);
     double overlap_ratio = 0.45; // 45% overlap
     auto [all_viewpoints_map, coverage_planes_map] = generateViewpointsFromPlane(
@@ -179,18 +187,19 @@ int main(int argc, char **argv)
         }
     }
 
-    // Convert the viewpoints to moveit frame
-    Eigen::Isometry3d transform_eigen_inverse = transform_eigen.inverse();
-    std::vector<Viewpoint> all_viewpoints;
-    for (const auto &vp_map : all_viewpoints_map)
-    {
-        Eigen::Vector3d pos_moveit = transform_eigen_inverse * vp_map.position;
-        Eigen::Quaterniond ori_moveit = Eigen::Quaterniond(transform_eigen_inverse.rotation()) * geometry_utils::arrayToEigenQuat(vp_map.orientation);
-        Viewpoint vp_moveit;
-        vp_moveit.position = pos_moveit;
-        vp_moveit.orientation = {ori_moveit.x(), ori_moveit.y(), ori_moveit.z(), ori_moveit.w()};
-        all_viewpoints.push_back(vp_moveit);
-    }
+    // // Convert the viewpoints to moveit frame
+    // Eigen::Isometry3d transform_eigen_inverse = transform_eigen.inverse();
+    // std::vector<Viewpoint> all_viewpoints;
+    // for (const auto &vp_map : all_viewpoints_map)
+    // {
+    //     Eigen::Vector3d pos_moveit = transform_eigen_inverse * vp_map.position;
+    //     Eigen::Quaterniond ori_moveit = Eigen::Quaterniond(transform_eigen_inverse.rotation()) * geometry_utils::arrayToEigenQuat(vp_map.orientation);
+    //     Viewpoint vp_moveit;
+    //     vp_moveit.position = pos_moveit;
+    //     vp_moveit.orientation = {ori_moveit.x(), ori_moveit.y(), ori_moveit.z(), ori_moveit.w()};
+    //     all_viewpoints.push_back(vp_moveit);
+    // }
+    auto all_viewpoints = all_viewpoints_map; // Since frames are aligned
 
     RCLCPP_INFO(node->get_logger(), "\n=== Filter Reachable Viewpoints ===");
     auto reachable_viewpoints = filterReachableViewpoints(all_viewpoints, manip_workspace, moveit_interface, config, node->get_logger());
@@ -222,7 +231,7 @@ int main(int argc, char **argv)
         // Select best viewpoint with valid plan
         auto plan = planPathToViewpoint(reachable_viewpoints[i], moveit_interface, config, node->get_logger());
         if (!plan) {
-            RCLCPP_WARN(node->get_logger(), "Failed to plan to the best viewpoint, skipping iteration...");
+            RCLCPP_WARN(node->get_logger(), "Failed to plan to the next viewpoint, skipping iteration...");
             continue;
         }
 
@@ -232,7 +241,7 @@ int main(int argc, char **argv)
             break;
         }
 
-        // Wait for octomap update
+        // Update the octomap after motion
         waitForOctomap(node, octomap_interface, trigger_clients, config, node->get_logger());
 
         // Evaluate if enabled
