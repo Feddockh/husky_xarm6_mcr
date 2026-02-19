@@ -405,7 +405,7 @@ namespace husky_xarm6_mcr_nbv_planner
          * @param file_path Path to the csv file
          * @return true if successful, false otherwise
          */
-        bool logMetricsToCSV(
+        static bool logMetricsToCSV(
             const std::vector<std::vector<ClassMetrics>> &all_metrics,
             const std::string &file_path = "/tmp/metrics.csv"
         );

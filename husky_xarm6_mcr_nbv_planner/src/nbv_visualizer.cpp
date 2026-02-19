@@ -1570,7 +1570,6 @@ namespace husky_xarm6_mcr_nbv_planner
     {
         if (all_metrics.empty())
         {
-            RCLCPP_WARN(logger_, "No metrics to log to CSV");
             return false;
         }
 
@@ -1578,7 +1577,6 @@ namespace husky_xarm6_mcr_nbv_planner
         std::ofstream csv_file(file_path);
         if (!csv_file.is_open())
         {
-            RCLCPP_ERROR(logger_, "Failed to open CSV file: %s", file_path.c_str());
             return false;
         }
 
@@ -1607,12 +1605,10 @@ namespace husky_xarm6_mcr_nbv_planner
             }
 
             csv_file.close();
-            RCLCPP_INFO(logger_, "Successfully logged metrics to CSV: %s", file_path.c_str());
             return true;
         }
         catch (const std::exception &e)
         {
-            RCLCPP_ERROR(logger_, "Error writing to CSV file: %s", e.what());
             csv_file.close();
             return false;
         }
