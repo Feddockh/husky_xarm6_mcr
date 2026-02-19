@@ -30,6 +30,7 @@ struct NBVPlannerConfig
 
     // Octomap Parameters
     std::string octomap_topic;
+    int min_unknown_neighbors;
 
     // Manipulation Parameters
     std::string planning_pipeline_id;
@@ -47,7 +48,7 @@ struct NBVPlannerConfig
     int camera_width;
     int camera_height;
     double camera_max_range;
-    double ideal_camera_distance; // NOT YET IMPLEMENTED
+    double ideal_camera_distance; // 0.2 m
     int num_camera_rays;
 
     // Evaluation Parameters
@@ -65,7 +66,15 @@ struct NBVPlannerConfig
     int max_iterations;
     double min_information_gain;
     double alpha_cost_weight;
+    
+    // Viewpoint Parameters
+    double plane_half_extent;
+    double plane_spatial_resolution;
+    double cap_max_theta_rad;
+    double cap_min_theta_rad;
     int num_viewpoints_per_frontier;
+    double z_bias_sigma; // M_PI / 3.0
+    double ideal_distance_tolerance; // 0.1 m
 
     // Debug Parameters
     bool visualize;
@@ -121,6 +130,7 @@ NBVPlannerConfig loadConfiguration(const std::shared_ptr<rclcpp::Node> &node)
     
     // Octomap Parameters
     config.octomap_topic = node->get_parameter("octomap_topic").as_string();
+    config.min_unknown_neighbors = node->get_parameter("min_unknown_neighbors").as_int();
     
     // Manipulation Parameters
     config.planning_pipeline_id = node->get_parameter("planning_pipeline_id").as_string();
@@ -156,7 +166,15 @@ NBVPlannerConfig loadConfiguration(const std::shared_ptr<rclcpp::Node> &node)
     config.max_iterations = node->get_parameter("max_iterations").as_int();
     config.min_information_gain = node->get_parameter("min_information_gain").as_double();
     config.alpha_cost_weight = node->get_parameter("alpha_cost_weight").as_double();
+
+    // Viewpoint Parameters
+    config.plane_half_extent = node->get_parameter("plane_half_extent").as_double();
+    config.plane_spatial_resolution = node->get_parameter("plane_spatial_resolution").as_double();
+    config.cap_max_theta_rad = geometry_utils::deg2Rad(node->get_parameter("cap_max_theta_deg").as_double());
+    config.cap_min_theta_rad = geometry_utils::deg2Rad(node->get_parameter("cap_min_theta_deg").as_double());
     config.num_viewpoints_per_frontier = node->get_parameter("num_viewpoints_per_frontier").as_int();
+    config.z_bias_sigma = node->get_parameter("z_bias_sigma").as_double();
+    config.ideal_distance_tolerance = node->get_parameter("ideal_distance_tolerance").as_double();
     
     // Debug Parameters
     config.visualize = node->get_parameter("visualize").as_bool();
@@ -179,6 +197,7 @@ void printConfiguration(const NBVPlannerConfig &config, const rclcpp::Logger &lo
     // Octomap Parameters
     RCLCPP_INFO(logger, "--- Octomap ---");
     RCLCPP_INFO(logger, "  Octomap topic: %s", config.octomap_topic.c_str());
+    RCLCPP_INFO(logger, "  Min unknown neighbors: %d", config.min_unknown_neighbors);
     
     // Manipulation Parameters
     RCLCPP_INFO(logger, "--- Manipulation ---");
@@ -222,7 +241,16 @@ void printConfiguration(const NBVPlannerConfig &config, const rclcpp::Logger &lo
     RCLCPP_INFO(logger, "  Max iterations: %d", config.max_iterations);
     RCLCPP_INFO(logger, "  Min information gain: %.4f", config.min_information_gain);
     RCLCPP_INFO(logger, "  Alpha cost weight: %.4f", config.alpha_cost_weight);
+
+    // Viewpoint Parameters
+    RCLCPP_INFO(logger, "--- Viewpoints ---");
+    RCLCPP_INFO(logger, "  Plane half extent: %.2f m", config.plane_half_extent);
+    RCLCPP_INFO(logger, "  Plane spatial resolution: %.2f m", config.plane_spatial_resolution);
+    RCLCPP_INFO(logger, "  Cap max theta: %.1f rad (%.1f deg)", config.cap_max_theta_rad, geometry_utils::rad2Deg(config.cap_max_theta_rad));
+    RCLCPP_INFO(logger, "  Cap min theta: %.1f rad (%.1f deg)", config.cap_min_theta_rad, geometry_utils::rad2Deg(config.cap_min_theta_rad));
     RCLCPP_INFO(logger, "  Viewpoints per frontier: %d", config.num_viewpoints_per_frontier);
+    RCLCPP_INFO(logger, "  Z-bias sigma: %.4f", config.z_bias_sigma);
+    RCLCPP_INFO(logger, "  Ideal distance tolerance: %.4f", config.ideal_distance_tolerance);
     
     // Debug Parameters
     RCLCPP_INFO(logger, "--- Debug ---");
@@ -751,7 +779,7 @@ std::optional<moveit::planning_interface::MoveGroupInterface::Plan> planPathToVi
     }
 
     // Compute IK
-    auto next_joint_angles = moveit_interface->computeIK(current_joint_state, target_ee_pose, 0.01, 10);
+    auto next_joint_angles = moveit_interface->computeIK(current_joint_state, target_ee_pose, 0.1, 10);
     if (next_joint_angles.empty())
     {
         RCLCPP_INFO(logger, "No IK solution found for this viewpoint");
