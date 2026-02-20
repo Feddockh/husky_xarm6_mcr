@@ -6,6 +6,9 @@
 #include <queue>
 #include <algorithm>
 #include <optional>
+#include <random>
+#include <cmath>
+#include <limits>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 #include <tf2_eigen/tf2_eigen.hpp>
@@ -39,12 +42,16 @@ struct NBVPlannerConfig
     int num_planning_attempts;
     double max_velocity_scaling_factor;
     double max_acceleration_scaling_factor;
+    int num_ik_seeds;
+    int plans_per_seed;
+    double ik_timeout;
+    int ik_attempts;
 
     // Camera Parameters
     std::string capture_type;
     std::string camera_optical_link;
     double camera_horizontal_fov_rad; // radians
-    double camera_vertical_fov_rad; // radians
+    double camera_vertical_fov_rad;   // radians
     int camera_width;
     int camera_height;
     double camera_max_range;
@@ -66,14 +73,14 @@ struct NBVPlannerConfig
     int max_iterations;
     double min_information_gain;
     double alpha_cost_weight;
-    
+
     // Viewpoint Parameters
     double plane_half_extent;
     double plane_spatial_resolution;
     double cap_max_theta_rad;
     double cap_min_theta_rad;
     int num_viewpoints_per_frontier;
-    double z_bias_sigma; // M_PI / 3.0
+    double z_bias_sigma;             // M_PI / 3.0
     double ideal_distance_tolerance; // 0.1 m
 
     // Debug Parameters
@@ -121,17 +128,17 @@ void waitForSimClock(const std::shared_ptr<rclcpp::Node> &node)
 NBVPlannerConfig loadConfiguration(const std::shared_ptr<rclcpp::Node> &node)
 {
     NBVPlannerConfig config;
-    
+
     // Workspace Parameters
     config.manipulator_group_name = node->get_parameter("manipulator_group_name").as_string();
     config.learn_workspace = node->get_parameter("learn_workspace").as_bool();
     config.num_samples = node->get_parameter("num_samples").as_int();
     config.workspace_file = node->get_parameter("manipulation_workspace_file").as_string();
-    
+
     // Octomap Parameters
     config.octomap_topic = node->get_parameter("octomap_topic").as_string();
     config.min_unknown_neighbors = node->get_parameter("min_unknown_neighbors").as_int();
-    
+
     // Manipulation Parameters
     config.planning_pipeline_id = node->get_parameter("planning_pipeline_id").as_string();
     config.planner_id = node->get_parameter("planner_id").as_string();
@@ -139,7 +146,11 @@ NBVPlannerConfig loadConfiguration(const std::shared_ptr<rclcpp::Node> &node)
     config.num_planning_attempts = node->get_parameter("num_planning_attempts").as_int();
     config.max_velocity_scaling_factor = node->get_parameter("max_velocity_scaling_factor").as_double();
     config.max_acceleration_scaling_factor = node->get_parameter("max_acceleration_scaling_factor").as_double();
-    
+    config.num_ik_seeds = node->get_parameter("num_ik_seeds").as_int();
+    config.plans_per_seed = node->get_parameter("plans_per_seed").as_int();
+    config.ik_timeout = node->get_parameter("ik_timeout").as_double();
+    config.ik_attempts = node->get_parameter("ik_attempts").as_int();
+
     // Camera Parameters
     config.capture_type = node->get_parameter("capture_type").as_string();
     config.camera_optical_link = node->get_parameter("camera_optical_link").as_string();
@@ -150,18 +161,18 @@ NBVPlannerConfig loadConfiguration(const std::shared_ptr<rclcpp::Node> &node)
     config.camera_max_range = node->get_parameter("camera_max_range").as_double();
     config.ideal_camera_distance = node->get_parameter("ideal_camera_distance").as_double();
     config.num_camera_rays = node->get_parameter("num_camera_rays").as_int();
-    
+
     // Evaluation Parameters
     config.enable_evaluation = node->get_parameter("enable_evaluation").as_bool();
     config.eval_threshold_radius = node->get_parameter("eval_threshold_radius").as_double();
     config.gt_points_file = node->get_parameter("gt_points_file").as_string();
     config.metrics_plots_dir = node->get_parameter("metrics_plots_dir").as_string();
     config.metrics_data_dir = node->get_parameter("metrics_data_dir").as_string();
-    
+
     // General Parameters
     config.init_joint_angles_rad = geometry_utils::deg2Rad(node->get_parameter("init_joint_angles_deg").as_double_array());
     config.map_frame = node->get_parameter("map_frame").as_string();
-    
+
     // NBV Planning Parameters
     config.max_iterations = node->get_parameter("max_iterations").as_int();
     config.min_information_gain = node->get_parameter("min_information_gain").as_double();
@@ -175,30 +186,30 @@ NBVPlannerConfig loadConfiguration(const std::shared_ptr<rclcpp::Node> &node)
     config.num_viewpoints_per_frontier = node->get_parameter("num_viewpoints_per_frontier").as_int();
     config.z_bias_sigma = node->get_parameter("z_bias_sigma").as_double();
     config.ideal_distance_tolerance = node->get_parameter("ideal_distance_tolerance").as_double();
-    
+
     // Debug Parameters
     config.visualize = node->get_parameter("visualize").as_bool();
     config.visualization_topic = node->get_parameter("visualization_topic").as_string();
-    
+
     return config;
 }
 
 void printConfiguration(const NBVPlannerConfig &config, const rclcpp::Logger &logger)
 {
     RCLCPP_INFO(logger, "\n=== NBV Baseline Configuration ===");
-    
+
     // Workspace Parameters
     RCLCPP_INFO(logger, "--- Workspace ---");
     RCLCPP_INFO(logger, "  Manipulator group: %s", config.manipulator_group_name.c_str());
     RCLCPP_INFO(logger, "  Learn workspace: %s", config.learn_workspace ? "true" : "false");
     RCLCPP_INFO(logger, "  Workspace samples: %d", config.num_samples);
     RCLCPP_INFO(logger, "  Workspace file: %s", config.workspace_file.c_str());
-    
+
     // Octomap Parameters
     RCLCPP_INFO(logger, "--- Octomap ---");
     RCLCPP_INFO(logger, "  Octomap topic: %s", config.octomap_topic.c_str());
     RCLCPP_INFO(logger, "  Min unknown neighbors: %d", config.min_unknown_neighbors);
-    
+
     // Manipulation Parameters
     RCLCPP_INFO(logger, "--- Manipulation ---");
     RCLCPP_INFO(logger, "  Planning pipeline: %s", config.planning_pipeline_id.c_str());
@@ -207,7 +218,11 @@ void printConfiguration(const NBVPlannerConfig &config, const rclcpp::Logger &lo
     RCLCPP_INFO(logger, "  Planning attempts: %d", config.num_planning_attempts);
     RCLCPP_INFO(logger, "  Max velocity scale: %.2f", config.max_velocity_scaling_factor);
     RCLCPP_INFO(logger, "  Max accel scale: %.2f", config.max_acceleration_scaling_factor);
-    
+    RCLCPP_INFO(logger, "  IK seeds: %d", config.num_ik_seeds);
+    RCLCPP_INFO(logger, "  Plans per seed: %d", config.plans_per_seed);
+    RCLCPP_INFO(logger, "  IK timeout: %.2f s", config.ik_timeout);
+    RCLCPP_INFO(logger, "  IK attempts: %d", config.ik_attempts);
+
     // Camera Parameters
     RCLCPP_INFO(logger, "--- Camera ---");
     RCLCPP_INFO(logger, "  Capture type: %s", config.capture_type.c_str());
@@ -218,7 +233,7 @@ void printConfiguration(const NBVPlannerConfig &config, const rclcpp::Logger &lo
     RCLCPP_INFO(logger, "  Max range: %.2f m", config.camera_max_range);
     RCLCPP_INFO(logger, "  Ideal distance: %.2f m", config.ideal_camera_distance);
     RCLCPP_INFO(logger, "  Number of IG rays: %d", config.num_camera_rays);
-    
+
     // Evaluation Parameters
     RCLCPP_INFO(logger, "--- Evaluation ---");
     RCLCPP_INFO(logger, "  Enable evaluation: %s", config.enable_evaluation ? "true" : "false");
@@ -226,7 +241,7 @@ void printConfiguration(const NBVPlannerConfig &config, const rclcpp::Logger &lo
     RCLCPP_INFO(logger, "  GT points file: %s", config.gt_points_file.c_str());
     RCLCPP_INFO(logger, "  Metrics plots dir: %s", config.metrics_plots_dir.c_str());
     RCLCPP_INFO(logger, "  Metrics data dir: %s", config.metrics_data_dir.c_str());
-    
+
     // General Parameters
     RCLCPP_INFO(logger, "--- General ---");
     RCLCPP_INFO(logger, "  Initial joint angles (rad):");
@@ -235,7 +250,7 @@ void printConfiguration(const NBVPlannerConfig &config, const rclcpp::Logger &lo
         RCLCPP_INFO(logger, "    Joint %zu: %.4f", i, config.init_joint_angles_rad[i]);
     }
     RCLCPP_INFO(logger, "  Map frame: %s", config.map_frame.c_str());
-    
+
     // NBV Planning Parameters
     RCLCPP_INFO(logger, "--- NBV Planning ---");
     RCLCPP_INFO(logger, "  Max iterations: %d", config.max_iterations);
@@ -251,12 +266,12 @@ void printConfiguration(const NBVPlannerConfig &config, const rclcpp::Logger &lo
     RCLCPP_INFO(logger, "  Viewpoints per frontier: %d", config.num_viewpoints_per_frontier);
     RCLCPP_INFO(logger, "  Z-bias sigma: %.4f", config.z_bias_sigma);
     RCLCPP_INFO(logger, "  Ideal distance tolerance: %.4f", config.ideal_distance_tolerance);
-    
+
     // Debug Parameters
     RCLCPP_INFO(logger, "--- Debug ---");
     RCLCPP_INFO(logger, "  Visualization: %s", config.visualize ? "enabled" : "disabled");
     RCLCPP_INFO(logger, "  Visualization topic: %s", config.visualization_topic.c_str());
-    
+
     RCLCPP_INFO(logger, "====================================\n");
 }
 
@@ -378,9 +393,9 @@ bool waitForOctomapWithTriggers(
     rclcpp::Rate spin_rate(10);
     int trigger_count = 0;
     auto last_trigger_time = node->now();
-    
+
     RCLCPP_DEBUG(logger, "Waiting for octomap (timeout: %.0f seconds)", timeout_seconds);
-    
+
     while (rclcpp::ok() && !octomap_interface->isTreeAvailable())
     {
         // Check timeout
@@ -389,9 +404,9 @@ bool waitForOctomapWithTriggers(
             RCLCPP_ERROR(logger, "Octomap not available after %.0f seconds. Exiting.", timeout_seconds);
             return false;
         }
-        
+
         rclcpp::spin_some(node);
-        
+
         // Send trigger every 1 second in triggered mode
         if (config.capture_type == "triggered" && (node->now() - last_trigger_time).seconds() >= 1.0)
         {
@@ -401,10 +416,10 @@ bool waitForOctomapWithTriggers(
             last_trigger_time = node->now();
             RCLCPP_DEBUG(logger, "Sending camera trigger #%d...", trigger_count);
         }
-        
+
         spin_rate.sleep();
     }
-    
+
     RCLCPP_DEBUG(logger, "Octomap received successfully");
     return true;
 }
@@ -419,17 +434,17 @@ void waitForOctomap(
     rclcpp::Rate spin_rate(10);
     int trigger_count = 0;
     auto last_trigger_time = node->now();
-    
+
     // Capture initial timestamp (will be 0.0 if no octomap exists yet)
     rclcpp::Time initial_time = octomap_interface->getLastUpdateTime();
     double initial_time_seconds = initial_time.seconds();
-    
+
     RCLCPP_DEBUG(logger, "Waiting for octomap (initial timestamp: %.3f seconds)", initial_time_seconds);
-    
+
     while (rclcpp::ok())
     {
         rclcpp::spin_some(node);
-        
+
         // Send trigger every 1 second in triggered mode
         if (config.capture_type == "triggered" && (node->now() - last_trigger_time).seconds() >= 1.0)
         {
@@ -439,20 +454,20 @@ void waitForOctomap(
             last_trigger_time = node->now();
             RCLCPP_DEBUG(logger, "Sending camera trigger #%d...", trigger_count);
         }
-        
+
         // Check if octomap is available AND has been updated
         if (octomap_interface->isTreeAvailable())
         {
             rclcpp::Time current_time = octomap_interface->getLastUpdateTime();
             double current_time_seconds = current_time.seconds();
-            
+
             if (current_time_seconds != initial_time_seconds)
             {
                 RCLCPP_DEBUG(logger, "Octomap available and updated (timestamp: %.3f seconds)", current_time_seconds);
                 break;
             }
         }
-        
+
         spin_rate.sleep();
     }
 }
@@ -462,14 +477,14 @@ void waitForOctomap(
  * Returns identity transform if frames are the same.
  */
 geometry_msgs::msg::TransformStamped getMoveitToOctomapTransform(
-    const std::shared_ptr<MoveItInterface>& moveit_interface,
-    const std::shared_ptr<OctoMapInterface>& octomap_interface,
-    const std::shared_ptr<tf2_ros::Buffer>& tf_buffer,
-    const rclcpp::Logger& logger)
+    const std::shared_ptr<MoveItInterface> &moveit_interface,
+    const std::shared_ptr<OctoMapInterface> &octomap_interface,
+    const std::shared_ptr<tf2_ros::Buffer> &tf_buffer,
+    const rclcpp::Logger &logger)
 {
     std::string moveit_frame = moveit_interface->getPoseReferenceFrame();
     std::string octomap_frame = octomap_interface->getOctomapFrameId();
-    
+
     geometry_msgs::msg::TransformStamped transform;
     if (moveit_frame != octomap_frame)
     {
@@ -480,7 +495,7 @@ geometry_msgs::msg::TransformStamped getMoveitToOctomapTransform(
                 moveit_frame,
                 tf2::TimePointZero);
             RCLCPP_DEBUG(logger, "Transform from %s to %s found",
-                        moveit_frame.c_str(), octomap_frame.c_str());
+                         moveit_frame.c_str(), octomap_frame.c_str());
         }
         catch (tf2::TransformException &ex)
         {
@@ -505,7 +520,6 @@ geometry_msgs::msg::TransformStamped getMoveitToOctomapTransform(
     }
     return transform;
 }
-
 
 // ============================================================================
 // NBV Planner Functions
@@ -681,29 +695,32 @@ std::pair<std::vector<Viewpoint>, std::vector<std::vector<Eigen::Vector3d>>> gen
  * @viewpoints: Candidate eef poses in moveit frame
  */
 std::vector<Viewpoint> filterReachableViewpoints(
-    const std::vector<Viewpoint>& viewpoints,
-    const std::shared_ptr<ManipulationWorkspace>& manip_workspace,
-    const std::shared_ptr<MoveItInterface>& moveit_interface,
-    const NBVPlannerConfig& config,
-    const rclcpp::Logger& logger)
-{    
+    const std::vector<Viewpoint> &viewpoints,
+    const std::shared_ptr<ManipulationWorkspace> &manip_workspace,
+    const std::shared_ptr<MoveItInterface> &moveit_interface,
+    const NBVPlannerConfig &config,
+    const rclcpp::Logger &logger)
+{
     // Filter by reachability
     std::vector<Viewpoint> reachable_viewpoints;
-    for (const auto& vp : viewpoints) {
+    for (const auto &vp : viewpoints)
+    {
         // Convert to end-effector pose
         geometry_msgs::msg::Pose cam_pose = eigenToPose(vp.position, vp.orientation);
         geometry_msgs::msg::Pose ee_pose;
-        if (!moveit_interface->cameraPoseToEEPose(cam_pose, config.camera_optical_link, ee_pose)) {
+        if (!moveit_interface->cameraPoseToEEPose(cam_pose, config.camera_optical_link, ee_pose))
+        {
             RCLCPP_INFO(logger, "Failed to convert camera pose to EE pose for reachability check...");
             continue;
         }
-        if (manip_workspace->isPoseReachable(ee_pose)) {
+        if (manip_workspace->isPoseReachable(ee_pose))
+        {
             reachable_viewpoints.push_back(vp);
         }
     }
     RCLCPP_DEBUG(logger, "%zu out of %zu viewpoints are reachable",
-                reachable_viewpoints.size(), viewpoints.size());
-    
+                 reachable_viewpoints.size(), viewpoints.size());
+
     return reachable_viewpoints;
 }
 
@@ -717,43 +734,99 @@ void sortViewpointsByAxisPriority(
     const std::vector<std::string> &axis_priority)
 {
     std::sort(viewpoints.begin(), viewpoints.end(),
-        [&axis_priority](const Viewpoint& a, const Viewpoint& b) {
-            for (const auto& axis_str : axis_priority) {
-                // Skip invalid axis (empty string)
-                if (axis_str.empty()) {
-                    continue;
-                }
+              [&axis_priority](const Viewpoint &a, const Viewpoint &b)
+              {
+                  for (const auto &axis_str : axis_priority)
+                  {
+                      // Skip invalid axis (empty string)
+                      if (axis_str.empty())
+                      {
+                          continue;
+                      }
 
-                // Determine axis and sort order
-                double val_a, val_b;
-                if (axis_str == "-x") {
-                    val_a = -a.position.x();
-                    val_b = -b.position.x();
-                } else if (axis_str == "x") {
-                    val_a = a.position.x();
-                    val_b = b.position.x();
-                } else if (axis_str == "-y") {
-                    val_a = -a.position.y();
-                    val_b = -b.position.y();
-                } else if (axis_str == "y") {
-                    val_a = a.position.y();
-                    val_b = b.position.y();
-                } else if (axis_str == "-z") {
-                    val_a = -a.position.z();
-                    val_b = -b.position.z();
-                } else if (axis_str == "z") {
-                    val_a = a.position.z();
-                    val_b = b.position.z();
-                } else {
-                    continue; // Invalid axis, skip
-                }
+                      // Determine axis and sort order
+                      double val_a, val_b;
+                      if (axis_str == "-x")
+                      {
+                          val_a = -a.position.x();
+                          val_b = -b.position.x();
+                      }
+                      else if (axis_str == "x")
+                      {
+                          val_a = a.position.x();
+                          val_b = b.position.x();
+                      }
+                      else if (axis_str == "-y")
+                      {
+                          val_a = -a.position.y();
+                          val_b = -b.position.y();
+                      }
+                      else if (axis_str == "y")
+                      {
+                          val_a = a.position.y();
+                          val_b = b.position.y();
+                      }
+                      else if (axis_str == "-z")
+                      {
+                          val_a = -a.position.z();
+                          val_b = -b.position.z();
+                      }
+                      else if (axis_str == "z")
+                      {
+                          val_a = a.position.z();
+                          val_b = b.position.z();
+                      }
+                      else
+                      {
+                          continue; // Invalid axis, skip
+                      }
 
-                // Check if values are different (with small epsilon for floating point)
-                if (std::abs(val_a - val_b) > 1e-6)
-                    return val_a < val_b;
-            }
-            return false; // All axes equal
-        });
+                      // Check if values are different (with small epsilon for floating point)
+                      if (std::abs(val_a - val_b) > 1e-6)
+                          return val_a < val_b;
+                  }
+                  return false; // All axes equal
+              });
+}
+
+void lawnmowerSortViewpoints(
+    std::vector<Viewpoint> &viewpoints,
+    const rclcpp::Logger &logger)
+{
+    // Determine if viewpoints are on YZ or XZ plane by checking x coordinates
+    bool is_xz_plane = false;
+    for (size_t i = 1; i < viewpoints.size(); ++i)
+    {
+        is_xz_plane = (std::abs(viewpoints[0].position.x() - viewpoints[i].position.x()) > 1e-6);
+        if (is_xz_plane) break;
+    }
+    // Sort by primary axis z (descending), then secondary axis y or x (descending)
+    if (is_xz_plane)
+        sortViewpointsByAxisPriority(viewpoints, {"-z", "-x"});
+    else
+        sortViewpointsByAxisPriority(viewpoints, {"-z", "-y"});
+    // Now reverse every other row to create lawnmower pattern
+    size_t row_start = 0;
+    size_t row_end = 1;
+    size_t row_count = 1;
+    std::vector<Viewpoint> sorted_viewpoints;
+    while (row_start < viewpoints.size())
+    {
+        std::vector<Viewpoint> row;
+        while (row_end < viewpoints.size())
+        {
+            bool same_row = (std::abs(viewpoints[row_end].position.z() - viewpoints[row_start].position.z()) < 1e-6);
+            if (same_row)
+                row_end++;
+            else
+                break;
+        }
+        // Reverse every other row
+        if (row_count % 2 == 0)
+            std::reverse(viewpoints.begin() + row_start, viewpoints.begin() + row_end);
+        row_start = row_end;
+        row_count++;
+    }
 }
 
 std::optional<moveit::planning_interface::MoveGroupInterface::Plan> planPathToViewpoint(
@@ -779,7 +852,7 @@ std::optional<moveit::planning_interface::MoveGroupInterface::Plan> planPathToVi
     }
 
     // Compute IK
-    auto next_joint_angles = moveit_interface->computeIK(current_joint_state, target_ee_pose, 0.1, 10);
+    auto next_joint_angles = moveit_interface->computeIK(current_joint_state, target_ee_pose, 0.5, 10);
     if (next_joint_angles.empty())
     {
         RCLCPP_INFO(logger, "No IK solution found for this viewpoint");
@@ -799,6 +872,44 @@ std::optional<moveit::planning_interface::MoveGroupInterface::Plan> planPathToVi
     if (plan.trajectory_.joint_trajectory.points.empty())
     {
         RCLCPP_INFO(logger, "No reachable path to IK solution");
+        return std::nullopt;
+    }
+
+    return plan;
+}
+
+/**
+ * @brief Plan path to viewpoint using multiple IK seeds and retry logic.
+ * This is a simplified wrapper around MoveItInterface::planToTargetPoseWithRetries.
+ */
+std::optional<moveit::planning_interface::MoveGroupInterface::Plan> planPathsToViewpoint(
+    const Viewpoint &viewpoint,
+    const std::shared_ptr<MoveItInterface> &moveit_interface,
+    const NBVPlannerConfig &config,
+    const rclcpp::Logger &logger)
+{
+    // Convert camera pose to end-effector pose
+    geometry_msgs::msg::Pose cam_pose = eigenToPose(viewpoint.position, viewpoint.orientation);
+    geometry_msgs::msg::Pose target_ee_pose;
+    if (!moveit_interface->cameraPoseToEEPose(cam_pose, config.camera_optical_link, target_ee_pose))
+    {
+        RCLCPP_INFO(logger, "Failed to convert camera pose to EE pose");
+        return std::nullopt;
+    }
+
+    // Use MoveItInterface's advanced planning with retries
+    moveit::planning_interface::MoveGroupInterface::Plan plan;
+    bool success = moveit_interface->planToTargetPoseWithRetries(
+        target_ee_pose,
+        plan,
+        config.num_ik_seeds,
+        config.plans_per_seed,
+        config.ik_timeout,
+        config.ik_attempts);
+
+    if (!success)
+    {
+        RCLCPP_INFO(logger, "No valid plan found for viewpoint after retries");
         return std::nullopt;
     }
 
@@ -845,10 +956,3 @@ bool executeAndWaitForMotion(
     }
     return false;
 }
-
-
-
-
-
-
-
