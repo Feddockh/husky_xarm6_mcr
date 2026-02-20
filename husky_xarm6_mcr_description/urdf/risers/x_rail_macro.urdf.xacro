@@ -17,7 +17,7 @@
         <xacro:property name="riser_y_origin" value="-0.078" />
         <xacro:property name="riser_z_origin" value="0" />
 
-        <xacro:property name="riser_y_offset" value="0.125" />
+        <xacro:property name="riser_y_offset" value="-0.125" />
         <xacro:property name="riser_z_offset" value="-0.02" />
 
         <!-- Battery Size -->
