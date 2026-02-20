@@ -48,7 +48,7 @@ def launch_setup(context, *args, **kwargs):
     metrics_dir = LaunchConfiguration('metrics_dir').perform(context)
     # if not os.path.isabs(metrics_dir):
     #     metrics_dir = os.path.join(package_share_dir, metrics_dir)
-    run_dir = LaunchConfiguration('run_dir').perform(context)
+    run_dir = LaunchConfiguration('run').perform(context)
     if run_dir == '':
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         run_dir = f'run_{timestamp}'
@@ -134,7 +134,7 @@ def launch_setup(context, *args, **kwargs):
         'alpha_cost_weight': float(LaunchConfiguration('alpha_cost_weight').perform(context)),
         # Viewpoint Parameters
         'plane_half_extent': 1.0,
-        'plane_spatial_resolution': 0.1,
+        'plane_spatial_resolution': 0.4,
         'cap_max_theta_deg': 60.0,
         'cap_min_theta_deg': 15.0,
         'num_viewpoints_per_frontier': int(LaunchConfiguration('num_viewpoints_per_frontier').perform(context)),
@@ -320,7 +320,7 @@ def generate_launch_description():
                             description='Threshold radius (meters) for matching clusters to ground truth points'),
         DeclareLaunchArgument('metrics_dir', default_value='metrics',
                             description='Directory for saving metrics (plots and CSV data)'),
-        DeclareLaunchArgument('run_dir', default_value='',
+        DeclareLaunchArgument('run', default_value='',
                             description='Directory for saving run data'),
         OpaqueFunction(function=launch_setup),
     ])

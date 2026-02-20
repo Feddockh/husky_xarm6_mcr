@@ -48,7 +48,7 @@ def launch_setup(context, *args, **kwargs):
     metrics_dir = LaunchConfiguration('metrics_dir').perform(context)
     # if not os.path.isabs(metrics_dir):
     #     metrics_dir = os.path.join(package_share_dir, metrics_dir)
-    run_dir = LaunchConfiguration('run_dir').perform(context)
+    run_dir = LaunchConfiguration('run').perform(context)
     if run_dir == '':
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         run_dir = f'run_{timestamp}'
@@ -318,7 +318,7 @@ def generate_launch_description():
                             description='Threshold radius (meters) for matching clusters to ground truth points'),
         DeclareLaunchArgument('metrics_dir', default_value='metrics',
                             description='Directory for saving metrics (plots and CSV data)'),
-        DeclareLaunchArgument('run_dir', default_value='',
+        DeclareLaunchArgument('run', default_value='',
                             description='Directory for saving run data'),
         OpaqueFunction(function=launch_setup),
     ])

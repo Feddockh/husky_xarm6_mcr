@@ -371,11 +371,11 @@ namespace husky_xarm6_mcr_nbv_planner
          * @param y_max Maximum y-axis value (default: 1.0)
          * @return true if successful, false otherwise
          */
-        bool plotMetrics(
+        static bool plotMetric(
             const std::vector<std::vector<double>> &y_data,
             const std::vector<double> &x_data,
             const std::vector<std::string> &series_labels,
-            const std::string &plot_title = "Metrics",
+            const std::string &plot_title = "Metric",
             const std::string &x_title = "X",
             const std::string &y_title = "Y",
             const std::vector<std::array<float, 3>> &colors = {},
@@ -386,28 +386,42 @@ namespace husky_xarm6_mcr_nbv_planner
 
         /**
          * @brief Plot evaluation metrics from ClassMetrics structure
-         * @param all_metrics 2D vector of ClassMetrics (outer: different runs, inner: classes)
-         * @param plot_title Title of the plot (default: "Classification Metrics")
+         * @param class_metrics 2D vector of ClassMetrics (outer: different runs, inner: classes)
+         * @param plot_title Title of the plot (default: "Class Metrics")
          * @param colors Colors for each metric run (optional)
          * @param save_path Path to save the plot (default: "/tmp/metrics.png")
          * @return true if successful, false otherwise
          */
-        bool plotMetrics(
-            const std::vector<std::vector<ClassMetrics>> &all_metrics,
-            const std::string &plot_title = "NBV Metrics",
+        static bool plotClassMetrics(
+            const std::vector<std::vector<ClassMetrics>> &metrics,
+            const std::vector<double> &x_data,
+            const std::string &x_data_label,
+            const std::string &plot_title = "Class Metrics",
             const std::vector<std::array<float, 3>> &colors = {},
             const std::string &save_path = "/tmp/metrics.png"
         );
 
         /**
-         * @brief Log metrics to csv file
+         * @brief Plots evaluation metrics from EvaluationMetrics structure
          * @param all_metrics 2D vector of ClassMetrics (outer: different runs, inner: classes)
+         * @param dir_path Path to save the plots (default: "/tmp/metrics.png")
+         * @return true if successful, false otherwise
+         */
+        static bool plotAllMetrics(
+            const std::vector<EvaluationMetrics> &all_metrics,
+            const std::string &dir_path = "/tmp"
+        );
+
+        /**
+         * @brief Log metrics to csv file
+         * @param all_metrics 2D vector of EvaluationMetrics (outer: different runs, inner: classes)
          * @param file_path Path to the csv file
          * @return true if successful, false otherwise
          */
-        static bool logMetricsToCSV(
-            const std::vector<std::vector<ClassMetrics>> &all_metrics,
-            const std::string &file_path = "/tmp/metrics.csv"
+        static bool logAllMetricsToCSV(
+            const std::vector<EvaluationMetrics> &all_metrics,
+            const std::string &dir_path = "/tmp",
+            const std::string &file_name = "nbv_metrics.csv"
         );
 
         /**

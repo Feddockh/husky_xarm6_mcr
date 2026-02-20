@@ -1383,7 +1383,7 @@ namespace husky_xarm6_mcr_nbv_planner
         publishPoints(gt_points, colors, labels, size, alpha, ns, frame_id);
     }
 
-    bool NBVVisualizer::plotMetrics(
+    bool NBVVisualizer::plotMetric(
         const std::vector<std::vector<double>> &y_data,
         const std::vector<double> &x_data,
         const std::vector<std::string> &series_labels,
@@ -1397,22 +1397,17 @@ namespace husky_xarm6_mcr_nbv_planner
     {
         if (y_data.empty())
         {
-            RCLCPP_WARN(logger_, "No data to plot");
             return false;
         }
 
         // Validate input sizes
         if (!x_data.empty() && x_data.size() != y_data[0].size())
         {
-            RCLCPP_ERROR(logger_, "x_data size (%zu) must match y data points per series (%zu)",
-                         x_data.size(), y_data[0].size());
             return false;
         }
 
         if (!series_labels.empty() && series_labels.size() != y_data.size())
         {
-            RCLCPP_ERROR(logger_, "series_labels size (%zu) must match number of series (%zu)",
-                         series_labels.size(), y_data.size());
             return false;
         }
 
@@ -1492,7 +1487,6 @@ namespace husky_xarm6_mcr_nbv_planner
             }
             catch (const std::exception &e)
             {
-                RCLCPP_ERROR(logger_, "Failed to save plot to '%s': %s", save_path.c_str(), e.what());
                 return false;
             }
 
@@ -1503,40 +1497,36 @@ namespace husky_xarm6_mcr_nbv_planner
         }
         catch (const std::exception &e)
         {
-            RCLCPP_ERROR(logger_, "Failed to plot metrics: %s", e.what());
             return false;
         }
     }
 
-    bool NBVVisualizer::plotMetrics(
-        const std::vector<std::vector<ClassMetrics>> &all_metrics,
+    bool NBVVisualizer::plotClassMetrics(
+        const std::vector<std::vector<ClassMetrics>> &metrics,
+        const std::vector<double> &x_data,
         const std::string &plot_title,
+        const std::string &x_data_label,
         const std::vector<std::array<float, 3>> &colors,
         const std::string &save_path)
     {
-        if (all_metrics.empty())
+        if (metrics.empty())
         {
-            RCLCPP_WARN(logger_, "No metrics to plot");
             return false;
         }
 
         // Define the data vectors
         std::vector<std::vector<double>> y_data;
-        std::vector<double> x_data;
+        
         std::vector<std::string> series_labels;
 
         // Define the number of iterations and classes based on the input metrics
-        int num_iterations = static_cast<int>(all_metrics.size());
-        int num_classes = static_cast<int>(all_metrics[0].size());
+        int num_iterations = static_cast<int>(metrics.size());
+        int num_classes = static_cast<int>(metrics[0].size());
 
         // Fill out the y data with zeros to initialize the vectors for each metric type (precision, recall, F1) for each class across all iterations
         y_data.resize(num_classes * 3); // 3 metrics per class
         for (auto &series : y_data)
             series.resize(num_iterations, 0.0);
-
-        // Fill out the x data (iteration numbers from 0 to num_iterations-1)
-        for (int i = 0; i < num_iterations; ++i)
-            x_data.push_back(static_cast<double>(i));
 
         // Fill out the series labels based on the class names and metric types (precision, recall, F1)
         for (size_t class_idx = 0; class_idx < static_cast<size_t>(num_classes); ++class_idx)
@@ -1547,9 +1537,9 @@ namespace husky_xarm6_mcr_nbv_planner
         }
 
         // Pull the precision, recall, and F1 scores across each iteration for each class and add to the data vectors
-        for (size_t i = 0; i < all_metrics.size(); ++i)
+        for (size_t i = 0; i < metrics.size(); ++i)
         {
-            const auto &iter_metrics = all_metrics[i];
+            const auto &iter_metrics = metrics[i];
             for (size_t class_idx = 0; class_idx < static_cast<size_t>(num_classes); ++class_idx)
             {
                 const auto &class_metrics = iter_metrics[class_idx];
@@ -1561,12 +1551,43 @@ namespace husky_xarm6_mcr_nbv_planner
         }
 
         // Call the more general plotMetrics function
-        return plotMetrics(y_data, x_data, series_labels, plot_title, "Iteration", "Metric Value", colors, save_path, 0.0, 1.0);
+        return plotMetric(y_data, x_data, series_labels, plot_title, x_data_label, "Metric Value", colors, save_path, 0.0, 1.0);
     }
 
-    bool NBVVisualizer::logMetricsToCSV(
-        const std::vector<std::vector<ClassMetrics>> &all_metrics,
-        const std::string &file_path)
+    bool NBVVisualizer::plotAllMetrics(
+        const std::vector<EvaluationMetrics> &all_metrics,
+        const std::string &dir_path)
+    {
+        if (all_metrics.empty())
+        {
+            return false;
+        }
+
+        // Extract class metrics from all evaluations
+        std::vector<std::vector<ClassMetrics>> class_metrics_over_time;
+        std::vector<double> x_data_time;
+        std::vector<double> x_data_iter;
+
+        for (size_t i = 0; i < all_metrics.size(); ++i)
+        {
+            class_metrics_over_time.push_back(all_metrics[i].class_metrics);
+            x_data_iter.push_back(static_cast<double>(i));
+            x_data_time.push_back(all_metrics[i].time);
+        }
+
+        // Plot the metric as a function of iterations
+        bool success_iter = plotClassMetrics(class_metrics_over_time, x_data_iter, 
+            "Class Metrics Over Iterations", "Iteration", {}, dir_path + "/nbv_class_metrics_iter.png");
+        // Plot the metric as a function of time
+        bool success_time = plotClassMetrics(class_metrics_over_time, x_data_time, 
+            "Class Metrics Over Time", "Time (s)", {}, dir_path + "/nbv_class_metrics_time.png");
+        return success_iter && success_time;
+    }
+
+    bool NBVVisualizer::logAllMetricsToCSV(
+        const std::vector<EvaluationMetrics> &all_metrics,
+        const std::string &dir_path,
+        const std::string &file_name)
     {
         if (all_metrics.empty())
         {
@@ -1574,7 +1595,7 @@ namespace husky_xarm6_mcr_nbv_planner
         }
 
         // Open file for writing
-        std::ofstream csv_file(file_path);
+        std::ofstream csv_file(dir_path + "/" + file_name);
         if (!csv_file.is_open())
         {
             return false;
@@ -1583,16 +1604,17 @@ namespace husky_xarm6_mcr_nbv_planner
         try
         {
             // Write CSV header
-            csv_file << "Run,Class_ID,TP_Clusters,FP_Clusters,TP_Points,FN_Points,Precision,Recall,F1_Score\n";
+            csv_file << "Run,Time,Class_ID,TP_Clusters,FP_Clusters,TP_Points,FN_Points,Precision,Recall,F1_Score\n";
 
             // Write data for each run and class
             for (size_t run_idx = 0; run_idx < all_metrics.size(); ++run_idx)
             {
-                const auto &metrics_for_run = all_metrics[run_idx];
+                const auto &eval_metrics = all_metrics[run_idx];
                 
-                for (const auto &class_metrics : metrics_for_run)
+                for (const auto &class_metrics : eval_metrics.class_metrics)
                 {
                     csv_file << run_idx << ","
+                             << std::fixed << std::setprecision(3) << eval_metrics.time << ","
                              << class_metrics.class_id << ","
                              << class_metrics.tp_clusters << ","
                              << class_metrics.fp_clusters << ","

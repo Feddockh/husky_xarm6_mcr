@@ -150,7 +150,10 @@ int main(int argc, char **argv)
             // Step 3: Evaluate and print metrics
             std::vector<ClassMetrics> eval_results = octomap_interface->evaluateMatchResults(match_result, false);
             all_metrics.push_back(eval_results);
-            visualizer->plotMetrics(all_metrics, "NBV Metrics", {}, "./nbv_metrics_plot.png");
+            std::vector<double> x_data;
+            for (size_t i = 0; i < all_metrics.size(); ++i)
+                x_data.push_back(static_cast<double>(i+1));
+            visualizer->plotClassMetrics(all_metrics, x_data, "viewpoint", "Class Metrics", {}, "./nbv_metrics_plot.png");
 
             has_data = true;
         }

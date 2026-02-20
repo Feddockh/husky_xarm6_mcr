@@ -56,4 +56,17 @@ namespace husky_xarm6_mcr_nbv_planner
         double recall;    // Computed using the GT point counts: tp_points / (tp_points + fn_points)
         double f1_score;  // Harmonic mean of precision and recall: 2 * (precision * recall) / (precision + recall)
     };
+
+    /**
+     * @brief Resulting evaluation metrics for all semantic classes at a single point in time
+     * 
+     * Note: To track metrics over time, use std::vector<EvaluationMetrics>
+     */
+    struct EvaluationMetrics
+    {
+        double time;                              // Timestamp (seconds)
+        std::vector<ClassMetrics> class_metrics;  // Metrics for each semantic class
+        int free_voxels;                          // Count of free voxels
+        int occupied_voxels;                      // Count of occupied voxels
+    };
 }

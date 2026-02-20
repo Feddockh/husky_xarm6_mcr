@@ -81,7 +81,7 @@ int main(int argc, char **argv)
     moveit_interface->setOrientationConstraints(
         config.camera_optical_link,
         arrayToQuaternion(init_cam_orientation),
-        2*M_PI, M_PI/2, M_PI);
+        M_PI/2, M_PI/2, M_PI);
 
     // Setup workspace with moveit interface
     auto manip_workspace = setupWorkspace(moveit_interface, visualizer, config, node->get_logger());
@@ -115,9 +115,7 @@ int main(int argc, char **argv)
     waitForOctomap(node, octomap_interface, trigger_clients, config, node->get_logger());
 
     // Initialize evaluation if enabled
-    std::string csv_path = config.metrics_data_dir + "/nbv_metrics.csv";
-    std::string plot_path = config.metrics_plots_dir + "/nbv_metrics_final.png";
-    std::vector<std::vector<ClassMetrics>> all_metrics;
+    std::vector<EvaluationMetrics> all_metrics;
     if (config.enable_evaluation && octomap_interface->isSemanticTree())
     {
         if (!octomap_interface->loadGroundTruthSemantics(config.gt_points_file))
@@ -128,15 +126,18 @@ int main(int argc, char **argv)
         }
         RCLCPP_INFO(node->get_logger(), "Ground truth loaded successfully");
         // Perform initial evaluation
+        EvaluationMetrics eval_metrics;
+        eval_metrics.time = node->now().seconds();
         auto latest_clusters = octomap_interface->clusterSemanticVoxels(false);
         auto match_result = octomap_interface->matchClustersToGroundTruth(latest_clusters, config.eval_threshold_radius, false);
-        all_metrics.push_back(octomap_interface->evaluateMatchResults(match_result, false));
+        eval_metrics.class_metrics = octomap_interface->evaluateMatchResults(match_result, false);
+        all_metrics.push_back(eval_metrics);
         if (visualizer)
         {
             visualizer->publishMatchResults(match_result, config.eval_threshold_radius * 2, 0.8f);
-            visualizer->plotMetrics(all_metrics, "NBV Metrics", {}, plot_path);
         }
-        visualizer->logMetricsToCSV(all_metrics, csv_path);
+        visualizer->plotAllMetrics(all_metrics, config.metrics_plots_dir);
+        visualizer->logAllMetricsToCSV(all_metrics, config.metrics_data_dir);
     }
     else
         RCLCPP_WARN(node->get_logger(), "Evaluation disabled or octomap is not semantic, skipping evaluation setup");
@@ -309,27 +310,29 @@ int main(int argc, char **argv)
 
         // Evaluate if enabled
         if (config.enable_evaluation && octomap_interface->isSemanticTree()) {
+            EvaluationMetrics eval_metrics;
+            eval_metrics.time = node->now().seconds();
             auto latest_clusters = octomap_interface->clusterSemanticVoxels(false);
             auto match_result = octomap_interface->matchClustersToGroundTruth(latest_clusters, config.eval_threshold_radius, false);
-            auto metrics = octomap_interface->evaluateMatchResults(match_result, false);
-            all_metrics.push_back(metrics);
+            eval_metrics.class_metrics = octomap_interface->evaluateMatchResults(match_result, false);
+            all_metrics.push_back(eval_metrics);
             // Print results
             RCLCPP_INFO(node->get_logger(), "\n=== Evaluation Results ===");
             RCLCPP_INFO(node->get_logger(), "Class ID | TP Clusters | FP Clusters | TP Points | FN Points");
             RCLCPP_INFO(node->get_logger(), "------------------------------------------------------------");
-            for (const auto &cm : metrics)
+            for (const auto &cm : eval_metrics.class_metrics)
                 RCLCPP_INFO(node->get_logger(), "  %6d | %11d | %12d | %9d | %9d", cm.class_id, cm.tp_clusters, cm.fp_clusters, cm.tp_points, cm.fn_points);
             RCLCPP_INFO(node->get_logger(), "------------------------------------------------------------");
             RCLCPP_INFO(node->get_logger(), "Class ID | Precision | Recall | F1 Score");
             RCLCPP_INFO(node->get_logger(), "------------------------------------------------------------");
-            for (const auto &cm : metrics)
+            for (const auto &cm : eval_metrics.class_metrics)
                 RCLCPP_INFO(node->get_logger(), "  %6d | %9.2f%% | %6.2f%% | %8.2f%%", cm.class_id, cm.precision * 100.0, cm.recall * 100.0, cm.f1_score * 100.0);
             // Visualize and log metrics
             if (visualizer) {
                 visualizer->publishMatchResults(match_result, config.eval_threshold_radius * 2, 0.8f);
-                visualizer->plotMetrics(all_metrics, "NBV Metrics", {}, plot_path);
             }
-            NBVVisualizer::logMetricsToCSV(all_metrics, csv_path);
+            visualizer->plotAllMetrics(all_metrics, config.metrics_plots_dir);
+            visualizer->logAllMetricsToCSV(all_metrics, config.metrics_data_dir);
         }
 
         // Clear visualization

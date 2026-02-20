@@ -790,8 +790,7 @@ void sortViewpointsByAxisPriority(
 }
 
 void lawnmowerSortViewpoints(
-    std::vector<Viewpoint> &viewpoints,
-    const rclcpp::Logger &logger)
+    std::vector<Viewpoint> &viewpoints)
 {
     // Determine if viewpoints are on YZ or XZ plane by checking x coordinates
     bool is_xz_plane = false;
