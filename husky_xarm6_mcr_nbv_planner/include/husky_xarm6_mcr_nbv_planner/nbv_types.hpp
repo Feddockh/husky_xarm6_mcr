@@ -68,5 +68,6 @@ namespace husky_xarm6_mcr_nbv_planner
         std::vector<ClassMetrics> class_metrics;  // Metrics for each semantic class
         int free_voxels;                          // Count of free voxels
         int occupied_voxels;                      // Count of occupied voxels
+        double bbox_coverage;                       // Percentage of bounding box covered by occupied voxels
     };
 }

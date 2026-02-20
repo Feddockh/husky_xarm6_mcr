@@ -6,6 +6,8 @@
 #include "husky_xarm6_mcr_nbv_planner/nbv_visualizer.hpp"
 
 #include <matplot/matplot.h>
+#include <iomanip>
+#include <algorithm>
 
 namespace husky_xarm6_mcr_nbv_planner
 {
@@ -1577,11 +1579,60 @@ namespace husky_xarm6_mcr_nbv_planner
 
         // Plot the metric as a function of iterations
         bool success_iter = plotClassMetrics(class_metrics_over_time, x_data_iter, 
-            "Class Metrics Over Iterations", "Iteration", {}, dir_path + "/nbv_class_metrics_iter.png");
+            "Iteration", "Class Metrics Over Iterations", {}, dir_path + "/nbv_class_metrics_iter.png");
         // Plot the metric as a function of time
         bool success_time = plotClassMetrics(class_metrics_over_time, x_data_time, 
-            "Class Metrics Over Time", "Time (s)", {}, dir_path + "/nbv_class_metrics_time.png");
-        return success_iter && success_time;
+            "Time (s)", "Class Metrics Over Time", {}, dir_path + "/nbv_class_metrics_time.png");
+
+        // Extract voxel count data
+        std::vector<double> occupied_voxels_data;
+        std::vector<double> free_voxels_data;
+        std::vector<double> total_voxels_data;
+        for (const auto &metrics : all_metrics)
+        {
+            occupied_voxels_data.push_back(static_cast<double>(metrics.occupied_voxels));
+            free_voxels_data.push_back(static_cast<double>(metrics.free_voxels));
+            total_voxels_data.push_back(static_cast<double>(metrics.occupied_voxels + metrics.free_voxels));
+        }
+
+        // Plot voxel counts over iterations
+        std::vector<std::vector<double>> voxel_data_iter = {occupied_voxels_data, free_voxels_data, total_voxels_data};
+        std::vector<std::string> voxel_labels = {"Occupied Voxels", "Free Voxels", "Total Voxels"};
+        std::vector<std::array<float, 3>> voxel_colors = {{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}};
+        
+        double max_voxels = total_voxels_data.empty() ? 1.0 : *std::max_element(total_voxels_data.begin(), total_voxels_data.end());
+        bool success_voxels_iter = plotMetric(voxel_data_iter, x_data_iter, voxel_labels, 
+                                             "Voxel Counts Over Iterations", "Iteration", "Voxel Count", 
+                                             voxel_colors, dir_path + "/voxel_counts_iter.png", 0.0, max_voxels * 1.1);
+
+        // Plot voxel counts over time
+        bool success_voxels_time = plotMetric(voxel_data_iter, x_data_time, voxel_labels, 
+                                             "Voxel Counts Over Time", "Time (s)", "Voxel Count", 
+                                             voxel_colors, dir_path + "/voxel_counts_time.png", 0.0, max_voxels * 1.1);
+
+        // Extract coverage data
+        std::vector<double> coverage_data;
+        for (const auto &metrics : all_metrics)
+        {
+            coverage_data.push_back(metrics.bbox_coverage);
+        }
+
+        // Plot coverage percentage over iterations
+        std::vector<std::vector<double>> coverage_y_data = {coverage_data};
+        std::vector<std::string> coverage_labels = {"Coverage %"};
+        std::vector<std::array<float, 3>> coverage_colors = {{0.0f, 0.5f, 1.0f}};
+        
+        bool success_coverage_iter = plotMetric(coverage_y_data, x_data_iter, coverage_labels, 
+                                               "Octomap Coverage Over Iterations", "Iteration", "Coverage (%)",
+                                               coverage_colors, dir_path + "/coverage_iter.png", 0.0, 100.0);
+
+        // Plot coverage percentage over time
+        bool success_coverage_time = plotMetric(coverage_y_data, x_data_time, coverage_labels, 
+                                               "Octomap Coverage Over Time", "Time (s)", "Coverage (%)",
+                                               coverage_colors, dir_path + "/coverage_time.png", 0.0, 100.0);
+
+        return success_iter && success_time && success_voxels_iter && success_voxels_time && 
+               success_coverage_iter && success_coverage_time;
     }
 
     bool NBVVisualizer::logAllMetricsToCSV(
@@ -1604,25 +1655,44 @@ namespace husky_xarm6_mcr_nbv_planner
         try
         {
             // Write CSV header
-            csv_file << "Run,Time,Class_ID,TP_Clusters,FP_Clusters,TP_Points,FN_Points,Precision,Recall,F1_Score\n";
+            csv_file << "Run,Time,Occupied_Voxels,Free_Voxels,Total_Voxels,Coverage_Percent,Class_ID,TP_Clusters,FP_Clusters,TP_Points,FN_Points,Precision,Recall,F1_Score\n";
 
             // Write data for each run and class
             for (size_t run_idx = 0; run_idx < all_metrics.size(); ++run_idx)
             {
                 const auto &eval_metrics = all_metrics[run_idx];
                 
-                for (const auto &class_metrics : eval_metrics.class_metrics)
+                // If there are class metrics, write one row per class
+                if (!eval_metrics.class_metrics.empty())
                 {
+                    for (const auto &class_metrics : eval_metrics.class_metrics)
+                    {
+                        csv_file << run_idx << ","
+                                 << std::fixed << std::setprecision(3) << eval_metrics.time << ","
+                                 << eval_metrics.occupied_voxels << ","
+                                 << eval_metrics.free_voxels << ","
+                                 << (eval_metrics.occupied_voxels + eval_metrics.free_voxels) << ","
+                                 << std::fixed << std::setprecision(2) << eval_metrics.bbox_coverage << ","
+                                 << class_metrics.class_id << ","
+                                 << class_metrics.tp_clusters << ","
+                                 << class_metrics.fp_clusters << ","
+                                 << class_metrics.tp_points << ","
+                                 << class_metrics.fn_points << ","
+                                 << std::fixed << std::setprecision(4) << class_metrics.precision << ","
+                                 << std::fixed << std::setprecision(4) << class_metrics.recall << ","
+                                 << std::fixed << std::setprecision(4) << class_metrics.f1_score << "\n";
+                    }
+                }
+                else
+                {
+                    // If no class metrics, still log voxel and coverage data
                     csv_file << run_idx << ","
                              << std::fixed << std::setprecision(3) << eval_metrics.time << ","
-                             << class_metrics.class_id << ","
-                             << class_metrics.tp_clusters << ","
-                             << class_metrics.fp_clusters << ","
-                             << class_metrics.tp_points << ","
-                             << class_metrics.fn_points << ","
-                             << std::fixed << std::setprecision(4) << class_metrics.precision << ","
-                             << std::fixed << std::setprecision(4) << class_metrics.recall << ","
-                             << std::fixed << std::setprecision(4) << class_metrics.f1_score << "\n";
+                             << eval_metrics.occupied_voxels << ","
+                             << eval_metrics.free_voxels << ","
+                             << (eval_metrics.occupied_voxels + eval_metrics.free_voxels) << ","
+                             << std::fixed << std::setprecision(2) << eval_metrics.bbox_coverage << ","
+                             << ",,,,,,,,\n";  // Empty fields for class-specific metrics
                 }
             }
 

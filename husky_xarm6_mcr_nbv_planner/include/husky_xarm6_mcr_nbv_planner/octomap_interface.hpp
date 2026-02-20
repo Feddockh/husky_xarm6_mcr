@@ -176,6 +176,18 @@ namespace husky_xarm6_mcr_nbv_planner
         std::vector<Cluster> clusterSemanticVoxels(bool verbose = false) const;
 
         /**
+         * @brief Get the number of occupied and free voxels in the octomap
+         * @return std::pair<size_t, size_t> where first is occupied count and second is free count
+         */
+        std::pair<size_t, size_t> getVoxelCounts() const;
+
+        /**
+         * @brief Calculate coverage percentage (occupied voxels / total known voxels)
+         * @return Coverage percentage (0-100), or 0.0 if no voxels exist
+         */
+        double calculateCoverage() const;
+
+        /**
          * @brief Print statistics about the current octomap
          * Logs resolution, node counts, occupied/free voxels, and semantic class info (if semantic tree)
          */

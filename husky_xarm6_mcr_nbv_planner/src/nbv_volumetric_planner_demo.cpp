@@ -116,6 +116,7 @@ int main(int argc, char **argv)
 
     // Initialize evaluation if enabled
     std::vector<EvaluationMetrics> all_metrics;
+    double initial_time = 0.0;
     if (config.enable_evaluation && octomap_interface->isSemanticTree())
     {
         if (!octomap_interface->loadGroundTruthSemantics(config.gt_points_file))
@@ -125,12 +126,18 @@ int main(int argc, char **argv)
             return 1;
         }
         RCLCPP_INFO(node->get_logger(), "Ground truth loaded successfully");
+        // Store initial time for relative time calculations
+        initial_time = node->now().seconds();
         // Perform initial evaluation
         EvaluationMetrics eval_metrics;
-        eval_metrics.time = node->now().seconds();
+        eval_metrics.time = 0.0;  // Initial evaluation at t=0
         auto latest_clusters = octomap_interface->clusterSemanticVoxels(false);
         auto match_result = octomap_interface->matchClustersToGroundTruth(latest_clusters, config.eval_threshold_radius, false);
         eval_metrics.class_metrics = octomap_interface->evaluateMatchResults(match_result, false);
+        auto [occupied, free] = octomap_interface->getVoxelCounts();
+        eval_metrics.occupied_voxels = occupied;
+        eval_metrics.free_voxels = free;
+        eval_metrics.bbox_coverage = octomap_interface->calculateCoverage();
         all_metrics.push_back(eval_metrics);
         if (visualizer)
         {
@@ -255,7 +262,8 @@ int main(int argc, char **argv)
         double average_information_gain = 0.0;
         for (auto& vp : reachable_viewpoints) {
             vp.information_gain = computeInformationGain(vp, octomap_interface,
-                geometry_utils::rad2Deg(config.camera_horizontal_fov_rad), config.camera_width, config.camera_height, config.camera_max_range,
+                geometry_utils::rad2Deg(config.camera_horizontal_fov_rad), geometry_utils::rad2Deg(config.camera_vertical_fov_rad),
+                config.camera_width, config.camera_height, config.camera_max_range,
                 octomap_interface->getResolution(), config.num_camera_rays, octomap_interface->hasBoundingBox(), node->get_logger(), nullptr);
             double distance = (vp.position - current_cam_position).norm();
             vp.cost = distance;
@@ -311,10 +319,14 @@ int main(int argc, char **argv)
         // Evaluate if enabled
         if (config.enable_evaluation && octomap_interface->isSemanticTree()) {
             EvaluationMetrics eval_metrics;
-            eval_metrics.time = node->now().seconds();
+            eval_metrics.time = node->now().seconds() - initial_time;  // Relative time since start
             auto latest_clusters = octomap_interface->clusterSemanticVoxels(false);
             auto match_result = octomap_interface->matchClustersToGroundTruth(latest_clusters, config.eval_threshold_radius, false);
             eval_metrics.class_metrics = octomap_interface->evaluateMatchResults(match_result, false);
+            auto [occupied, free] = octomap_interface->getVoxelCounts();
+            eval_metrics.occupied_voxels = occupied;
+            eval_metrics.free_voxels = free;
+            eval_metrics.bbox_coverage = octomap_interface->calculateCoverage();
             all_metrics.push_back(eval_metrics);
             // Print results
             RCLCPP_INFO(node->get_logger(), "\n=== Evaluation Results ===");

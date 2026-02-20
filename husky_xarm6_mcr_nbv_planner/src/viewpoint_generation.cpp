@@ -417,7 +417,8 @@ namespace husky_xarm6_mcr_nbv_planner
     double computeInformationGain(
         const Viewpoint &viewpoint,
         const std::shared_ptr<OctoMapInterface> &octomap_interface,
-        double fov,
+        double h_fov,
+        double v_fov,
         int width,
         int height,
         double max_range,
@@ -470,8 +471,10 @@ namespace husky_xarm6_mcr_nbv_planner
         const Eigen::Matrix3d R_wc = geometry_utils::quatToRotMat(viewpoint.orientation);
 
         // Camera intrinsics
-        const double hfov = fov * M_PI / 180.0;
-        const double focal = (width / 2.0) / std::tan(hfov / 2.0);
+        const double hfov_rad = h_fov * M_PI / 180.0;
+        const double vfov_rad = v_fov * M_PI / 180.0;
+        const double focal_x = (width / 2.0) / std::tan(hfov_rad / 2.0);
+        const double focal_y = (height / 2.0) / std::tan(vfov_rad / 2.0);
         const double cx = (width - 1) * 0.5;
         const double cy = (height - 1) * 0.5;
 
@@ -484,8 +487,8 @@ namespace husky_xarm6_mcr_nbv_planner
             for (int u = 0; u < width; u += stride_u)
             {
                 // Ray in camera frame
-                const double x = (u - cx) / focal;
-                const double y = (v - cy) / focal;
+                const double x = (u - cx) / focal_x;
+                const double y = (v - cy) / focal_y;
                 Eigen::Vector3d ray_cam(x, y, 1.0);
                 ray_cam.normalize();
 
@@ -587,7 +590,8 @@ namespace husky_xarm6_mcr_nbv_planner
     double computeSemanticInformationGain(
         const Viewpoint &viewpoint,
         const std::shared_ptr<OctoMapInterface> &octomap_interface,
-        double fov,
+        double h_fov,
+        double v_fov,
         int width,
         int height,
         double max_range,
@@ -608,7 +612,7 @@ namespace husky_xarm6_mcr_nbv_planner
         // You can extend this by passing a SemanticOctoMap pointer instead
 
         return computeInformationGain(
-            viewpoint, octomap_interface, fov, width, height,
+            viewpoint, octomap_interface, h_fov, v_fov, width, height,
             max_range, resolution, num_rays, use_bbox,
             rclcpp::get_logger("viewpoint_generation"),
             nullptr);

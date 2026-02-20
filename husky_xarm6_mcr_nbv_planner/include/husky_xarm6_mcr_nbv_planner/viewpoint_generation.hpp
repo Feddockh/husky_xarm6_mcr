@@ -134,7 +134,8 @@ std::vector<Viewpoint> generateFrontierBasedViewpoints(
  * 
  * @param viewpoint Candidate viewpoint
  * @param octomap_interface OctoMap interface for scene representation
- * @param fov Camera horizontal field of view (degrees)
+ * @param h_fov Camera horizontal field of view (degrees)
+ * @param v_fov Camera vertical field of view (degrees)
  * @param width Image width (pixels)
  * @param height Image height (pixels)
  * @param max_range Maximum sensor range (meters)
@@ -146,7 +147,8 @@ std::vector<Viewpoint> generateFrontierBasedViewpoints(
 double computeInformationGain(
     const Viewpoint& viewpoint,
     const std::shared_ptr<OctoMapInterface>& octomap_interface,
-    double fov = 60.0,
+    double h_fov = 60.0,
+    double v_fov = 45.0,
     int width = 640,
     int height = 480,
     double max_range = 3.0,
@@ -167,7 +169,8 @@ double computeInformationGain(
  * 
  * @param viewpoint Candidate viewpoint
  * @param octomap_interface OctoMap interface for scene representation
- * @param fov Camera horizontal field of view (degrees)
+ * @param h_fov Camera horizontal field of view (degrees)
+ * @param v_fov Camera vertical field of view (degrees)
  * @param width Image width (pixels)
  * @param height Image height (pixels)
  * @param max_range Maximum sensor range (meters)
@@ -180,7 +183,8 @@ double computeInformationGain(
 double computeSemanticInformationGain(
     const Viewpoint& viewpoint,
     const std::shared_ptr<OctoMapInterface>& octomap_interface,
-    double fov = 60.0,
+    double h_fov = 60.0,
+    double v_fov = 45.0,
     int width = 640,
     int height = 480,
     double max_range = 3.0,

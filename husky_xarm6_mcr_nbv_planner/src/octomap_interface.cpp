@@ -1021,6 +1021,41 @@ namespace husky_xarm6_mcr_nbv_planner
         return metrics;
     }
 
+    std::pair<size_t, size_t> OctoMapInterface::getVoxelCounts() const
+    {
+        std::shared_lock lk(mtx_);
+
+        bool has_tree = std::visit([](auto&& tree) { return tree != nullptr; }, tree_);
+        if (!has_tree)
+        {
+            return {0, 0};
+        }
+
+        size_t occupied = 0, free_space = 0;
+        std::visit([&](auto&& tree) {
+            for (auto it = tree->begin_leafs(); it != tree->end_leafs(); ++it)
+            {
+                if (tree->isNodeOccupied(*it))
+                    occupied++;
+                else
+                    free_space++;
+            }
+        }, tree_);
+
+        return {occupied, free_space};
+    }
+
+    double OctoMapInterface::calculateCoverage() const
+    {
+        auto [occupied, free_space] = getVoxelCounts();
+        size_t total = occupied + free_space;
+        
+        if (total == 0)
+            return 0.0;
+        
+        return (static_cast<double>(occupied) / static_cast<double>(total)) * 100.0;
+    }
+
     void OctoMapInterface::printOctomapStats() const
     {
         std::shared_lock lk(mtx_);
@@ -1039,18 +1074,15 @@ namespace husky_xarm6_mcr_nbv_planner
             RCLCPP_INFO(node_->get_logger(), "Resolution: %.4f m", tree->getResolution());
             RCLCPP_INFO(node_->get_logger(), "Total nodes: %zu", tree->size());
             RCLCPP_INFO(node_->get_logger(), "Leaf nodes: %zu", tree->getNumLeafNodes());
-
-            size_t occupied = 0, free_space = 0;
-            for (auto it = tree->begin_leafs(); it != tree->end_leafs(); ++it)
-            {
-                if (tree->isNodeOccupied(*it))
-                    occupied++;
-                else
-                    free_space++;
-            }
-            RCLCPP_INFO(node_->get_logger(), "Occupied voxels: %zu", occupied);
-            RCLCPP_INFO(node_->get_logger(), "Free voxels: %zu", free_space);
         }, tree_);
+
+        // Get voxel counts and coverage
+        auto [occupied, free_space] = getVoxelCounts();
+        double coverage = calculateCoverage();
+        
+        RCLCPP_INFO(node_->get_logger(), "Occupied voxels: %zu", occupied);
+        RCLCPP_INFO(node_->get_logger(), "Free voxels: %zu", free_space);
+        RCLCPP_INFO(node_->get_logger(), "Coverage: %.2f%%", coverage);
 
         // Display semantic class information if this is a semantic tree
         if (tree_type_ == OctoMapType::SEMANTIC)

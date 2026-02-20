@@ -134,7 +134,7 @@ def launch_setup(context, *args, **kwargs):
         'alpha_cost_weight': float(LaunchConfiguration('alpha_cost_weight').perform(context)),
         # Viewpoint Parameters
         'plane_half_extent': 1.0,
-        'plane_spatial_resolution': 0.4,
+        'plane_spatial_resolution': 0.3,
         'cap_max_theta_deg': 60.0,
         'cap_min_theta_deg': 15.0,
         'num_viewpoints_per_frontier': int(LaunchConfiguration('num_viewpoints_per_frontier').perform(context)),
@@ -279,11 +279,11 @@ def generate_launch_description():
         DeclareLaunchArgument('visualization_topic', default_value='nbv_planner_visualization',
                             description='Topic for workspace visualization markers'),
         # NBV Planner Parameters
-        DeclareLaunchArgument('max_iterations', default_value='10',
+        DeclareLaunchArgument('max_iterations', default_value='100',
                             description='Maximum number of NBV planning iterations'),
-        DeclareLaunchArgument('min_information_gain', default_value='1.0',
+        DeclareLaunchArgument('min_information_gain', default_value='10.0',
                             description='Minimum information gain threshold for termination'),
-        DeclareLaunchArgument('alpha_cost_weight', default_value='0.5',
+        DeclareLaunchArgument('alpha_cost_weight', default_value='0.1',
                             description='Weight for cost in utility function (IG - alpha*cost)'),
         DeclareLaunchArgument('num_viewpoints_per_frontier', default_value='7',
                             description='Number of viewpoint candidates per frontier cluster'),
@@ -306,7 +306,7 @@ def generate_launch_description():
                             description='Ideal distance from camera to target surface for information gain computation'),
         DeclareLaunchArgument('num_camera_rays', default_value='25',
                             description='Number of rays for information gain computation'),
-        DeclareLaunchArgument('map_frame', default_value='map',
+        DeclareLaunchArgument('map_frame', default_value='husky/a200_base_footprint',
                             description='Fixed frame for visualization markers'),
 
         # Ground Truth Evaluation Parameters
