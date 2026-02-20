@@ -43,7 +43,7 @@ def generate_launch_description():
 
     map_frame_arg = DeclareLaunchArgument(
         'map_frame',
-        default_value='map',
+        default_value='husky/a200_base_footprint',
         description='Frame for the occupancy map'
     )
 

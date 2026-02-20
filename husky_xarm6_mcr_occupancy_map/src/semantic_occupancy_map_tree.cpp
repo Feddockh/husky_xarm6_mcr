@@ -129,6 +129,154 @@ namespace octomap
         semanticOcTreeMemberInit_.ensureLinking();
     }
 
+    void SemanticOcTree::insertPointCloud(const Pointcloud& scan,
+                                         const point3d& sensor_origin,
+                                         double maxrange,
+                                         bool lazy_eval,
+                                         bool discretize)
+    {
+        KeySet free_cells, occupied_cells;
+        
+        // Handle discretization same as OctoMap base class
+        if (discretize) {
+            Pointcloud discretePC;
+            discretePC.reserve(scan.size());
+            KeySet endpoints;
+            
+            for (size_t i = 0; i < scan.size(); ++i) {
+                OcTreeKey k = this->coordToKey(scan[i]);
+                std::pair<KeySet::iterator, bool> ret = endpoints.insert(k);
+                if (ret.second) { // insertion took place => k was not in set
+                    discretePC.push_back(this->keyToCoord(k));
+                }
+            }
+            
+            // Recursively call with discretized pointcloud
+            insertPointCloud(discretePC, sensor_origin, maxrange, lazy_eval, false);
+            return;
+        }
+        
+        // Main update logic (matches OctoMap structure)
+#ifdef _OPENMP
+        omp_set_num_threads(this->keyrays.size());
+        #pragma omp parallel for schedule(guided)
+#endif
+        for (int i = 0; i < (int)scan.size(); ++i) 
+        {
+            const point3d& p = scan[i];
+            unsigned threadIdx = 0;
+#ifdef _OPENMP
+            threadIdx = omp_get_thread_num();
+#endif
+            KeyRay* keyray = &(this->keyrays.at(threadIdx));
+            
+            if (!use_bbx_limit) 
+            { 
+                // No BBX specified - use default OctoMap behavior
+                if ((maxrange < 0.0) || ((p - sensor_origin).norm() <= maxrange)) 
+                { 
+                    // is not maxrange meas.
+                    // free cells
+                    if (this->computeRayKeys(sensor_origin, p, *keyray)) {
+#ifdef _OPENMP
+                        #pragma omp critical (free_insert)
+#endif
+                        {
+                            free_cells.insert(keyray->begin(), keyray->end());
+                        }
+                    }
+                    // occupied endpoint
+                    OcTreeKey key;
+                    if (this->coordToKeyChecked(p, key)) {
+#ifdef _OPENMP
+                        #pragma omp critical (occupied_insert)
+#endif
+                        {
+                            occupied_cells.insert(key);
+                        }
+                    }
+                } 
+                else 
+                { 
+                    // user set a maxrange and length is above
+                    point3d direction = (p - sensor_origin).normalized();
+                    point3d new_end = sensor_origin + direction * (float)maxrange;
+                    if (this->computeRayKeys(sensor_origin, new_end, *keyray)) {
+#ifdef _OPENMP
+                        #pragma omp critical (free_insert)
+#endif
+                        {
+                            free_cells.insert(keyray->begin(), keyray->end());
+                        }
+                    }
+                }
+            } 
+            else 
+            { 
+                // BBX was set - use FIXED behavior
+                // endpoint in bbx and not maxrange?
+                if (inBBX(p) && ((maxrange < 0.0) || ((p - sensor_origin).norm() <= maxrange))) 
+                {
+                    // occupied endpoint
+                    OcTreeKey key;
+                    if (this->coordToKeyChecked(p, key)) {
+#ifdef _OPENMP
+                        #pragma omp critical (occupied_insert)
+#endif
+                        {
+                            occupied_cells.insert(key);
+                        }
+                    }
+                    
+                    // update freespace - FIXED: iterate forward, allow entering BBX
+                    if (this->computeRayKeys(sensor_origin, p, *keyray)) 
+                    {
+                        bool was_inside_bbx = false;
+                        
+                        // Iterate FORWARD from origin to endpoint
+                        for (KeyRay::iterator it = keyray->begin(); 
+                             it != keyray->end(); 
+                             ++it) 
+                        {
+                            if (inBBX(*it)) {
+#ifdef _OPENMP
+                                #pragma omp critical (free_insert)
+#endif
+                                {
+                                    free_cells.insert(*it);
+                                }
+                                was_inside_bbx = true;
+                            }
+                            else if (was_inside_bbx) {
+                                // Was inside, now outside - break on EXIT
+                                break;
+                            }
+                            // else: still approaching bbox, continue
+                        }
+                    }
+                }
+            }
+        }
+        
+        // prefer occupied cells over free ones (and make sets disjunct)
+        for (KeySet::iterator it = free_cells.begin(), end = free_cells.end(); it != end; ) 
+        {
+            if (occupied_cells.find(*it) != occupied_cells.end()) {
+                it = free_cells.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        
+        // insert data into tree
+        for (KeySet::iterator it = free_cells.begin(); it != free_cells.end(); ++it) {
+            this->updateNode(*it, false, lazy_eval);
+        }
+        for (KeySet::iterator it = occupied_cells.begin(); it != occupied_cells.end(); ++it) {
+            this->updateNode(*it, true, lazy_eval);
+        }
+    }
+
     SemanticOcTreeNode *SemanticOcTree::integrateNodeSemantic(const OcTreeKey &key,
                                                               int32_t class_id,
                                                               float confidence,

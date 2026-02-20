@@ -186,8 +186,9 @@ namespace husky_xarm6_mcr_occupancy_map
         // Publish
         marker_pub_->publish(marker_array);
 
-        RCLCPP_DEBUG(logger_, "Published occupancy map visualization with %zu occupied voxels",
-                     occupied_marker.points.size());
+        RCLCPP_INFO(logger_, "Published occupancy map visualization with %zu occupied voxels and %zu free voxels",
+                      occupied_marker.points.size(),
+                      publish_free ? free_marker.points.size() : 0);
     }
 
     void OccupancyMapVisualizer::publishBoundingBox(

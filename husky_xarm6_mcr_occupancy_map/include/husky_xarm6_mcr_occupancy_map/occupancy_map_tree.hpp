@@ -48,6 +48,29 @@ namespace husky_xarm6_mcr_occupancy_map
         virtual ~OccupancyMapTree() = default;
 
         // ========================================================================
+        // OVERRIDE: Fixed bounding box behavior for free space
+        // ========================================================================
+        
+        /**
+         * @brief Override insertPointCloud to use fixed bbox free space filtering
+         * 
+         * The base octomap implementation stops adding free voxels as soon as
+         * the ray exits the bbox (when iterating backward). This override allows
+         * rays to ENTER the bbox from outside, only stopping when EXITING.
+         * 
+         * @param scan Input point cloud
+         * @param sensor_origin Sensor origin
+         * @param maxrange Maximum sensor range (-1 for unlimited)
+         * @param lazy_eval Whether to defer tree updates
+         * @param discretize Whether to discretize endpoints to voxel centers
+         */
+        virtual void insertPointCloud(const octomap::Pointcloud& scan,
+                                     const octomap::point3d& sensor_origin,
+                                     double maxrange = -1.0,
+                                     bool lazy_eval = false,
+                                     bool discretize = false);
+
+        // ========================================================================
         // Thread-safe locking
         // ========================================================================
 

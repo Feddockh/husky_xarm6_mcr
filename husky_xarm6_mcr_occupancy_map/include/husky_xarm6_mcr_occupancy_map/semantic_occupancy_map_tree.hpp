@@ -143,6 +143,25 @@ namespace octomap
         SemanticOcTree *create() const override { return new SemanticOcTree(this->resolution); }
         std::string getTreeType() const override { return "SemanticOcTree"; }
 
+        // ========================================================================
+        // OVERRIDE: Fixed bounding box behavior for free space
+        // ========================================================================
+        
+        /**
+         * @brief Override insertPointCloud to use fixed bbox free space filtering
+         * 
+         * @param scan Input point cloud
+         * @param sensor_origin Sensor origin
+         * @param maxrange Maximum sensor range (-1 for unlimited)
+         * @param lazy_eval Whether to defer tree updates
+         * @param discretize Whether to discretize endpoints to voxel centers
+         */
+        virtual void insertPointCloud(const Pointcloud& scan,
+                                     const point3d& sensor_origin,
+                                     double maxrange = -1.0,
+                                     bool lazy_eval = false,
+                                     bool discretize = false);
+
         /**
          * @brief Integrate semantic at a voxel key using max fusion.
          *
