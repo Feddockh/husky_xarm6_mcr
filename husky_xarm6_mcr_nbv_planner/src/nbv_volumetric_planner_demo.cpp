@@ -10,6 +10,9 @@
 #include <queue>
 #include <algorithm>
 #include <optional>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_eigen/tf2_eigen.hpp>
 #include "husky_xarm6_mcr_nbv_planner/moveit_interface.hpp"
 #include "husky_xarm6_mcr_nbv_planner/manipulation_workspace.hpp"
 #include "husky_xarm6_mcr_nbv_planner/octomap_interface.hpp"
@@ -39,6 +42,10 @@ int main(int argc, char **argv)
     // Load configuration
     auto config = loadConfiguration(node);
     printConfiguration(config, node->get_logger());
+
+    // Create trigger clients and stop any ongoing video capture
+    auto trigger_clients = createTriggerClients(node);
+    stopVideoCapture(node, trigger_clients, node->get_logger());
 
     // Initialize MoveIt interface
     auto moveit_interface = setupMoveItInterface(node, config);
@@ -72,9 +79,9 @@ int main(int argc, char **argv)
 
     // Set orientation constraints (±90 degrees tolerance)
     moveit_interface->setOrientationConstraints(
-        moveit_interface->getEndEffectorLink(),
+        config.camera_optical_link,
         arrayToQuaternion(init_cam_orientation),
-        M_PI_2, M_PI_2, M_PI_2);
+        2*M_PI, M_PI/2, M_PI);
 
     // Setup workspace with moveit interface
     auto manip_workspace = setupWorkspace(moveit_interface, visualizer, config, node->get_logger());
@@ -84,12 +91,14 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    // Initialize octomap interface
-    RCLCPP_INFO(node->get_logger(), "Initializing OctoMap Interface...");
-    auto octomap_interface = std::make_shared<OctoMapInterface>(node, config.octomap_topic, true);
+    // Initialize TF2 buffer and listener
+    RCLCPP_DEBUG(node->get_logger(), "\nInitializing TF2 Buffer and Listener");
+    auto tf_buffer = std::make_shared<tf2_ros::Buffer>(node->get_clock());
+    auto tf_listener = std::make_shared<tf2_ros::TransformListener>(*tf_buffer);
 
-    // Create trigger clients
-    auto trigger_clients = createTriggerClients(node);
+    // Initialize octomap interface
+    RCLCPP_DEBUG(node->get_logger(), "\nInitializing OctoMap Interface");
+    auto octomap_interface = std::make_shared<OctoMapInterface>(node, config.octomap_topic, true);
 
     // Handle camera triggering based on capture_type
     if (config.capture_type == "continuous")
@@ -98,7 +107,6 @@ int main(int argc, char **argv)
     }
     else if (config.capture_type == "triggered")
     {
-        stopVideoCapture(node, trigger_clients, node->get_logger());
         if (!trigger_clients.send_trigger->wait_for_service(std::chrono::seconds(5)))
             RCLCPP_WARN(node->get_logger(), "send_trigger service not available, waiting for octomap anyway...");
     }
@@ -133,12 +141,6 @@ int main(int argc, char **argv)
     else
         RCLCPP_WARN(node->get_logger(), "Evaluation disabled or octomap is not semantic, skipping evaluation setup");
 
-
-    // Initialize TF2 buffer and listener
-    RCLCPP_DEBUG(node->get_logger(), "\nInitializing TF2 Buffer and Listener");
-    auto tf_buffer = std::make_shared<tf2_ros::Buffer>(node->get_clock());
-    auto tf_listener = std::make_shared<tf2_ros::TransformListener>(*tf_buffer);
-    
     // Get transform between MoveIt and OctoMap frames
     geometry_msgs::msg::TransformStamped moveit_to_octomap_transform;
     try
@@ -282,7 +284,7 @@ int main(int argc, char **argv)
             RCLCPP_DEBUG(node->get_logger(), "Trying viewpoint with utility %.4f, IG %.4f, cost %.4f",
                     best_viewpoint.utility, best_viewpoint.information_gain, best_viewpoint.cost);
             // Select best viewpoint with valid plan
-            best_plan = planPathToViewpoint(best_viewpoint, moveit_interface, config, node->get_logger());
+            best_plan = planPathsToViewpoint(best_viewpoint, moveit_interface, config, node->get_logger());
             if (!best_plan) {
                 RCLCPP_INFO(node->get_logger(), "Failed to plan to the best viewpoint, trying next best...");
                 continue;
@@ -345,6 +347,7 @@ int main(int argc, char **argv)
     }
 
     // Return to initial joint configuration
+    moveit_interface->clearPathConstraints();
     RCLCPP_INFO(node->get_logger(), "\nReturning to initial joint configuration...");
     if (!moveit_interface->planAndExecute(config.init_joint_angles_rad))
     {

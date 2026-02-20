@@ -58,8 +58,8 @@ def launch_setup(context, *args, **kwargs):
     os.makedirs(metrics_plots_dir, exist_ok=True)
     os.makedirs(metrics_data_dir, exist_ok=True)
     
-    print(f"[nbv_volumetric_planner_demo.launch.py] Metrics plots directory: {metrics_plots_dir}")
-    print(f"[nbv_volumetric_planner_demo.launch.py] Metrics data directory: {metrics_data_dir}")
+    print(f"[nbv_baseline_demo.launch.py] Metrics plots directory: {metrics_plots_dir}")
+    print(f"[nbv_baseline_demo.launch.py] Metrics data directory: {metrics_data_dir}")
     
     # Determine workspace file path
     learn_workspace_val = learn_workspace.perform(context).lower() == 'true'
@@ -79,8 +79,98 @@ def launch_setup(context, *args, **kwargs):
             print(f"[nbv_volumetric_planner_demo.launch.py] Found {len(workspace_files)} workspace file(s), loading most recent: {os.path.basename(workspace_file_path)}")
         else:
             workspace_file_path = os.path.join(data_dir, 'workspace_latest.bin')
-            print(f"[nbv_volumetric_planner_demo.launch.py] WARNING: No workspace files found in {data_dir}")
-            print(f"[nbv_volumetric_planner_demo.launch.py] Set learn_workspace:=true to learn a new workspace")
+            print(f"[nbv_baseline_demo.launch.py] WARNING: No workspace files found in {data_dir}")
+            print(f"[nbv_baseline_demo.launch.py] Set learn_workspace:=true to learn a new workspace")
+
+    # Ground truth file path
+    gt_points_file = os.path.join(
+        LaunchConfiguration('gt_points_dir').perform(context),
+        LaunchConfiguration('gt_points_file').perform(context)
+    )
+
+    # Build parameters dictionary for saving and node configuration
+    node_parameters = {
+        # Workspace Parameters
+        'manipulator_group_name': manipulator_group_name.perform(context),
+        'learn_workspace': learn_workspace.perform(context).lower() == 'true',
+        'num_samples': 10000000,
+        'manipulation_workspace_file': workspace_file_path,
+        # Octomap Parameters
+        'octomap_topic': LaunchConfiguration('octomap_topic').perform(context),
+        'min_unknown_neighbors': 1,
+        # Manipulation Parameters
+        'planning_pipeline_id': 'ompl',
+        'planner_id': 'RRTConnect',
+        'planning_time': 0.5,
+        'num_planning_attempts': 1,
+        'max_velocity_scaling_factor': 0.8,
+        'max_acceleration_scaling_factor': 0.8,
+        'num_ik_seeds': 10,
+        'plans_per_seed': 1,
+        'ik_timeout': 0.05,
+        'ik_attempts': 5,
+        # Camera Parameters
+        'capture_type': 'triggered',
+        'camera_optical_link': LaunchConfiguration('camera_optical_link').perform(context),
+        'camera_horizontal_fov_deg': 45.0,
+        'camera_vertical_fov_deg': 35.0,
+        'camera_width': int(LaunchConfiguration('camera_width').perform(context)),
+        'camera_height': int(LaunchConfiguration('camera_height').perform(context)),
+        'camera_max_range': float(LaunchConfiguration('camera_max_range').perform(context)),
+        'ideal_camera_distance': float(LaunchConfiguration('ideal_camera_distance').perform(context)),
+        'num_camera_rays': int(LaunchConfiguration('num_camera_rays').perform(context)),
+        # Evaluation Parameters
+        'enable_evaluation': LaunchConfiguration('enable_evaluation').perform(context).lower() == 'true',
+        'eval_threshold_radius': float(LaunchConfiguration('eval_threshold_radius').perform(context)),
+        'gt_points_file': gt_points_file,
+        'metrics_plots_dir': metrics_plots_dir,
+        'metrics_data_dir': metrics_data_dir,
+        # General Parameters
+        'init_joint_angles_deg': [0.0, -45.0, -45.0, 0.0, 0.0, 90.0],
+        'map_frame': LaunchConfiguration('map_frame').perform(context),
+        # NBV Planning Parameters
+        'max_iterations': int(LaunchConfiguration('max_iterations').perform(context)),
+        'min_information_gain': float(LaunchConfiguration('min_information_gain').perform(context)),
+        'alpha_cost_weight': float(LaunchConfiguration('alpha_cost_weight').perform(context)),
+        # Viewpoint Parameters
+        'plane_half_extent': 1.0,
+        'plane_spatial_resolution': 0.1,
+        'cap_max_theta_deg': 60.0,
+        'cap_min_theta_deg': 15.0,
+        'num_viewpoints_per_frontier': int(LaunchConfiguration('num_viewpoints_per_frontier').perform(context)),
+        'z_bias_sigma': 0.3,
+        'ideal_distance_tolerance': 0.1,
+        # Debug Parameters
+        'visualize': LaunchConfiguration('visualize').perform(context).lower() == 'true',
+        'visualization_topic': LaunchConfiguration('visualization_topic').perform(context),
+        # Baseline Planner Specific
+        'viewpoint_overlap_ratio': 0.42,
+    }
+
+    # Save parameters to YAML file
+    params_file_path = os.path.join(metrics_dir, run_dir, 'run_parameters.yaml')
+    params_data = {
+        'run_info': {
+            'timestamp': run_dir,
+            'launch_file': 'nbv_baseline_demo.launch.py',
+            'node_name': 'nbv_baseline_demo',
+            'description': 'NBV Baseline Demo - Systematic grid coverage',
+        },
+        'launch_arguments': {
+            'use_sim_time': use_sim_time.perform(context),
+            'use_gazebo': use_gazebo.perform(context),
+            'manipulator_prefix': manipulator_prefix.perform(context),
+            'manipulator_ns': manipulator_ns.perform(context),
+            'platform_prefix': platform_prefix.perform(context),
+            'platform_ns': platform_ns.perform(context),
+        },
+        'parameters': node_parameters
+    }
+    
+    with open(params_file_path, 'w') as f:
+        yaml.dump(params_data, f, default_flow_style=False, sort_keys=False)
+    
+    print(f"[nbv_baseline_demo.launch.py] Saved run parameters to: {params_file_path}")
 
     description_pkg = Path(get_package_share_directory('husky_xarm6_mcr_description'))
     xacro_file = description_pkg / 'urdf' / 'husky_xarm6_mcr.urdf.xacro'
@@ -150,11 +240,7 @@ def launch_setup(context, *args, **kwargs):
         }
     }
 
-    gt_points_file = os.path.join(
-        LaunchConfiguration('gt_points_dir').perform(context),
-        LaunchConfiguration('gt_points_file').perform(context)
-    )
-    nbv_volumetric_planner_demo = Node(
+    nbv_baseline_demo = Node(
         package='husky_xarm6_mcr_nbv_planner',
         executable='nbv_baseline_demo',
         output='screen',
@@ -167,66 +253,11 @@ def launch_setup(context, *args, **kwargs):
             planner_config,
             controller_config,
             planning_scene_monitor_config,
-            # Workspace Parameters
-            {'manipulator_group_name': manipulator_group_name},
-            {'learn_workspace': learn_workspace},
-            {'num_samples': 10000000},
-            {'manipulation_workspace_file': workspace_file_path},
-            # Octomap Parameters
-            {'octomap_topic': LaunchConfiguration('octomap_topic')},
-            {'min_unknown_neighbors': 1},
-            # Manipulation Parameters
-            {'planning_pipeline_id': 'ompl'},
-            {'planner_id': 'RRTConnect'},
-            # {'planner_id': 'TRRT'},
-            {'planning_time': 0.5},
-            {'num_planning_attempts': 1},
-            {'max_velocity_scaling_factor': 0.8},
-            {'max_acceleration_scaling_factor': 0.8},
-            {'num_ik_seeds': 10},
-            {'plans_per_seed': 1},
-            {'ik_timeout': 0.05},
-            {'ik_attempts': 5},
-            # Camera Parameters
-            {'capture_type': 'triggered'},
-            {'camera_optical_link': LaunchConfiguration('camera_optical_link')},
-            {'camera_horizontal_fov_deg': 45.0},
-            {'camera_vertical_fov_deg': 35.0},
-            {'camera_width': LaunchConfiguration('camera_width')},
-            {'camera_height': LaunchConfiguration('camera_height')},
-            {'camera_max_range': LaunchConfiguration('camera_max_range')},
-            {'ideal_camera_distance': LaunchConfiguration('ideal_camera_distance')},
-            {'num_camera_rays': LaunchConfiguration('num_camera_rays')},
-            # Evaluation Parameters
-            {'enable_evaluation': LaunchConfiguration('enable_evaluation')},
-            {'eval_threshold_radius': LaunchConfiguration('eval_threshold_radius')},
-            {'gt_points_file': gt_points_file},
-            {'metrics_plots_dir': metrics_plots_dir},
-            {'metrics_data_dir': metrics_data_dir},
-            # General Parameters
-            {'init_joint_angles_deg': [0.0, -45.0, -45.0, 0.0, 0.0, 90.0]},
-            {'map_frame': LaunchConfiguration('map_frame')},
-            # NBV Planning Parameters
-            {'max_iterations': LaunchConfiguration('max_iterations')},
-            {'min_information_gain': LaunchConfiguration('min_information_gain')},
-            {'alpha_cost_weight': LaunchConfiguration('alpha_cost_weight')},
-            # Viewpoint Parameters
-            {'plane_half_extent': 1.0},
-            {'plane_spatial_resolution': 0.1},
-            {'cap_max_theta_deg': 60.0},
-            {'cap_min_theta_deg': 15.0},
-            {'num_viewpoints_per_frontier': LaunchConfiguration('num_viewpoints_per_frontier')},
-            {'z_bias_sigma': 0.3},
-            {'ideal_distance_tolerance': 0.1},
-            # Debug Parameters
-            {'visualize': LaunchConfiguration('visualize')},
-            {'visualization_topic': LaunchConfiguration('visualization_topic')},
-            # Baseline Planner
-            {'viewpoint_overlap_ratio': 0.35},  # 35% overlap
+            node_parameters,  # Use the pre-built parameters dictionary
         ],
     )
 
-    return [nbv_volumetric_planner_demo]
+    return [nbv_baseline_demo]
 
 
 def generate_launch_description():

@@ -46,11 +46,15 @@ def launch_setup(context, *args, **kwargs):
     
     # Setup metrics directory structure
     metrics_dir = LaunchConfiguration('metrics_dir').perform(context)
-    if not os.path.isabs(metrics_dir):
-        metrics_dir = os.path.join(package_share_dir, metrics_dir)
+    # if not os.path.isabs(metrics_dir):
+    #     metrics_dir = os.path.join(package_share_dir, metrics_dir)
+    run_dir = LaunchConfiguration('run_dir').perform(context)
+    if run_dir == '':
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        run_dir = f'run_{timestamp}'
     
-    metrics_plots_dir = os.path.join(metrics_dir, 'runs', 'plots')
-    metrics_data_dir = os.path.join(metrics_dir, 'runs', 'data')
+    metrics_plots_dir = os.path.join(metrics_dir, run_dir, 'plots')
+    metrics_data_dir = os.path.join(metrics_dir, run_dir, 'data')
     os.makedirs(metrics_plots_dir, exist_ok=True)
     os.makedirs(metrics_data_dir, exist_ok=True)
     
@@ -77,6 +81,94 @@ def launch_setup(context, *args, **kwargs):
             workspace_file_path = os.path.join(data_dir, 'workspace_latest.bin')
             print(f"[nbv_volumetric_planner_demo.launch.py] WARNING: No workspace files found in {data_dir}")
             print(f"[nbv_volumetric_planner_demo.launch.py] Set learn_workspace:=true to learn a new workspace")
+
+    # Ground truth file path
+    gt_points_file = os.path.join(
+        LaunchConfiguration('gt_points_dir').perform(context),
+        LaunchConfiguration('gt_points_file').perform(context)
+    )
+
+    # Build parameters dictionary for saving and node configuration
+    node_parameters = {
+        # Workspace Parameters
+        'manipulator_group_name': manipulator_group_name.perform(context),
+        'learn_workspace': learn_workspace.perform(context).lower() == 'true',
+        'num_samples': 10000000,
+        'manipulation_workspace_file': workspace_file_path,
+        # Octomap Parameters
+        'octomap_topic': LaunchConfiguration('octomap_topic').perform(context),
+        'min_unknown_neighbors': 1,
+        # Manipulation Parameters
+        'planning_pipeline_id': 'ompl',
+        'planner_id': 'RRTConnect',
+        'planning_time': 0.5,
+        'num_planning_attempts': 1,
+        'max_velocity_scaling_factor': 0.8,
+        'max_acceleration_scaling_factor': 0.8,
+        'num_ik_seeds': 5,
+        'plans_per_seed': 1,
+        'ik_timeout': 0.05,
+        'ik_attempts': 5,
+        # Camera Parameters
+        'capture_type': 'triggered',
+        'camera_optical_link': LaunchConfiguration('camera_optical_link').perform(context),
+        'camera_horizontal_fov_deg': 45.0,
+        'camera_vertical_fov_deg': 35.0,
+        'camera_width': int(LaunchConfiguration('camera_width').perform(context)),
+        'camera_height': int(LaunchConfiguration('camera_height').perform(context)),
+        'camera_max_range': float(LaunchConfiguration('camera_max_range').perform(context)),
+        'ideal_camera_distance': float(LaunchConfiguration('ideal_camera_distance').perform(context)),
+        'num_camera_rays': int(LaunchConfiguration('num_camera_rays').perform(context)),
+        # Evaluation Parameters
+        'enable_evaluation': LaunchConfiguration('enable_evaluation').perform(context).lower() == 'true',
+        'eval_threshold_radius': float(LaunchConfiguration('eval_threshold_radius').perform(context)),
+        'gt_points_file': gt_points_file,
+        'metrics_plots_dir': metrics_plots_dir,
+        'metrics_data_dir': metrics_data_dir,
+        # General Parameters
+        'init_joint_angles_deg': [0.0, -45.0, -45.0, 0.0, 0.0, 90.0],
+        'map_frame': LaunchConfiguration('map_frame').perform(context),
+        # NBV Planning Parameters
+        'max_iterations': int(LaunchConfiguration('max_iterations').perform(context)),
+        'min_information_gain': float(LaunchConfiguration('min_information_gain').perform(context)),
+        'alpha_cost_weight': float(LaunchConfiguration('alpha_cost_weight').perform(context)),
+        # Viewpoint Parameters
+        'plane_half_extent': 1.0,
+        'plane_spatial_resolution': 0.1,
+        'cap_max_theta_deg': 60.0,
+        'cap_min_theta_deg': 15.0,
+        'num_viewpoints_per_frontier': int(LaunchConfiguration('num_viewpoints_per_frontier').perform(context)),
+        'z_bias_sigma': 0.3,
+        'ideal_distance_tolerance': 0.1,
+        # Debug Parameters
+        'visualize': LaunchConfiguration('visualize').perform(context).lower() == 'true',
+        'visualization_topic': LaunchConfiguration('visualization_topic').perform(context),
+    }
+
+    # Save parameters to YAML file
+    params_file_path = os.path.join(metrics_dir, run_dir, 'run_parameters.yaml')
+    params_data = {
+        'run_info': {
+            'timestamp': run_dir,
+            'launch_file': 'nbv_volumetric_planner_demo.launch.py',
+            'node_name': 'nbv_volumetric_planner_demo',
+            'description': 'NBV Volumetric Planner Demo - Information gain based planning',
+        },
+        'launch_arguments': {
+            'use_sim_time': use_sim_time.perform(context),
+            'use_gazebo': use_gazebo.perform(context),
+            'manipulator_prefix': manipulator_prefix.perform(context),
+            'manipulator_ns': manipulator_ns.perform(context),
+            'platform_prefix': platform_prefix.perform(context),
+            'platform_ns': platform_ns.perform(context),
+        },
+        'parameters': node_parameters
+    }
+    
+    with open(params_file_path, 'w') as f:
+        yaml.dump(params_data, f, default_flow_style=False, sort_keys=False)
+    
+    print(f"[nbv_volumetric_planner_demo.launch.py] Saved run parameters to: {params_file_path}")
 
     description_pkg = Path(get_package_share_directory('husky_xarm6_mcr_description'))
     xacro_file = description_pkg / 'urdf' / 'husky_xarm6_mcr.urdf.xacro'
@@ -163,39 +255,7 @@ def launch_setup(context, *args, **kwargs):
             planner_config,
             controller_config,
             planning_scene_monitor_config,
-            {'manipulator_group_name': manipulator_group_name},
-            {'learn_workspace': learn_workspace},
-            {'capture_type': LaunchConfiguration('capture_type')},
-            {'manipulation_workspace_file': workspace_file_path},
-            {'num_samples': LaunchConfiguration('num_samples')},
-            {'visualize': LaunchConfiguration('visualize')},
-            {'visualization_topic': LaunchConfiguration('visualization_topic')},
-            # NBV Planner Parameters
-            {'max_iterations': LaunchConfiguration('max_iterations')},
-            {'min_information_gain': LaunchConfiguration('min_information_gain')},
-            {'alpha_cost_weight': LaunchConfiguration('alpha_cost_weight')},
-            {'num_viewpoints_per_frontier': LaunchConfiguration('num_viewpoints_per_frontier')},
-            {'octomap_topic': LaunchConfiguration('octomap_topic')},
-            # Camera Parameters
-            {'camera_optical_link': LaunchConfiguration('camera_optical_link')},
-            {'camera_horizontal_fov': LaunchConfiguration('camera_horizontal_fov')},
-            {'camera_vertical_fov': LaunchConfiguration('camera_vertical_fov')},
-            {'camera_width': LaunchConfiguration('camera_width')},
-            {'camera_height': LaunchConfiguration('camera_height')},
-            {'camera_max_range': LaunchConfiguration('camera_max_range')},
-            {'ideal_camera_distance': LaunchConfiguration('ideal_camera_distance')},
-            {'num_camera_rays': LaunchConfiguration('num_camera_rays')},
-            {'map_frame': LaunchConfiguration('map_frame')},
-            # User Input Control Parameters
-            {'wait_for_user_input': LaunchConfiguration('wait_for_user_input')},
-            {'auto_continue_delay': LaunchConfiguration('auto_continue_delay')},
-            # Ground Truth Evaluation Parameters
-            {'gt_points_file': gt_points_file},
-            {'enable_evaluation': LaunchConfiguration('enable_evaluation')},
-            {'eval_threshold_radius': LaunchConfiguration('eval_threshold_radius')},
-            # Metrics Output Directories
-            {'metrics_plots_dir': metrics_plots_dir},
-            {'metrics_data_dir': metrics_data_dir},
+            node_parameters,  # Use the pre-built parameters dictionary
         ],
     )
 
@@ -214,10 +274,6 @@ def generate_launch_description():
         DeclareLaunchArgument('manipulator_group_name', default_value='xarm6_manipulator'),
         DeclareLaunchArgument('learn_workspace', default_value='false', 
                             description='True to learn new workspace, False to load existing'),
-        DeclareLaunchArgument('capture_type', default_value='triggered',
-                            description='Camera capture type: "continuous" or "triggered"'),
-        DeclareLaunchArgument('num_samples', default_value='10000000',
-                            description='Number of samples for workspace learning'),
         DeclareLaunchArgument('visualize', default_value='true',
                             description='Visualize nbv planner operation in RViz'),
         DeclareLaunchArgument('visualization_topic', default_value='nbv_planner_visualization',
@@ -246,16 +302,12 @@ def generate_launch_description():
                             description='Camera image height (pixels)'),
         DeclareLaunchArgument('camera_max_range', default_value='3.0',
                             description='Camera maximum sensing range (meters)'),
-        DeclareLaunchArgument('ideal_camera_distance', default_value='0.5',
+        DeclareLaunchArgument('ideal_camera_distance', default_value='0.2',
                             description='Ideal distance from camera to target surface for information gain computation'),
         DeclareLaunchArgument('num_camera_rays', default_value='25',
                             description='Number of rays for information gain computation'),
         DeclareLaunchArgument('map_frame', default_value='map',
                             description='Fixed frame for visualization markers'),
-        DeclareLaunchArgument('wait_for_user_input', default_value='false',
-                            description='Wait for user to press Enter at each step (incompatible with ros2 launch)'),
-        DeclareLaunchArgument('auto_continue_delay', default_value='3.0',
-                            description='Auto-continue delay in seconds when wait_for_user_input is false'),
 
         # Ground Truth Evaluation Parameters
         DeclareLaunchArgument('gt_points_dir', default_value=PathJoinSubstitution([FindPackageShare('husky_xarm6_mcr_nbv_planner'), 'metrics', 'gt_points']),
@@ -268,5 +320,7 @@ def generate_launch_description():
                             description='Threshold radius (meters) for matching clusters to ground truth points'),
         DeclareLaunchArgument('metrics_dir', default_value='metrics',
                             description='Directory for saving metrics (plots and CSV data)'),
+        DeclareLaunchArgument('run_dir', default_value='',
+                            description='Directory for saving run data'),
         OpaqueFunction(function=launch_setup),
     ])
