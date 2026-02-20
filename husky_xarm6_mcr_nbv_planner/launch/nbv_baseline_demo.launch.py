@@ -177,11 +177,16 @@ def launch_setup(context, *args, **kwargs):
             {'min_unknown_neighbors': 1},
             # Manipulation Parameters
             {'planning_pipeline_id': 'ompl'},
-            {'planner_id': 'RRTConnectkConfigDefault'},
-            {'planning_time': 5.0},
-            {'num_planning_attempts': 10},
-            {'max_velocity_scaling_factor': 0.1},
-            {'max_acceleration_scaling_factor': 0.1},
+            {'planner_id': 'RRTConnect'},
+            # {'planner_id': 'TRRT'},
+            {'planning_time': 0.5},
+            {'num_planning_attempts': 1},
+            {'max_velocity_scaling_factor': 0.8},
+            {'max_acceleration_scaling_factor': 0.8},
+            {'num_ik_seeds': 10},
+            {'plans_per_seed': 1},
+            {'ik_timeout': 0.05},
+            {'ik_attempts': 5},
             # Camera Parameters
             {'capture_type': 'triggered'},
             {'camera_optical_link': LaunchConfiguration('camera_optical_link')},
@@ -216,6 +221,8 @@ def launch_setup(context, *args, **kwargs):
             # Debug Parameters
             {'visualize': LaunchConfiguration('visualize')},
             {'visualization_topic': LaunchConfiguration('visualization_topic')},
+            # Baseline Planner
+            {'viewpoint_overlap_ratio': 0.35},  # 35% overlap
         ],
     )
 

@@ -77,9 +77,9 @@ int main(int argc, char **argv)
 
     // Set orientation constraints (±90 degrees tolerance)
     moveit_interface->setOrientationConstraints(
-        moveit_interface->getEndEffectorLink(),
+        config.camera_optical_link,
         arrayToQuaternion(init_cam_orientation),
-        M_PI_2, M_PI_2, M_PI_2);
+        2*M_PI, M_PI/2, M_PI);
 
     // Setup workspace with moveit interface
     auto manip_workspace = setupWorkspace(moveit_interface, visualizer, config, node->get_logger());
@@ -172,7 +172,7 @@ int main(int argc, char **argv)
     }
     // Generate viewpoints on the plane
     Eigen::Quaterniond init_cam_quat_map = Eigen::Quaterniond(transform_eigen.rotation()) * geometry_utils::arrayToEigenQuat(init_cam_orientation);
-    double overlap_ratio = 0.45; // 45% overlap
+    double overlap_ratio = node->get_parameter("viewpoint_overlap_ratio").as_double(); // % overlap
     auto [all_viewpoints_map, coverage_planes_map] = generateViewpointsFromPlane(
         plane_corners_map, distance, init_cam_quat_map, overlap_ratio, config);
     if (config.visualize && visualizer)
@@ -210,8 +210,9 @@ int main(int argc, char **argv)
     }
 
     // Sort reachable viewpoints based on axis priority (relative to moveit frame)
-    std::vector<std::string> axis_priority = {"-z", "-x"}; // Reading left to right and top to bottom
-    sortViewpointsByAxisPriority(reachable_viewpoints, axis_priority);
+    // std::vector<std::string> axis_priority = {"-z", "-x"}; // Reading left to right and top to bottom
+    // sortViewpointsByAxisPriority(reachable_viewpoints, axis_priority);
+    lawnmowerSortViewpoints(reachable_viewpoints, node->get_logger());
     if (config.visualize && visualizer)
     {
         RCLCPP_INFO(node->get_logger(), "Publishing reachable viewpoints for visualization");
@@ -229,7 +230,7 @@ int main(int argc, char **argv)
         RCLCPP_INFO(node->get_logger(), "\n********** NBV Baseline Iteration %ld **********", i);
 
         // Select best viewpoint with valid plan
-        auto plan = planPathToViewpoint(reachable_viewpoints[i], moveit_interface, config, node->get_logger());
+        auto plan = planPathsToViewpoint(reachable_viewpoints[i], moveit_interface, config, node->get_logger());
         if (!plan) {
             RCLCPP_WARN(node->get_logger(), "Failed to plan to the next viewpoint, skipping iteration...");
             continue;
@@ -284,6 +285,7 @@ int main(int argc, char **argv)
     }
 
     // Return to initial joint configuration
+    moveit_interface->clearPathConstraints();
     RCLCPP_INFO(node->get_logger(), "\nReturning to initial joint configuration...");
     if (!moveit_interface->planAndExecute(config.init_joint_angles_rad))
     {
