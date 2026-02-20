@@ -255,6 +255,45 @@ namespace octomap
                         }
                     }
                 }
+                else
+                {
+                    // Endpoint is outside BBX or beyond maxrange
+                    // Still need to mark free space inside BBX along the ray
+                    point3d ray_endpoint = p;
+                    
+                    // If beyond maxrange, truncate to maxrange
+                    if (maxrange > 0.0 && ((p - sensor_origin).norm() > maxrange)) {
+                        point3d direction = (p - sensor_origin).normalized();
+                        ray_endpoint = sensor_origin + direction * (float)maxrange;
+                    }
+                    
+                    // Compute ray and add free voxels inside BBX
+                    if (this->computeRayKeys(sensor_origin, ray_endpoint, *keyray)) 
+                    {
+                        bool was_inside_bbx = false;
+                        
+                        // Iterate FORWARD from origin toward endpoint
+                        for (KeyRay::iterator it = keyray->begin(); 
+                             it != keyray->end(); 
+                             ++it) 
+                        {
+                            if (inBBX(*it)) {
+#ifdef _OPENMP
+                                #pragma omp critical (free_insert)
+#endif
+                                {
+                                    free_cells.insert(*it);
+                                }
+                                was_inside_bbx = true;
+                            }
+                            else if (was_inside_bbx) {
+                                // Was inside, now outside - break on EXIT
+                                break;
+                            }
+                            // else: still approaching bbox, continue
+                        }
+                    }
+                }
             }
         }
         

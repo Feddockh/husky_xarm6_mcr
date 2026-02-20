@@ -25,13 +25,13 @@ def generate_launch_description():
 
     max_range_arg = DeclareLaunchArgument(
         'max_range',
-        default_value='1.0',
+        default_value='1.5',
         description='Maximum sensor range in meters'
     )
 
     use_moveit_arg = DeclareLaunchArgument(
         'use_moveit',
-        default_value='false',
+        default_value='true',
         description='Enable MoveIt planning scene integration'
     )
 
