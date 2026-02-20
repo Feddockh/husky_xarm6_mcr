@@ -300,7 +300,7 @@ def generate_launch_description():
                             description='Camera image width (pixels)'),
         DeclareLaunchArgument('camera_height', default_value='224',
                             description='Camera image height (pixels)'),
-        DeclareLaunchArgument('camera_max_range', default_value='3.0',
+        DeclareLaunchArgument('camera_max_range', default_value='1.0',
                             description='Camera maximum sensing range (meters)'),
         DeclareLaunchArgument('ideal_camera_distance', default_value='0.2',
                             description='Ideal distance from camera to target surface for information gain computation'),

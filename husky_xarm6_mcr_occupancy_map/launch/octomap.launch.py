@@ -25,7 +25,7 @@ def generate_launch_description():
 
     max_range_arg = DeclareLaunchArgument(
         'max_range',
-        default_value='1.5',
+        default_value='1.0',
         description='Maximum sensor range in meters'
     )
 
