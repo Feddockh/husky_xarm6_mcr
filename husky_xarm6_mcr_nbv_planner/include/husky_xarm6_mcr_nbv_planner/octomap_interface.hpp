@@ -182,8 +182,8 @@ namespace husky_xarm6_mcr_nbv_planner
         std::pair<size_t, size_t> getVoxelCounts() const;
 
         /**
-         * @brief Calculate coverage percentage (occupied voxels / total known voxels)
-         * @return Coverage percentage (0-100), or 0.0 if no voxels exist
+         * @brief Calculate coverage percentage of the bounding box that has been mapped
+         * @return Coverage percentage (0-100) based on mapped voxels / theoretical max voxels in bbox, or 0.0 if no bbox or no voxels
          */
         double calculateCoverage() const;
 

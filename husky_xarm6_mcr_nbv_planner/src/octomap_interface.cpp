@@ -1047,13 +1047,37 @@ namespace husky_xarm6_mcr_nbv_planner
 
     double OctoMapInterface::calculateCoverage() const
     {
-        auto [occupied, free_space] = getVoxelCounts();
-        size_t total = occupied + free_space;
+        std::shared_lock lk(mtx_);
         
-        if (total == 0)
+        // Need valid bounding box to calculate coverage
+        if (!has_valid_bbox_)
             return 0.0;
         
-        return (static_cast<double>(occupied) / static_cast<double>(total)) * 100.0;
+        // Get mapped voxel counts
+        lk.unlock();  // Unlock before calling getVoxelCounts which will lock again
+        auto [occupied, free_space] = getVoxelCounts();
+        lk.lock();  // Re-lock to access resolution safely
+        
+        size_t total_mapped = occupied + free_space;
+        if (total_mapped == 0)
+            return 0.0;
+        
+        // Calculate bounding box volume
+        double bbox_volume = (bbox_max_.x() - bbox_min_.x()) * 
+                            (bbox_max_.y() - bbox_min_.y()) * 
+                            (bbox_max_.z() - bbox_min_.z());
+        
+        if (bbox_volume <= 0.0)
+            return 0.0;
+        
+        // Calculate volume of a single voxel
+        double voxel_volume = resolution_ * resolution_ * resolution_;
+        
+        // Calculate theoretical maximum number of voxels that could fit in bbox
+        double theoretical_max_voxels = bbox_volume / voxel_volume;
+        
+        // Calculate coverage percentage
+        return (static_cast<double>(total_mapped) / theoretical_max_voxels) * 100.0;
     }
 
     void OctoMapInterface::printOctomapStats() const
