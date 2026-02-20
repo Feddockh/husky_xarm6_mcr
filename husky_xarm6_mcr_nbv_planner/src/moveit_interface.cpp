@@ -5,6 +5,8 @@
 #include <moveit/planning_scene_monitor/planning_scene_monitor.h>
 #include <moveit/kinematic_constraints/utils.h>
 #include <tf2_eigen/tf2_eigen.hpp>
+#include <random>
+#include <ctime>
 
 namespace husky_xarm6_mcr_nbv_planner
 {
@@ -189,7 +191,7 @@ namespace husky_xarm6_mcr_nbv_planner
         if (!isMoveGroupValid() || !validateJointPositions(joint_positions))
             return false;
 
-        // move_group_->setStartStateToCurrentState();
+        move_group_->setStartStateToCurrentState();
         move_group_->setJointValueTarget(joint_positions);
         moveit::core::MoveItErrorCode result = move_group_->plan(plan);
 
@@ -662,6 +664,177 @@ namespace husky_xarm6_mcr_nbv_planner
         RCLCPP_DEBUG(node_->get_logger(), "Cleared all path constraints");
     }
 
+
+    /**
+     * @brief Compute L2 distance between two joint configurations
+     */
+    double MoveItInterface::jointDeltaL2(const std::vector<double>& a, const std::vector<double>& b)
+    {
+        if (a.size() != b.size()) return std::numeric_limits<double>::infinity();
+        double s2 = 0.0;
+        for (size_t i=0; i<a.size(); ++i) {
+            const double d = a[i] - b[i];
+            s2 += d*d;
+        }
+        return std::sqrt(s2);
+    }
+
+    // Helper functions for advanced planning
+    double MoveItInterface::computeJointSpacePathLength(const trajectory_msgs::msg::JointTrajectory &trajectory)
+    {
+        if (trajectory.points.size() < 2)
+            return std::numeric_limits<double>::infinity();
+
+        double total_length = 0.0;
+        for (size_t i = 1; i < trajectory.points.size(); ++i)
+        {
+            const auto &prev_positions = trajectory.points[i - 1].positions;
+            const auto &curr_positions = trajectory.points[i].positions;
+            
+            if (prev_positions.size() != curr_positions.size())
+                return std::numeric_limits<double>::infinity();
+
+            double segment_length_sq = 0.0;
+            for (size_t j = 0; j < prev_positions.size(); ++j)
+            {
+                double delta = curr_positions[j] - prev_positions[j];
+                segment_length_sq += delta * delta;
+            }
+            total_length += std::sqrt(segment_length_sq);
+        }
+        return total_length;
+    }
+
+    bool MoveItInterface::hasStrictlyIncreasingTime(const trajectory_msgs::msg::JointTrajectory &trajectory)
+    {
+        if (trajectory.points.size() < 2)
+            return true;
+
+        rclcpp::Duration prev_time(0, 0);
+        for (size_t i = 0; i < trajectory.points.size(); ++i)
+        {
+            rclcpp::Duration curr_time(trajectory.points[i].time_from_start);
+            if (i > 0 && curr_time <= prev_time)
+                return false;
+            prev_time = curr_time;
+        }
+        return true;
+    }
+
+    void MoveItInterface::ensureStrictlyIncreasingTime(trajectory_msgs::msg::JointTrajectory &trajectory, double dt_sec)
+    {
+        if (trajectory.points.empty())
+            return;
+
+        // If already strictly increasing, do nothing
+        if (hasStrictlyIncreasingTime(trajectory))
+            return;
+
+        // Force strictly increasing timestamps
+        for (size_t i = 0; i < trajectory.points.size(); ++i)
+        {
+            trajectory.points[i].time_from_start = rclcpp::Duration::from_seconds(dt_sec * static_cast<double>(i));
+        }
+    }
+
+    std::vector<double> MoveItInterface::jitterJointSeed(const std::vector<double> &seed, double sigma, std::mt19937 &rng)
+    {
+        std::normal_distribution<double> noise_dist(0.0, sigma);
+        std::vector<double> jittered_seed = seed;
+        for (double &value : jittered_seed)
+            value += noise_dist(rng);
+        return jittered_seed;
+    }
+
+    bool MoveItInterface::planToTargetPoseWithRetries(const geometry_msgs::msg::Pose &target_ee_pose,
+                                                       moveit::planning_interface::MoveGroupInterface::Plan &best_plan_out,
+                                                       int num_ik_seeds,
+                                                       int plans_per_seed,
+                                                       double ik_timeout,
+                                                       int ik_attempts)
+    {
+        // Get current joint state as baseline seed
+        std::vector<double> current_joint_state;
+        if (!getCurrentJointAngles(current_joint_state))
+        {
+            RCLCPP_ERROR(node_->get_logger(), "Failed to get current joint state for IK seed");
+            return false;
+        }
+
+        // Random number generator for seed jittering
+        std::mt19937 rng(static_cast<unsigned>(std::time(nullptr)));
+
+        // Track best plan found
+        bool found_valid_plan = false;
+        double best_cost = std::numeric_limits<double>::infinity();
+        const double dt_sec = 0.02; // Time step for trajectory timestamps
+
+        RCLCPP_DEBUG(node_->get_logger(), "Attempting to find best plan with %d IK seeds and %d plans per seed",
+                    num_ik_seeds, plans_per_seed);
+
+        // Try multiple IK seeds
+        for (int seed_idx = 0; seed_idx < num_ik_seeds; ++seed_idx)
+        {
+            // Generate IK seed (first iteration uses current state, rest are jittered)
+            std::vector<double> seed = (seed_idx == 0) ? current_joint_state
+                                                        : jitterJointSeed(current_joint_state, 0.4, rng);
+
+            // Compute IK with this seed
+            auto ik_solution = computeIK(seed, target_ee_pose, ik_timeout, ik_attempts);
+            if (ik_solution.empty())
+                continue;
+
+            // Quick collision check
+            if (!isStateValid(ik_solution))
+                continue;
+
+            // Try multiple planning attempts with this IK solution
+            for (int plan_idx = 0; plan_idx < plans_per_seed; ++plan_idx)
+            {
+                moveit::planning_interface::MoveGroupInterface::Plan plan;
+                bool planning_success = planToJointGoal(ik_solution, plan);
+                
+                if (!planning_success || plan.trajectory_.joint_trajectory.points.empty())
+                    continue;
+
+                // Ensure trajectory has strictly increasing timestamps (required by controller)
+                ensureStrictlyIncreasingTime(plan.trajectory_.joint_trajectory, dt_sec);
+
+                // Compute cost as joint-space path length
+                double path_cost = computeJointSpacePathLength(plan.trajectory_.joint_trajectory);
+
+                // Keep best plan
+                if (!found_valid_plan || path_cost < best_cost)
+                {
+                    best_cost = path_cost;
+                    best_plan_out = plan;
+                    found_valid_plan = true;
+                    
+                    RCLCPP_DEBUG(node_->get_logger(), 
+                                "Found better plan (cost=%.3f) with IK seed %d, attempt %d",
+                                path_cost, seed_idx, plan_idx);
+                }
+            }
+
+            // Early exit if we found a very good solution
+            if (found_valid_plan && best_cost < 2.0)
+            {
+                RCLCPP_DEBUG(node_->get_logger(), "Found sufficiently good plan early, stopping search");
+                break;
+            }
+        }
+
+        if (found_valid_plan)
+        {
+            RCLCPP_INFO(node_->get_logger(), 
+                       "Selected best plan with joint-space path length: %.3f", best_cost);
+            return true;
+        }
+
+        RCLCPP_WARN(node_->get_logger(), 
+                   "No valid plan found after trying %d IK seeds", num_ik_seeds);
+        return false;
+    }
     // Frame configuration
     std::string MoveItInterface::getPoseReferenceFrame() const
     {

@@ -6,6 +6,7 @@
 #include <geometry_msgs/msg/pose.hpp>
 #include <Eigen/Geometry>
 #include <vector>
+#include <random>
 
 namespace husky_xarm6_mcr_nbv_planner
 {
@@ -111,6 +112,15 @@ namespace husky_xarm6_mcr_nbv_planner
                                 std::array<double, 4> &ee_orientation_out,
                                 const std::string &reference_frame = "") const;
 
+        // Advanced planning with multiple IK seeds and retry logic
+        // Returns the best plan found after trying multiple IK seeds and planners
+        bool planToTargetPoseWithRetries(const geometry_msgs::msg::Pose &target_ee_pose,
+                                         moveit::planning_interface::MoveGroupInterface::Plan &best_plan_out,
+                                         int num_ik_seeds = 5,
+                                         int plans_per_seed = 1,
+                                         double ik_timeout = 0.05,
+                                         int ik_attempts = 5);
+
         // IK configuration
         double getIKTimeout() const;
         void setIKTimeout(double timeout);
@@ -168,6 +178,13 @@ namespace husky_xarm6_mcr_nbv_planner
         std::shared_ptr<planning_scene_monitor::PlanningSceneMonitor> getPlanningSceneMonitor() const { return psm_; }
 
     private:
+        // Helper functions for advanced planning
+        static double jointDeltaL2(const std::vector<double>& a, const std::vector<double>& b);
+        static double computeJointSpacePathLength(const trajectory_msgs::msg::JointTrajectory &trajectory);
+        static bool hasStrictlyIncreasingTime(const trajectory_msgs::msg::JointTrajectory &trajectory);
+        static void ensureStrictlyIncreasingTime(trajectory_msgs::msg::JointTrajectory &trajectory, double dt_sec = 0.02);
+        static std::vector<double> jitterJointSeed(const std::vector<double> &seed, double sigma, std::mt19937 &rng);
+
         std::shared_ptr<rclcpp::Node> node_;
         std::string group_name_;
         std::unique_ptr<moveit::planning_interface::MoveGroupInterface> move_group_;
