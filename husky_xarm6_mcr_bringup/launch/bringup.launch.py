@@ -133,6 +133,8 @@ def launch_setup(context, *args, **kwargs):
             'use_gazebo': use_gazebo,
             'manipulator_prefix': manipulator_prefix,
             'platform_prefix': platform_prefix,
+            'manipulator_ns': manipulator_ns,
+            'platform_ns': platform_ns,
         }.items()
     )
     launch_actions.append(moveit_launch)
@@ -158,6 +160,9 @@ def launch_setup(context, *args, **kwargs):
                 'use_sim_time': use_sim_time,
                 'manipulator_prefix': manipulator_prefix,
                 'platform_prefix': platform_prefix,
+                'manipulator_ns': manipulator_ns,
+                'platform_ns': platform_ns,
+                'rviz_config': os.path.join(bringup_pkg, 'rviz', 'view.rviz'),
             }.items()
         )
         launch_actions.append(rviz_launch)

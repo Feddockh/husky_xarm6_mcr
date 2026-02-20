@@ -7,6 +7,7 @@ from launch_ros.parameter_descriptions import ParameterValue
 from pathlib import Path
 import yaml
 import tempfile
+import os
 
 from husky_xarm6_mcr_moveit_config.generate_moveit_controllers_yaml import generate_moveit_controllers_yaml
 from husky_xarm6_mcr_moveit_config.generate_rviz_config import generate_rviz_config
@@ -30,6 +31,7 @@ def launch_setup(context, *args, **kwargs):
     manipulator_ns = LaunchConfiguration('manipulator_ns')
     platform_prefix = LaunchConfiguration('platform_prefix')
     platform_ns = LaunchConfiguration('platform_ns')
+    rviz_config_file = LaunchConfiguration('rviz_config')
 
     description_pkg = Path(get_package_share_directory('husky_xarm6_mcr_description'))
     moveit_config_pkg = Path(get_package_share_directory('husky_xarm6_mcr_moveit_config'))
@@ -50,18 +52,25 @@ def launch_setup(context, *args, **kwargs):
     # Load the dynamically generated controllers
     controller_config = yaml.safe_load(Path(moveit_controllers_yaml_file.name).read_text())
 
-    # Generate the RViz config file dynamically
-    rviz_config_dict = generate_rviz_config(
-        platform_ns=platform_ns.perform(context),
-        platform_prefix=platform_prefix.perform(context),
-        manipulator_ns=manipulator_ns.perform(context),
-        manipulator_prefix=manipulator_prefix.perform(context)
-    )
-    # Create a temporary file for the RViz config
-    rviz_config_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.rviz')
-    yaml.dump(rviz_config_dict, rviz_config_file, default_flow_style=False, sort_keys=False)
-    rviz_config_file.close()
-    rviz_config = rviz_config_file.name
+    # Determine which RViz config to use
+    rviz_config_path = rviz_config_file.perform(context)
+    
+    if rviz_config_path and os.path.exists(rviz_config_path):
+        # Use provided config file
+        rviz_config = rviz_config_path
+    else:
+        # Generate the RViz config file dynamically
+        rviz_config_dict = generate_rviz_config(
+            platform_ns=platform_ns.perform(context),
+            platform_prefix=platform_prefix.perform(context),
+            manipulator_ns=manipulator_ns.perform(context),
+            manipulator_prefix=manipulator_prefix.perform(context)
+        )
+        # Create a temporary file for the RViz config
+        rviz_config_temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.rviz')
+        yaml.dump(rviz_config_dict, rviz_config_temp_file, default_flow_style=False, sort_keys=False)
+        rviz_config_temp_file.close()
+        rviz_config = rviz_config_temp_file.name
 
     # robot_description from URDF xacro
     robot_description = {'robot_description': _xacro_param(
@@ -134,5 +143,10 @@ def generate_launch_description():
         DeclareLaunchArgument('manipulator_ns', default_value='xarm'),
         DeclareLaunchArgument('platform_prefix', default_value='a200_'),
         DeclareLaunchArgument('platform_ns', default_value='husky'),
+        DeclareLaunchArgument(
+            'rviz_config',
+            default_value='',
+            description='Path to RViz config file (empty = use generated config)'
+        ),
         OpaqueFunction(function=launch_setup),
     ])

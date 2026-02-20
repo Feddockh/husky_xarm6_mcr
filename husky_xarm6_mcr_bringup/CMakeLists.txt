@@ -31,7 +31,7 @@ find_package(geometry_msgs REQUIRED)
 # )
 
 # Install launch files
-install(DIRECTORY launch
+install(DIRECTORY launch rviz
   DESTINATION share/${PROJECT_NAME}
 )
 
