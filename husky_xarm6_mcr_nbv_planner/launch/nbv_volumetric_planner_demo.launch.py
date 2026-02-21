@@ -126,7 +126,7 @@ def launch_setup(context, *args, **kwargs):
         'metrics_plots_dir': metrics_plots_dir,
         'metrics_data_dir': metrics_data_dir,
         # General Parameters
-        'init_joint_angles_deg': [0.0, -45.0, -45.0, 0.0, 0.0, 90.0],
+        'init_joint_angles_deg': [0.0, -35.0, -55.0, 0.0, 0.0, 90.0],
         'map_frame': LaunchConfiguration('map_frame').perform(context),
         # NBV Planning Parameters
         'max_iterations': int(LaunchConfiguration('max_iterations').perform(context)),
@@ -300,9 +300,9 @@ def generate_launch_description():
                             description='Camera image width (pixels)'),
         DeclareLaunchArgument('camera_height', default_value='224',
                             description='Camera image height (pixels)'),
-        DeclareLaunchArgument('camera_max_range', default_value='1.0',
+        DeclareLaunchArgument('camera_max_range', default_value='0.6',
                             description='Camera maximum sensing range (meters)'),
-        DeclareLaunchArgument('ideal_camera_distance', default_value='0.2',
+        DeclareLaunchArgument('ideal_camera_distance', default_value='0.3',
                             description='Ideal distance from camera to target surface for information gain computation'),
         DeclareLaunchArgument('num_camera_rays', default_value='25',
                             description='Number of rays for information gain computation'),
