@@ -8,6 +8,7 @@
 #include "husky_xarm6_mcr_occupancy_map/semantic_pointcloud_updater.hpp"
 #include "husky_xarm6_mcr_occupancy_map/occupancy_map_visualizer.hpp"
 #include <rclcpp/rclcpp.hpp>
+#include <std_srvs/srv/trigger.hpp>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 #include <octomap_msgs/msg/octomap.hpp>
@@ -450,6 +451,34 @@ int main(int argc, char **argv)
         RCLCPP_INFO(logger, "  PointCloud topic: %s", pointcloud_topic.c_str());
         RCLCPP_INFO(logger, "  MoveIt integration: %s", use_moveit ? "ENABLED" : "DISABLED");
     }
+
+    // Clear service: /occupancy_map/clear
+    auto clear_service = node->create_service<std_srvs::srv::Trigger>(
+        "/occupancy_map/clear",
+        [node, monitor, use_semantics](
+            const std::shared_ptr<std_srvs::srv::Trigger::Request> /*request*/,
+            std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+        {
+            RCLCPP_INFO(node->get_logger(), "Clearing occupancy map...");
+            if (use_semantics)
+            {
+                auto tree = monitor->getSemanticMapTree();
+                tree->lockWrite();
+                tree->clear();
+                tree->unlockWrite();
+            }
+            else
+            {
+                auto tree = monitor->getMapTree();
+                tree->lockWrite();
+                tree->clear();
+                tree->unlockWrite();
+            }
+            RCLCPP_INFO(node->get_logger(), "Occupancy map cleared successfully");
+            response->success = true;
+            response->message = "Occupancy map cleared successfully";
+        });
+    RCLCPP_INFO(logger, "Clear service available at: /occupancy_map/clear");
 
     rclcpp::spin(node);
 
