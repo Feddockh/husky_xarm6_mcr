@@ -222,14 +222,11 @@ int main(int argc, char **argv)
     lawnmowerSortViewpoints(reachable_viewpoints);
     if (visualizer)
     {
-        RCLCPP_INFO(node->get_logger(), "Publishing reachable viewpoints for visualization");
-        for (size_t i = 0; i < reachable_viewpoints.size(); ++i)
-        {
-            visualizer->publishViewpoint(
-                reachable_viewpoints[i], 0.2, 0.02, 1.0f,
-                "vpoint_" + std::to_string(i), moveit_interface->getPoseReferenceFrame()); // in moveit frame
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        }
+        std::vector<geometry_msgs::msg::Pose> viewpoint_poses;
+            for (const auto& vp : reachable_viewpoints) {
+                viewpoint_poses.push_back(eigenToPose(vp.position, vp.orientation));
+            }
+            visualizer->publishCoordinates(viewpoint_poses, 0.15, 0.01, 0.5f, "reachable_viewpoints", moveit_interface->getPoseReferenceFrame());
     }
 
     // Main NBV Planning Loop - use the filtered reachable_viewpoints from above

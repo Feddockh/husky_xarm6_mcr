@@ -276,7 +276,7 @@ int main(int argc, char **argv)
             for (const auto& vp : reachable_viewpoints) {
                 viewpoint_poses.push_back(eigenToPose(vp.position, vp.orientation));
             }
-            visualizer->publishCoordinates(viewpoint_poses, 0.1, 0.005, 0.5f, "reachable_viewpoints", moveit_interface->getPoseReferenceFrame());
+            visualizer->publishCoordinates(viewpoint_poses, 0.15, 0.01, 0.5f, "reachable_viewpoints", moveit_interface->getPoseReferenceFrame());
         }
 
         // Compute utilities
