@@ -1453,19 +1453,28 @@ namespace husky_xarm6_mcr_nbv_planner
 
             // Plot each series
             std::vector<matplot::line_handle> line_handles;
+            hold(on);
             for (size_t i = 0; i < num_series; ++i)
             {
                 auto h = plot(x_values, y_data[i]);
                 h->line_width(2);
 
-                // Apply custom color if provided
                 if (!plot_colors.empty() && i < plot_colors.size())
                 {
-                    h->color({plot_colors[i][0], plot_colors[i][1], plot_colors[i][2]});
+                    // color_array format is {alpha, r, g, b} where alpha=0 is fully opaque
+                    h->color({0.0f, plot_colors[i][0], plot_colors[i][1], plot_colors[i][2]});
                 }
 
                 line_handles.push_back(h);
-                hold(on);
+            }
+
+            // Re-apply colors after all series are plotted, before save
+            for (size_t i = 0; i < line_handles.size(); ++i)
+            {
+                if (!plot_colors.empty() && i < plot_colors.size())
+                {
+                    line_handles[i]->color({0.0f, plot_colors[i][0], plot_colors[i][1], plot_colors[i][2]});
+                }
             }
 
             // Set labels and title
@@ -1508,7 +1517,6 @@ namespace husky_xarm6_mcr_nbv_planner
         const std::vector<double> &x_data,
         const std::string &plot_title,
         const std::string &x_data_label,
-        const std::vector<std::array<float, 3>> &colors,
         const std::string &save_path)
     {
         if (metrics.empty())
@@ -1516,44 +1524,96 @@ namespace husky_xarm6_mcr_nbv_planner
             return false;
         }
 
-        // Define the data vectors
         std::vector<std::vector<double>> y_data;
-        
         std::vector<std::string> series_labels;
 
-        // Define the number of iterations and classes based on the input metrics
         int num_iterations = static_cast<int>(metrics.size());
         int num_classes = static_cast<int>(metrics[0].size());
 
-        // Fill out the y data with zeros to initialize the vectors for each metric type (precision, recall, F1) for each class across all iterations
-        y_data.resize(num_classes * 3); // 3 metrics per class
+        y_data.resize(num_classes * 3);
         for (auto &series : y_data)
             series.resize(num_iterations, 0.0);
 
-        // Fill out the series labels based on the class names and metric types (precision, recall, F1)
+        std::vector<std::array<float, 3>> plot_colors;
+        plot_colors.reserve(num_classes * 3);
+
+        // Convert RGB to HSV
+        auto rgbToHsv = [](float r, float g, float b, float &h, float &s, float &v)
+        {
+            float cmax = std::max({r, g, b});
+            float cmin = std::min({r, g, b});
+            float diff = cmax - cmin;
+
+            v = cmax;
+            s = (cmax == 0.0f) ? 0.0f : diff / cmax;
+
+            if (diff == 0.0f)       { h = 0.0f; }
+            else if (cmax == r)     { h = 60.0f * std::fmod((g - b) / diff, 6.0f); }
+            else if (cmax == g)     { h = 60.0f * ((b - r) / diff + 2.0f); }
+            else                    { h = 60.0f * ((r - g) / diff + 4.0f); }
+
+            if (h < 0.0f) h += 360.0f;
+        };
+
+        // Convert HSV to RGB
+        auto hsvToRgb = [](float h, float s, float v, float &r, float &g, float &b)
+        {
+            float c = v * s;
+            float x = c * (1.0f - std::abs(std::fmod(h / 60.0f, 2.0f) - 1.0f));
+            float m = v - c;
+
+            if      (h < 60.0f)  { r = c; g = x; b = 0; }
+            else if (h < 120.0f) { r = x; g = c; b = 0; }
+            else if (h < 180.0f) { r = 0; g = c; b = x; }
+            else if (h < 240.0f) { r = 0; g = x; b = c; }
+            else if (h < 300.0f) { r = x; g = 0; b = c; }
+            else                 { r = c; g = 0; b = x; }
+
+            r += m; g += m; b += m;
+        };
+
+        // Rotate hue by offset degrees, keeping saturation and value the same
+        auto rotateHue = [&](const std_msgs::msg::ColorRGBA &base_color, float hue_offset) -> std::array<float, 3>
+        {
+            float h, s, v;
+            rgbToHsv(base_color.r, base_color.g, base_color.b, h, s, v);
+            h = std::fmod(h + hue_offset + 360.0f, 360.0f);
+            // Boost saturation so rotated colors don't look washed out
+            s = std::min(1.0f, s * 1.1f);
+            float r, g, b;
+            hsvToRgb(h, s, v, r, g, b);
+            return {r, g, b};
+        };
+
+        // Fill out the series labels and colors
+        // Precision: base hue, Recall: +40 degrees, F1: -40 degrees
         for (size_t class_idx = 0; class_idx < static_cast<size_t>(num_classes); ++class_idx)
         {
+            auto base_color = colorForLabel(static_cast<int>(class_idx), 1.0f);
+
+            plot_colors.push_back(rotateHue(base_color,   0.0f));  // Precision - base hue
+            plot_colors.push_back(rotateHue(base_color,  40.0f));  // Recall    - +40 degrees
+            plot_colors.push_back(rotateHue(base_color, -40.0f));  // F1 Score  - -40 degrees
+
             series_labels.push_back("Class " + std::to_string(class_idx) + " Precision");
             series_labels.push_back("Class " + std::to_string(class_idx) + " Recall");
             series_labels.push_back("Class " + std::to_string(class_idx) + " F1 Score");
         }
 
-        // Pull the precision, recall, and F1 scores across each iteration for each class and add to the data vectors
+        // Pull the precision, recall, and F1 scores across each iteration
         for (size_t i = 0; i < metrics.size(); ++i)
         {
             const auto &iter_metrics = metrics[i];
             for (size_t class_idx = 0; class_idx < static_cast<size_t>(num_classes); ++class_idx)
             {
                 const auto &class_metrics = iter_metrics[class_idx];
-                // Add precision, recall, and F1 to the y_data vector
-                y_data[class_idx * 3][i] = class_metrics.precision;
+                y_data[class_idx * 3][i]     = class_metrics.precision;
                 y_data[class_idx * 3 + 1][i] = class_metrics.recall;
                 y_data[class_idx * 3 + 2][i] = class_metrics.f1_score;
             }
         }
 
-        // Call the more general plotMetrics function
-        return plotMetric(y_data, x_data, series_labels, plot_title, x_data_label, "Metric Value", colors, save_path, 0.0, 1.0);
+        return plotMetric(y_data, x_data, series_labels, plot_title, x_data_label, "Metric Value", plot_colors, save_path, 0.0, 1.0);
     }
 
     bool NBVVisualizer::plotAllMetrics(
@@ -1579,10 +1639,10 @@ namespace husky_xarm6_mcr_nbv_planner
 
         // Plot the metric as a function of iterations
         bool success_iter = plotClassMetrics(class_metrics_over_time, x_data_iter, 
-            "Iteration", "Class Metrics Over Iterations", {}, dir_path + "/nbv_class_metrics_iter.png");
+            "Class Metrics Over Viewpoints", "Viewpoint", dir_path + "/nbv_class_metrics_viewpoints.png");
         // Plot the metric as a function of time
         bool success_time = plotClassMetrics(class_metrics_over_time, x_data_time, 
-            "Time (s)", "Class Metrics Over Time", {}, dir_path + "/nbv_class_metrics_time.png");
+            "Class Metrics Over Time", "Time (s)", dir_path + "/nbv_class_metrics_time.png");
 
         // Extract voxel count data
         std::vector<double> occupied_voxels_data;
@@ -1602,8 +1662,8 @@ namespace husky_xarm6_mcr_nbv_planner
         
         double max_voxels = total_voxels_data.empty() ? 1.0 : *std::max_element(total_voxels_data.begin(), total_voxels_data.end());
         bool success_voxels_iter = plotMetric(voxel_data_iter, x_data_iter, voxel_labels, 
-                                             "Voxel Counts Over Iterations", "Iteration", "Voxel Count", 
-                                             voxel_colors, dir_path + "/voxel_counts_iter.png", 0.0, max_voxels * 1.1);
+                                             "Voxel Counts Over Viewpoints", "Viewpoint", "Voxel Count", 
+                                             voxel_colors, dir_path + "/voxel_counts_viewpoints.png", 0.0, max_voxels * 1.1);
 
         // Plot voxel counts over time
         bool success_voxels_time = plotMetric(voxel_data_iter, x_data_time, voxel_labels, 
@@ -1623,8 +1683,8 @@ namespace husky_xarm6_mcr_nbv_planner
         std::vector<std::array<float, 3>> coverage_colors = {{0.0f, 0.5f, 1.0f}};
         
         bool success_coverage_iter = plotMetric(coverage_y_data, x_data_iter, coverage_labels, 
-                                               "Octomap Coverage Over Iterations", "Iteration", "Coverage (%)",
-                                               coverage_colors, dir_path + "/coverage_iter.png", 0.0, 100.0);
+                                               "Octomap Coverage Over Viewpoints", "Viewpoint", "Coverage (%)",
+                                               coverage_colors, dir_path + "/coverage_viewpoints.png", 0.0, 100.0);
 
         // Plot coverage percentage over time
         bool success_coverage_time = plotMetric(coverage_y_data, x_data_time, coverage_labels, 

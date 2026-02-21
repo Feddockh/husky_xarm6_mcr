@@ -387,8 +387,9 @@ namespace husky_xarm6_mcr_nbv_planner
         /**
          * @brief Plot evaluation metrics from ClassMetrics structure
          * @param class_metrics 2D vector of ClassMetrics (outer: different runs, inner: classes)
+         * @param x_data X-axis values
+         * @param x_data_label X-axis label
          * @param plot_title Title of the plot (default: "Class Metrics")
-         * @param colors Colors for each metric run (optional)
          * @param save_path Path to save the plot (default: "/tmp/metrics.png")
          * @return true if successful, false otherwise
          */
@@ -397,7 +398,6 @@ namespace husky_xarm6_mcr_nbv_planner
             const std::vector<double> &x_data,
             const std::string &x_data_label,
             const std::string &plot_title = "Class Metrics",
-            const std::vector<std::array<float, 3>> &colors = {},
             const std::string &save_path = "/tmp/metrics.png"
         );
 

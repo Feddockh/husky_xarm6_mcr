@@ -153,7 +153,7 @@ int main(int argc, char **argv)
             std::vector<double> x_data;
             for (size_t i = 0; i < all_metrics.size(); ++i)
                 x_data.push_back(static_cast<double>(i+1));
-            visualizer->plotClassMetrics(all_metrics, x_data, "viewpoint", "Class Metrics", {}, "./nbv_metrics_plot.png");
+            visualizer->plotClassMetrics(all_metrics, x_data, "viewpoint", "Class Metrics", "./nbv_metrics_plot.png");
 
             has_data = true;
         }
