@@ -125,7 +125,7 @@ namespace husky_xarm6_mcr_occupancy_map
         /**
          * @brief Filter ground plane (optional)
          */
-        bool isGroundPlane(const octomap::point3d &point) const;
+        // bool isGroundPlane(const octomap::point3d &point) const;
 
         // ROS resources
         rclcpp::Node::SharedPtr node_;

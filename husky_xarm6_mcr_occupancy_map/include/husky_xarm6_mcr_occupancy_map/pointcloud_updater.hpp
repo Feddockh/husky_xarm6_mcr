@@ -70,7 +70,7 @@ namespace husky_xarm6_mcr_occupancy_map
         /**
          * @brief Filter ground plane (optional)
          */
-        bool isGroundPlane(const octomap::point3d &point) const;
+        // bool isGroundPlane(const octomap::point3d &point) const;
 
         std::string topic_;                                                  ///< Point cloud topic
         OccupancyMapParameters params_;                                      ///< Configuration

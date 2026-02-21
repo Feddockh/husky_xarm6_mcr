@@ -35,8 +35,8 @@ namespace husky_xarm6_mcr_occupancy_map
         double clamp_min;                    ///< Minimum clamping threshold
         double clamp_max;                    ///< Maximum clamping threshold
         double occupancy_threshold;          ///< Threshold for considering voxel occupied
-        bool filter_ground_plane;            ///< Remove ground plane
-        double ground_distance_threshold;    ///< Distance to ground (m)
+        // bool filter_ground_plane;            ///< Remove ground plane
+        // double ground_distance_threshold;    ///< Distance to ground (m)
 
         // Bounding box parameters (optional)
         bool use_bounding_box;

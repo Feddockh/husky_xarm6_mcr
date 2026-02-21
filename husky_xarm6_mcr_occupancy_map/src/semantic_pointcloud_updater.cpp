@@ -337,9 +337,9 @@ namespace husky_xarm6_mcr_occupancy_map
         return true;
     }
 
-    bool SemanticPointCloudUpdater::isGroundPlane(const octomap::point3d &point) const
-    {
-        return std::abs(point.z()) < params_.ground_distance_threshold;
-    }
+    // bool SemanticPointCloudUpdater::isGroundPlane(const octomap::point3d &point) const
+    // {
+    //     return std::abs(point.z()) < params_.ground_distance_threshold;
+    // }
 
 } // namespace husky_xarm6_mcr_occupancy_map

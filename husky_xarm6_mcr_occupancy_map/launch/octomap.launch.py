@@ -31,7 +31,7 @@ def generate_launch_description():
 
     use_moveit_arg = DeclareLaunchArgument(
         'use_moveit',
-        default_value='true',
+        default_value='false',
         description='Enable MoveIt planning scene integration'
     )
 
@@ -82,9 +82,9 @@ def generate_launch_description():
             'clamp_max': 0.97,
             'occupancy_threshold': 0.5,
 
-            # Ground filtering
-            'filter_ground_plane': True,
-            'ground_distance_threshold': 0.04,
+            # # Ground filtering
+            # 'filter_ground_plane': False, # Not using ground filtering
+            # 'ground_distance_threshold': 0.04,
 
             # Bounding box (limits octomap updates to this region)
             'use_bounding_box': LaunchConfiguration('use_bbox'),

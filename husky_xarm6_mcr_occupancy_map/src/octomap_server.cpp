@@ -41,8 +41,8 @@ int main(int argc, char **argv)
     node->declare_parameter("clamp_min", 0.1192);
     node->declare_parameter("clamp_max", 0.971);
     node->declare_parameter("occupancy_threshold", 0.5);
-    node->declare_parameter("filter_ground_plane", true);
-    node->declare_parameter("ground_distance_threshold", 0.04);
+    // node->declare_parameter("filter_ground_plane", true);
+    // node->declare_parameter("ground_distance_threshold", 0.04);
 
     node->declare_parameter("pointcloud_topic", "/camera/depth/points");
     node->declare_parameter("use_moveit", false);
@@ -82,8 +82,8 @@ int main(int argc, char **argv)
     params.clamp_max = node->get_parameter("clamp_max").as_double();
     params.occupancy_threshold = node->get_parameter("occupancy_threshold").as_double();
     params.map_frame = node->get_parameter("map_frame").as_string();
-    params.filter_ground_plane = node->get_parameter("filter_ground_plane").as_bool();
-    params.ground_distance_threshold = node->get_parameter("ground_distance_threshold").as_double();
+    // params.filter_ground_plane = node->get_parameter("filter_ground_plane").as_bool();
+    // params.ground_distance_threshold = node->get_parameter("ground_distance_threshold").as_double();
 
     std::string pointcloud_topic = node->get_parameter("pointcloud_topic").as_string();
     bool use_moveit = node->get_parameter("use_moveit").as_bool();

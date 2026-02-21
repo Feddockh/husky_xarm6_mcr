@@ -218,11 +218,11 @@ namespace husky_xarm6_mcr_occupancy_map
         return (distance >= params_.min_range && distance <= params_.max_range);
     }
 
-    bool PointCloudUpdater::isGroundPlane(const octomap::point3d &point) const
-    {
-        // Simple ground filter: check if z coordinate is near ground level
-        // Using ground_distance_threshold as both the ground height and tolerance
-        return std::abs(point.z()) < params_.ground_distance_threshold;
-    }
+    // bool PointCloudUpdater::isGroundPlane(const octomap::point3d &point) const
+    // {
+    //     // Simple ground filter: check if z coordinate is near ground level
+    //     // Using ground_distance_threshold as both the ground height and tolerance
+    //     return std::abs(point.z()) < params_.ground_distance_threshold;
+    // }
 
 } // namespace husky_xarm6_mcr_occupancy_map
