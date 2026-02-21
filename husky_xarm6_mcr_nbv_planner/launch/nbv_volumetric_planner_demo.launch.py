@@ -117,7 +117,8 @@ def launch_setup(context, *args, **kwargs):
         'camera_width': int(LaunchConfiguration('camera_width').perform(context)),
         'camera_height': int(LaunchConfiguration('camera_height').perform(context)),
         'camera_max_range': float(LaunchConfiguration('camera_max_range').perform(context)),
-        'ideal_camera_distance': float(LaunchConfiguration('ideal_camera_distance').perform(context)),
+        'ideal_camera_distance': 0.3,
+        'ideal_distance_tolerance': 0.1,
         'num_camera_rays': int(LaunchConfiguration('num_camera_rays').perform(context)),
         # Evaluation Parameters
         'enable_evaluation': LaunchConfiguration('enable_evaluation').perform(context).lower() == 'true',
@@ -133,13 +134,12 @@ def launch_setup(context, *args, **kwargs):
         'min_information_gain': float(LaunchConfiguration('min_information_gain').perform(context)),
         'alpha_cost_weight': float(LaunchConfiguration('alpha_cost_weight').perform(context)),
         # Viewpoint Parameters
-        'plane_half_extent': 1.0,
-        'plane_spatial_resolution': 0.3,
-        'cap_max_theta_deg': 60.0,
-        'cap_min_theta_deg': 15.0,
+        'plane_half_extent': 1.0, # Not used in this demo
+        'plane_spatial_resolution': 0.3, # Not used in this demo
+        'cap_max_theta_deg': 60.0, # Not used in this demo
+        'cap_min_theta_deg': 15.0, # Not used in this demo
         'num_viewpoints_per_frontier': int(LaunchConfiguration('num_viewpoints_per_frontier').perform(context)),
         'z_bias_sigma': 0.3,
-        'ideal_distance_tolerance': 0.1,
         # Debug Parameters
         'visualize': LaunchConfiguration('visualize').perform(context).lower() == 'true',
         'visualization_topic': LaunchConfiguration('visualization_topic').perform(context),
@@ -292,23 +292,16 @@ def generate_launch_description():
         # Camera Parameters
         DeclareLaunchArgument('camera_optical_link', default_value='firefly_left_camera_optical_frame',
                             description='TF frame of the camera optical link'),
-        DeclareLaunchArgument('camera_horizontal_fov', default_value='45.0',
-                            description='Camera horizontal field of view (degrees, 45 deg default)'),
-        DeclareLaunchArgument('camera_vertical_fov', default_value='35.0',
-                            description='Camera vertical field of view (degrees, 35 deg default)'),
         DeclareLaunchArgument('camera_width', default_value='448',
                             description='Camera image width (pixels)'),
         DeclareLaunchArgument('camera_height', default_value='224',
                             description='Camera image height (pixels)'),
         DeclareLaunchArgument('camera_max_range', default_value='0.6',
                             description='Camera maximum sensing range (meters)'),
-        DeclareLaunchArgument('ideal_camera_distance', default_value='0.3',
-                            description='Ideal distance from camera to target surface for information gain computation'),
         DeclareLaunchArgument('num_camera_rays', default_value='25',
                             description='Number of rays for information gain computation'),
         DeclareLaunchArgument('map_frame', default_value='husky/a200_base_footprint',
                             description='Fixed frame for visualization markers'),
-
         # Ground Truth Evaluation Parameters
         DeclareLaunchArgument('gt_points_dir', default_value=PathJoinSubstitution([FindPackageShare('husky_xarm6_mcr_nbv_planner'), 'metrics', 'gt_points']),
             description='Directory containing ground truth points YAML files for semantic evaluation'),
