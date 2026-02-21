@@ -1,9 +1,10 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, OpaqueFunction
+from launch.actions import DeclareLaunchArgument, OpaqueFunction, IncludeLaunchDescription
 from launch.substitutions import LaunchConfiguration, Command
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 from launch.substitutions import PathJoinSubstitution
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from ament_index_python.packages import get_package_share_directory
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_param_builder import load_xacro
@@ -96,7 +97,7 @@ def launch_setup(context, *args, **kwargs):
         'num_samples': 10000000,
         'manipulation_workspace_file': workspace_file_path,
         # Octomap Parameters
-        'octomap_topic': LaunchConfiguration('octomap_topic').perform(context),
+        'octomap_topic': '/octomap_binary',
         'min_unknown_neighbors': 1,
         # Manipulation Parameters
         'planning_pipeline_id': 'ompl',
@@ -114,8 +115,8 @@ def launch_setup(context, *args, **kwargs):
         'camera_optical_link': LaunchConfiguration('camera_optical_link').perform(context),
         'camera_horizontal_fov_deg': 45.0,
         'camera_vertical_fov_deg': 35.0,
-        'camera_width': int(LaunchConfiguration('camera_width').perform(context)),
-        'camera_height': int(LaunchConfiguration('camera_height').perform(context)),
+        'camera_scaled_width': int(LaunchConfiguration('camera_scaled_width').perform(context)),
+        'camera_scaled_height': int(LaunchConfiguration('camera_scaled_height').perform(context)),
         'camera_max_range': float(LaunchConfiguration('camera_max_range').perform(context)),
         'ideal_camera_distance': 0.3,
         'ideal_distance_tolerance': 0.1,
@@ -147,6 +148,46 @@ def launch_setup(context, *args, **kwargs):
         'viewpoint_overlap_ratio': 0.42,
     }
 
+    # Capture firefly parameters
+    firefly_parameters = {
+        'trigger_flash_duration_ms': int(LaunchConfiguration('trigger_flash_duration_ms').perform(context)),
+        'trigger_frame_rate_hz': int(LaunchConfiguration('trigger_frame_rate_hz').perform(context)),
+        'trigger_auto_start': LaunchConfiguration('trigger_auto_start').perform(context).lower() == 'true',
+        'output_width': int(LaunchConfiguration('camera_scaled_width').perform(context)),
+        'output_height': int(LaunchConfiguration('camera_scaled_height').perform(context)),
+        'stereo_matcher_model_trt': LaunchConfiguration('stereo_matcher_model_trt').perform(context),
+        'use_semantics': LaunchConfiguration('use_semantics').perform(context).lower() == 'true',
+        'use_seg_detection': LaunchConfiguration('use_seg_detection').perform(context).lower() == 'true',
+        'enable_detection': LaunchConfiguration('enable_detection').perform(context).lower() == 'true',
+        'detection_model_trt': LaunchConfiguration('detection_model_trt').perform(context),
+    }
+
+    # Capture octomap parameters
+    octomap_parameters = {
+        'resolution': float(LaunchConfiguration('octomap_resolution').perform(context)),
+        'max_range': float(LaunchConfiguration('octomap_max_range').perform(context)),
+        'min_range': 0.01,
+        'use_moveit': LaunchConfiguration('octomap_use_moveit').perform(context).lower() == 'true',
+        'use_bbox': LaunchConfiguration('octomap_use_bbox').perform(context).lower() == 'true',
+        'map_frame': LaunchConfiguration('map_frame').perform(context),
+        'use_semantics': LaunchConfiguration('octomap_use_semantics').perform(context).lower() == 'true',
+        'pointcloud_topic': LaunchConfiguration('octomap_pointcloud_topic').perform(context),
+        'bbx_min_x': float(LaunchConfiguration('octomap_bbx_min_x').perform(context)),
+        'bbx_min_y': float(LaunchConfiguration('octomap_bbx_min_y').perform(context)),
+        'bbx_min_z': float(LaunchConfiguration('octomap_bbx_min_z').perform(context)),
+        'bbx_max_x': float(LaunchConfiguration('octomap_bbx_max_x').perform(context)),
+        'bbx_max_y': float(LaunchConfiguration('octomap_bbx_max_y').perform(context)),
+        'bbx_max_z': float(LaunchConfiguration('octomap_bbx_max_z').perform(context)),
+        'prob_hit': 0.7,
+        'prob_miss': 0.4,
+        'clamp_min': 0.12,
+        'clamp_max': 0.97,
+        'occupancy_threshold': 0.5,
+        'semantic_confidence_boost': float(LaunchConfiguration('semantic_confidence_boost').perform(context)),
+        'semantic_mismatch_penalty': float(LaunchConfiguration('semantic_mismatch_penalty').perform(context)),
+        'conf_thresh': float(LaunchConfiguration('conf_thresh').perform(context)),
+    }
+
     # Save parameters to YAML file
     params_file_path = os.path.join(metrics_dir, run_dir, 'run_parameters.yaml')
     params_data = {
@@ -164,7 +205,9 @@ def launch_setup(context, *args, **kwargs):
             'platform_prefix': platform_prefix.perform(context),
             'platform_ns': platform_ns.perform(context),
         },
-        'parameters': node_parameters
+        'parameters': node_parameters,
+        'firefly_parameters': firefly_parameters,
+        'octomap_parameters': octomap_parameters
     }
     
     with open(params_file_path, 'w') as f:
@@ -240,6 +283,73 @@ def launch_setup(context, *args, **kwargs):
         }
     }
 
+    # Firefly camera bringup
+    firefly_bringup_pkg = get_package_share_directory('multi_camera_rig_bringup')
+    firefly_bringup_launch = os.path.join(firefly_bringup_pkg, 'launch', 'firefly_bringup.launch.py')
+    
+    firefly_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(firefly_bringup_launch),
+        launch_arguments={
+            'use_gazebo': use_gazebo,
+            'calib_dir': LaunchConfiguration('calib_dir'),
+            'spinnaker_config_file': LaunchConfiguration('spinnaker_config_file'),
+            'spinnaker_param_file': LaunchConfiguration('spinnaker_param_file'),
+            'trigger_flash_duration_ms': LaunchConfiguration('trigger_flash_duration_ms'),
+            'trigger_frame_rate_hz': LaunchConfiguration('trigger_frame_rate_hz'),
+            'trigger_auto_start': LaunchConfiguration('trigger_auto_start'),
+            'output_width': LaunchConfiguration('camera_scaled_width'),
+            'output_height': LaunchConfiguration('camera_scaled_height'),
+            'stereo_matcher_model_dir': LaunchConfiguration('stereo_matcher_model_dir'),
+            'stereo_matcher_model_trt': LaunchConfiguration('stereo_matcher_model_trt'),
+            'use_semantics': LaunchConfiguration('use_semantics'),
+            'use_seg_detection': LaunchConfiguration('use_seg_detection'),
+            'enable_detection': LaunchConfiguration('enable_detection'),
+            'detection_model_dir': LaunchConfiguration('detection_model_dir'),
+            'detection_model_trt': LaunchConfiguration('detection_model_trt'),
+            'conf_thresh': LaunchConfiguration('conf_thresh'),
+        }.items()
+    )
+
+    # Octomap server node
+    octomap_server_node = Node(
+        package='husky_xarm6_mcr_occupancy_map',
+        executable='octomap_server',
+        name='octomap_server',
+        output='screen',
+        parameters=[{
+            'use_sim_time': use_sim_time,
+            'resolution': LaunchConfiguration('octomap_resolution'),
+            'map_frame': LaunchConfiguration('map_frame'),
+            'max_range': LaunchConfiguration('octomap_max_range'),
+            'min_range': 0.01,
+            'prob_hit': 0.7,
+            'prob_miss': 0.4,
+            'clamp_min': 0.12,
+            'clamp_max': 0.97,
+            'occupancy_threshold': 0.5,
+            'use_bounding_box': LaunchConfiguration('octomap_use_bbox'),
+            'bbx_min_x': LaunchConfiguration('octomap_bbx_min_x'),
+            'bbx_min_y': LaunchConfiguration('octomap_bbx_min_y'),
+            'bbx_min_z': LaunchConfiguration('octomap_bbx_min_z'),
+            'bbx_max_x': LaunchConfiguration('octomap_bbx_max_x'),
+            'bbx_max_y': LaunchConfiguration('octomap_bbx_max_y'),
+            'bbx_max_z': LaunchConfiguration('octomap_bbx_max_z'),
+            'use_semantics': LaunchConfiguration('octomap_use_semantics'),
+            'semantic_confidence_boost': LaunchConfiguration('semantic_confidence_boost'),
+            'semantic_mismatch_penalty': LaunchConfiguration('semantic_mismatch_penalty'),
+            'pointcloud_topic': LaunchConfiguration('octomap_pointcloud_topic'),
+            'use_moveit': LaunchConfiguration('octomap_use_moveit'),
+            'planning_scene_world_topic': '/planning_scene_world',
+            'publish_free_voxels': True,
+            'enable_visualization': True,
+            'visualization_topic': 'occupancy_map_markers',
+            'visualization_rate': 1.0,
+            'octomap_publish_rate': 1.0,
+            'nbv_octomap_topic': '/octomap_binary',
+            'nbv_octomap_qos_transient_local': True,
+        }]
+    )
+
     nbv_baseline_demo = Node(
         package='husky_xarm6_mcr_nbv_planner',
         executable='nbv_baseline_demo',
@@ -257,13 +367,13 @@ def launch_setup(context, *args, **kwargs):
         ],
     )
 
-    return [nbv_baseline_demo]
+    return [firefly_launch, octomap_server_node, nbv_baseline_demo]
 
 
 def generate_launch_description():
     return LaunchDescription([
-        DeclareLaunchArgument('use_sim_time', default_value='true'),
-        DeclareLaunchArgument('use_gazebo', default_value='true'),
+        DeclareLaunchArgument('use_sim_time', default_value='false'),
+        DeclareLaunchArgument('use_gazebo', default_value='false'),
         DeclareLaunchArgument('use_fake_hardware', default_value='false'),
         DeclareLaunchArgument('manipulator_prefix', default_value='xarm6_'),
         DeclareLaunchArgument('manipulator_ns', default_value='xarm'),
@@ -285,15 +395,13 @@ def generate_launch_description():
                             description='Weight for cost in utility function (IG - alpha*cost)'),
         DeclareLaunchArgument('num_viewpoints_per_frontier', default_value='7',
                             description='Number of viewpoint candidates per frontier cluster'),
-        DeclareLaunchArgument('octomap_topic', default_value='/octomap_binary',
-                            description='Topic for receiving octomap updates'),
         # Camera Parameters
         DeclareLaunchArgument('camera_optical_link', default_value='firefly_left_camera_optical_frame',
                             description='TF frame of the camera optical link'),
-        DeclareLaunchArgument('camera_width', default_value='448',
-                            description='Camera image width (pixels)'),
-        DeclareLaunchArgument('camera_height', default_value='224',
-                            description='Camera image height (pixels)'),
+        DeclareLaunchArgument('camera_scaled_width', default_value='448',
+                            description='Camera scaled image width (pixels)'),
+        DeclareLaunchArgument('camera_scaled_height', default_value='224',
+                            description='Camera scaled image height (pixels)'),
         DeclareLaunchArgument('camera_max_range', default_value='0.6',
                             description='Camera maximum sensing range (meters)'),
         DeclareLaunchArgument('num_camera_rays', default_value='25',
@@ -303,7 +411,7 @@ def generate_launch_description():
         # Ground Truth Evaluation Parameters
         DeclareLaunchArgument('gt_points_dir', default_value=PathJoinSubstitution([FindPackageShare('husky_xarm6_mcr_nbv_planner'), 'metrics', 'gt_points']),
             description='Directory containing ground truth points YAML files for semantic evaluation'),
-        DeclareLaunchArgument('gt_points_file', default_value='sim_aruco_gt_points.yaml',
+        DeclareLaunchArgument('gt_points_file', default_value='aruco_gt_points_lab.yaml',
                             description='Path to the ground truth points YAML file for semantic evaluation'),
         DeclareLaunchArgument('enable_evaluation', default_value='true',
                             description='Enable semantic octomap evaluation against ground truth'),
@@ -313,5 +421,57 @@ def generate_launch_description():
                             description='Directory for saving metrics (plots and CSV data)'),
         DeclareLaunchArgument('run', default_value='',
                             description='Directory for saving run data'),
+        # Firefly Camera Parameters
+        DeclareLaunchArgument('calib_dir', default_value=PathJoinSubstitution([FindPackageShare('firefly-ros2-wrapper-bringup'), 'calibs']),
+                            description='Directory containing camera calibration YAML files'),
+        DeclareLaunchArgument('spinnaker_config_file', default_value=PathJoinSubstitution([FindPackageShare('firefly-ros2-wrapper-bringup'), 'configs', 'firefly.yaml']),
+                            description='Path to the Spinnaker camera configuration YAML file'),
+        DeclareLaunchArgument('spinnaker_param_file', default_value=PathJoinSubstitution([FindPackageShare('firefly-ros2-wrapper-bringup'), 'params', 'firefly.yaml']),
+                            description='Path to the Spinnaker camera parameter definitions YAML file'),
+        DeclareLaunchArgument('trigger_flash_duration_ms', default_value='200',
+                            description='Flash duration in milliseconds (0-300)'),
+        DeclareLaunchArgument('trigger_frame_rate_hz', default_value='1',
+                            description='Trigger frame rate in Hz (1-20)'),
+        DeclareLaunchArgument('trigger_auto_start', default_value='false',
+                            description='Automatically start video triggering on launch'),
+        DeclareLaunchArgument('stereo_matcher_model_dir', default_value=PathJoinSubstitution([FindPackageShare('multi_camera_rig_reconstruction'), 'models']),
+                            description='Directory containing TensorRT engine (.plan) files'),
+        DeclareLaunchArgument('stereo_matcher_model_trt', default_value='fs_224x448_vit-small_iters5.plan',
+                            description='TensorRT engine file for the foundation stereo model'),
+        DeclareLaunchArgument('use_semantics', default_value='true',
+                            description='Enable semantic mode with detections for point cloud'),
+        DeclareLaunchArgument('use_seg_detection', default_value='true',
+                            description='Use segmentation detections for semantic point cloud coloring'),
+        DeclareLaunchArgument('enable_detection', default_value='true',
+                            description='Enable YOLO detection node'),
+        DeclareLaunchArgument('detection_model_dir', default_value=PathJoinSubstitution([FindPackageShare('multi_camera_rig_detection'), 'models']),
+                            description='Directory containing TensorRT engine (.plan) files'),
+        DeclareLaunchArgument('detection_model_trt', default_value='best_lab_seg_v2.plan',
+                            description='TensorRT engine file for YOLO detection model'),
+        DeclareLaunchArgument('conf_thresh', default_value='0.5',
+                            description='Confidence threshold for YOLO detections'),
+        # Octomap Parameters
+        DeclareLaunchArgument('octomap_resolution', default_value='0.04',
+                            description='Octomap resolution in meters'),
+        DeclareLaunchArgument('octomap_max_range', default_value='0.6',
+                            description='Maximum sensor range in meters'),
+        DeclareLaunchArgument('octomap_use_moveit', default_value='false',
+                            description='Enable MoveIt planning scene integration'),
+        DeclareLaunchArgument('octomap_use_bbox', default_value='true',
+                            description='Enable bounding box for octomap updates'),
+        DeclareLaunchArgument('octomap_use_semantics', default_value='true',
+                            description='Enable semantic occupancy mapping mode'),
+        DeclareLaunchArgument('octomap_pointcloud_topic', default_value='/firefly_left/points2',
+                            description='PointCloud2 topic for PointCloudUpdater'),
+        DeclareLaunchArgument('octomap_bbx_min_x', default_value='-0.4'),
+        DeclareLaunchArgument('octomap_bbx_min_y', default_value='-1.6'),
+        DeclareLaunchArgument('octomap_bbx_min_z', default_value='0.0'),
+        DeclareLaunchArgument('octomap_bbx_max_x', default_value='0.6'),
+        DeclareLaunchArgument('octomap_bbx_max_y', default_value='-0.6'),
+        DeclareLaunchArgument('octomap_bbx_max_z', default_value='2.0'),
+        DeclareLaunchArgument('semantic_confidence_boost', default_value='0.1',
+                            description='Confidence boost for semantic occupancy updates'),
+        DeclareLaunchArgument('semantic_mismatch_penalty', default_value='0.15',
+                            description='Penalty for semantic label mismatches'),
         OpaqueFunction(function=launch_setup),
     ])

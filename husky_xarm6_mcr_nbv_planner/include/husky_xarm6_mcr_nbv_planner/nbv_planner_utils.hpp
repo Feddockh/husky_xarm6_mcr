@@ -52,8 +52,8 @@ struct NBVPlannerConfig
     std::string camera_optical_link;
     double camera_horizontal_fov_rad; // radians
     double camera_vertical_fov_rad;   // radians
-    int camera_width;
-    int camera_height;
+    int camera_scaled_width;
+    int camera_scaled_height;
     double camera_max_range;
     double ideal_camera_distance; // 0.3 m
     double ideal_distance_tolerance; // 0.1 m
@@ -157,8 +157,8 @@ NBVPlannerConfig loadConfiguration(const std::shared_ptr<rclcpp::Node> &node)
     config.camera_optical_link = node->get_parameter("camera_optical_link").as_string();
     config.camera_horizontal_fov_rad = geometry_utils::deg2Rad(node->get_parameter("camera_horizontal_fov_deg").as_double());
     config.camera_vertical_fov_rad = geometry_utils::deg2Rad(node->get_parameter("camera_vertical_fov_deg").as_double());
-    config.camera_width = node->get_parameter("camera_width").as_int();
-    config.camera_height = node->get_parameter("camera_height").as_int();
+    config.camera_scaled_width = node->get_parameter("camera_scaled_width").as_int();
+    config.camera_scaled_height = node->get_parameter("camera_scaled_height").as_int();
     config.camera_max_range = node->get_parameter("camera_max_range").as_double();
     config.ideal_camera_distance = node->get_parameter("ideal_camera_distance").as_double();
     config.ideal_distance_tolerance = node->get_parameter("ideal_distance_tolerance").as_double();
@@ -231,7 +231,7 @@ void printConfiguration(const NBVPlannerConfig &config, const rclcpp::Logger &lo
     RCLCPP_INFO(logger, "  Optical link: %s", config.camera_optical_link.c_str());
     RCLCPP_INFO(logger, "  H-FOV: %.1f rad (%.1f deg)", config.camera_horizontal_fov_rad, geometry_utils::rad2Deg(config.camera_horizontal_fov_rad));
     RCLCPP_INFO(logger, "  V-FOV: %.1f rad (%.1f deg)", config.camera_vertical_fov_rad, geometry_utils::rad2Deg(config.camera_vertical_fov_rad));
-    RCLCPP_INFO(logger, "  Resolution: %dx%d", config.camera_width, config.camera_height);
+    RCLCPP_INFO(logger, "  Scaled Resolution: %dx%d", config.camera_scaled_width, config.camera_scaled_height);
     RCLCPP_INFO(logger, "  Max range: %.2f m", config.camera_max_range);
     RCLCPP_INFO(logger, "  Ideal distance: %.2f m", config.ideal_camera_distance);
     RCLCPP_INFO(logger, "  Ideal distance tolerance: %.4f", config.ideal_distance_tolerance);

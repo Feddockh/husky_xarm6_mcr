@@ -287,7 +287,7 @@ int main(int argc, char **argv)
         for (auto& vp : reachable_viewpoints) {
             vp.information_gain = computeInformationGain(vp, octomap_interface,
                 config.camera_horizontal_fov_rad, config.camera_vertical_fov_rad,
-                config.camera_width, config.camera_height, config.camera_max_range,
+                config.camera_scaled_width, config.camera_scaled_height, config.camera_max_range,
                 octomap_interface->getResolution(), config.num_camera_rays, octomap_interface->hasBoundingBox(), node->get_logger(), nullptr);
             double distance = (vp.position - current_cam_position).norm();
             vp.cost = distance;

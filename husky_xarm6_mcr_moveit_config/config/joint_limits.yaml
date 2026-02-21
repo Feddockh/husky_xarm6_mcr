@@ -33,6 +33,9 @@ joint_limits:
     has_acceleration_limits: true
     max_acceleration: 10.0
   xarm/xarm6_joint6:
+    has_position_limits: true
+    min_position: -3.14159
+    max_position:  3.14159
     has_velocity_limits: true
     max_velocity: 2.14
     # max_velocity: 3.14
