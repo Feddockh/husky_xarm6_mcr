@@ -334,6 +334,38 @@ TriggerClients createTriggerClients(const std::shared_ptr<rclcpp::Node> &node)
         node->create_client<std_srvs::srv::Trigger>("/trigger/send_trigger")};
 }
 
+bool callClearMap(
+    const std::shared_ptr<rclcpp::Node> &node,
+    const rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr &clear_client,
+    const rclcpp::Logger &logger)
+{
+    if (!clear_client->wait_for_service(std::chrono::seconds(5)))
+    {
+        RCLCPP_ERROR(logger, "Clear service /occupancy_map/clear not available");
+        return false;
+    }
+
+    auto req = std::make_shared<std_srvs::srv::Trigger::Request>();
+    auto future = clear_client->async_send_request(req);
+
+    auto ret = rclcpp::spin_until_future_complete(node, future, std::chrono::seconds(10));
+    if (ret != rclcpp::FutureReturnCode::SUCCESS)
+    {
+        RCLCPP_ERROR(logger, "Failed to call /occupancy_map/clear");
+        return false;
+    }
+
+    auto resp = future.get();
+    if (!resp->success)
+    {
+        RCLCPP_ERROR(logger, "Clear service returned failure: %s", resp->message.c_str());
+        return false;
+    }
+
+    RCLCPP_INFO(logger, "Occupancy map cleared: %s", resp->message.c_str());
+    return true;
+}
+
 bool startContinuousCapture(
     const std::shared_ptr<rclcpp::Node> &node,
     const TriggerClients &clients,

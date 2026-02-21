@@ -1,3 +1,5 @@
+# nbv_demo.launch.py
+
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction, IncludeLaunchDescription
 from launch.substitutions import LaunchConfiguration, Command
@@ -21,6 +23,7 @@ from husky_xarm6_mcr_moveit_config.generate_moveit_controllers_yaml import gener
 def load_yaml(path):
     return yaml.safe_load(Path(path).read_text())
 
+
 def _xacro_param(xacro_path, *args):
     """Build a ParameterValue wrapping a xacro Command.
 
@@ -28,6 +31,7 @@ def _xacro_param(xacro_path, *args):
     """
     cmd = ["xacro ", str(xacro_path)] + list(args)
     return ParameterValue(Command(cmd), value_type=str)
+
 
 def launch_setup(context, *args, **kwargs):
     use_sim_time = LaunchConfiguration('use_sim_time')
@@ -39,12 +43,17 @@ def launch_setup(context, *args, **kwargs):
     platform_ns = LaunchConfiguration('platform_ns')
     manipulator_group_name = LaunchConfiguration('manipulator_group_name')
     learn_workspace = LaunchConfiguration('learn_workspace')
-    
+
+    # Number of repeated runs
+    n_runs = int(LaunchConfiguration('n_runs').perform(context))
+    if n_runs < 1:
+        n_runs = 1
+
     # Get package share directory and setup data directory
     package_share_dir = get_package_share_directory('husky_xarm6_mcr_nbv_planner')
     data_dir = os.path.join(package_share_dir, 'data')
     os.makedirs(data_dir, exist_ok=True)
-    
+
     # Setup metrics directory structure
     metrics_dir = LaunchConfiguration('metrics_dir').perform(context)
     # if not os.path.isabs(metrics_dir):
@@ -53,35 +62,47 @@ def launch_setup(context, *args, **kwargs):
     if run_dir == '':
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         run_dir = f'run_{timestamp}'
-    
-    metrics_plots_dir = os.path.join(metrics_dir, run_dir, 'plots')
-    metrics_data_dir = os.path.join(metrics_dir, run_dir, 'data')
-    os.makedirs(metrics_plots_dir, exist_ok=True)
-    os.makedirs(metrics_data_dir, exist_ok=True)
-    
-    print(f"[nbv_volumetric_planner_demo.launch.py] Metrics plots directory: {metrics_plots_dir}")
-    print(f"[nbv_volumetric_planner_demo.launch.py] Metrics data directory: {metrics_data_dir}")
-    
+
+    base_run_dir = os.path.join(metrics_dir, run_dir)
+
+    # If n_runs > 1:
+    #   - pass base_run_dir to the C++ node and it will create run_001/... subfolders
+    # If n_runs == 1:
+    #   - keep old behavior: base_run_dir/{plots,data}
+    if n_runs > 1:
+        metrics_plots_dir = base_run_dir
+        metrics_data_dir = base_run_dir
+        os.makedirs(base_run_dir, exist_ok=True)
+    else:
+        metrics_plots_dir = os.path.join(base_run_dir, 'plots')
+        metrics_data_dir = os.path.join(base_run_dir, 'data')
+        os.makedirs(metrics_plots_dir, exist_ok=True)
+        os.makedirs(metrics_data_dir, exist_ok=True)
+
+    print(f"[nbv_demo.launch.py] n_runs: {n_runs}")
+    print(f"[nbv_demo.launch.py] Metrics plots directory: {metrics_plots_dir}")
+    print(f"[nbv_demo.launch.py] Metrics data directory: {metrics_data_dir}")
+
     # Determine workspace file path
     learn_workspace_val = learn_workspace.perform(context).lower() == 'true'
-    
+
     if learn_workspace_val:
         # Learning mode: generate timestamped filename
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         workspace_file_path = os.path.join(data_dir, f'workspace_{timestamp}.bin')
-        print(f"[nbv_volumetric_planner_demo.launch.py] Will learn and save workspace to: {workspace_file_path}")
+        print(f"[nbv_demo.launch.py] Will learn and save workspace to: {workspace_file_path}")
     else:
         # Loading mode: find most recent workspace file
         workspace_files = glob.glob(os.path.join(data_dir, 'workspace_*.bin'))
-        
+
         if workspace_files:
             workspace_files.sort(key=os.path.getmtime, reverse=True)
             workspace_file_path = workspace_files[0]
-            print(f"[nbv_volumetric_planner_demo.launch.py] Found {len(workspace_files)} workspace file(s), loading most recent: {os.path.basename(workspace_file_path)}")
+            print(f"[nbv_demo.launch.py] Found {len(workspace_files)} workspace file(s), loading most recent: {os.path.basename(workspace_file_path)}")
         else:
             workspace_file_path = os.path.join(data_dir, 'workspace_latest.bin')
-            print(f"[nbv_volumetric_planner_demo.launch.py] WARNING: No workspace files found in {data_dir}")
-            print(f"[nbv_volumetric_planner_demo.launch.py] Set learn_workspace:=true to learn a new workspace")
+            print(f"[nbv_demo.launch.py] WARNING: No workspace files found in {data_dir}")
+            print(f"[nbv_demo.launch.py] Set learn_workspace:=true to learn a new workspace")
 
     # Ground truth file path
     gt_points_file = os.path.join(
@@ -91,14 +112,20 @@ def launch_setup(context, *args, **kwargs):
 
     # Build parameters dictionary for saving and node configuration
     node_parameters = {
+        # Number of repeated runs
+        'n_runs': n_runs,
+        'planner_type': LaunchConfiguration('planner_type').perform(context),
+
         # Workspace Parameters
         'manipulator_group_name': manipulator_group_name.perform(context),
         'learn_workspace': learn_workspace.perform(context).lower() == 'true',
         'num_samples': 10000000,
         'manipulation_workspace_file': workspace_file_path,
+
         # Octomap Parameters
         'octomap_topic': '/octomap_binary',
         'min_unknown_neighbors': 1,
+
         # Manipulation Parameters
         'planning_pipeline_id': 'ompl',
         'planner_id': 'RRTConnect',
@@ -110,6 +137,7 @@ def launch_setup(context, *args, **kwargs):
         'plans_per_seed': 1,
         'ik_timeout': 0.05,
         'ik_attempts': 5,
+
         # Camera Parameters
         'capture_type': 'triggered',
         'camera_optical_link': LaunchConfiguration('camera_optical_link').perform(context),
@@ -118,32 +146,39 @@ def launch_setup(context, *args, **kwargs):
         'camera_scaled_width': int(LaunchConfiguration('camera_scaled_width').perform(context)),
         'camera_scaled_height': int(LaunchConfiguration('camera_scaled_height').perform(context)),
         'camera_max_range': float(LaunchConfiguration('camera_max_range').perform(context)),
-        'ideal_camera_distance': 0.3,
+        'ideal_camera_distance': 0.4,
         'ideal_distance_tolerance': 0.1,
         'num_camera_rays': int(LaunchConfiguration('num_camera_rays').perform(context)),
+
         # Evaluation Parameters
         'enable_evaluation': LaunchConfiguration('enable_evaluation').perform(context).lower() == 'true',
         'eval_threshold_radius': float(LaunchConfiguration('eval_threshold_radius').perform(context)),
         'gt_points_file': gt_points_file,
         'metrics_plots_dir': metrics_plots_dir,
         'metrics_data_dir': metrics_data_dir,
+
         # General Parameters
         'init_joint_angles_deg': [0.0, -45.0, -45.0, 0.0, 0.0, 90.0],
         'map_frame': LaunchConfiguration('map_frame').perform(context),
+
         # NBV Planning Parameters
         'max_iterations': int(LaunchConfiguration('max_iterations').perform(context)),
         'min_information_gain': float(LaunchConfiguration('min_information_gain').perform(context)),
         'alpha_cost_weight': float(LaunchConfiguration('alpha_cost_weight').perform(context)),
+
         # Viewpoint Parameters
-        'plane_half_extent': 1.0, # Not used in this demo
-        'plane_spatial_resolution': 0.3, # Not used in this demo
-        'cap_max_theta_deg': 60.0, # Not used in this demo
-        'cap_min_theta_deg': 15.0, # Not used in this demo
+        'plane_half_extent': 1.0,  # Not used in planner
+        'plane_spatial_resolution': 0.1,  # Not used in planner
+        'cap_max_theta_deg': 60.0,  # Not used in planner
+        'cap_min_theta_deg': 15.0,  # Not used in planner
         'num_viewpoints_per_frontier': int(LaunchConfiguration('num_viewpoints_per_frontier').perform(context)),
         'z_bias_sigma': 0.3,
+        'viewpoint_overlap_ratio': 0.42,
+
         # Debug Parameters
         'visualize': LaunchConfiguration('visualize').perform(context).lower() == 'true',
         'visualization_topic': LaunchConfiguration('visualization_topic').perform(context),
+        'keep_alive': LaunchConfiguration('keep_alive').perform(context).lower() == 'true',
     }
 
     # Capture firefly parameters
@@ -186,14 +221,15 @@ def launch_setup(context, *args, **kwargs):
         'conf_thresh': float(LaunchConfiguration('conf_thresh').perform(context)),
     }
 
-    # Save parameters to YAML file
-    params_file_path = os.path.join(metrics_dir, run_dir, 'run_parameters.yaml')
+    # Save parameters to YAML file (always in base_run_dir)
+    os.makedirs(base_run_dir, exist_ok=True)
+    params_file_path = os.path.join(base_run_dir, 'run_parameters.yaml')
     params_data = {
         'run_info': {
             'timestamp': run_dir,
-            'launch_file': 'nbv_volumetric_planner_demo.launch.py',
-            'node_name': 'nbv_volumetric_planner_demo',
-            'description': 'NBV Volumetric Planner Demo - Information gain based planning',
+            'launch_file': 'nbv_demo.launch.py',
+            'node_name': 'nbv_demo',
+            'description': 'NBV Demo - Systematic grid coverage',
         },
         'launch_arguments': {
             'use_sim_time': use_sim_time.perform(context),
@@ -202,16 +238,17 @@ def launch_setup(context, *args, **kwargs):
             'manipulator_ns': manipulator_ns.perform(context),
             'platform_prefix': platform_prefix.perform(context),
             'platform_ns': platform_ns.perform(context),
+            'n_runs': n_runs,
         },
         'parameters': node_parameters,
         'firefly_parameters': firefly_parameters,
         'octomap_parameters': octomap_parameters
     }
-    
+
     with open(params_file_path, 'w') as f:
         yaml.dump(params_data, f, default_flow_style=False, sort_keys=False)
-    
-    print(f"[nbv_volumetric_planner_demo.launch.py] Saved run parameters to: {params_file_path}")
+
+    print(f"[nbv_demo.launch.py] Saved run parameters to: {params_file_path}")
 
     description_pkg = Path(get_package_share_directory('husky_xarm6_mcr_description'))
     xacro_file = description_pkg / 'urdf' / 'husky_xarm6_mcr.urdf.xacro'
@@ -219,19 +256,15 @@ def launch_setup(context, *args, **kwargs):
     moveit_config_pkg = Path(get_package_share_directory('husky_xarm6_mcr_moveit_config'))
 
     # Generate the moveit_controllers.yaml file dynamically
-    # 1. Generate the config dictionary
     config = generate_moveit_controllers_yaml(
         manipulator_ns=manipulator_ns.perform(context),
         manipulator_prefix=manipulator_prefix.perform(context)
     )
-    # 2. Create a temporary file to hold the YAML
-    # We use NamedTemporaryFile so it persists long enough for the nodes to read it
-    # OS cleans /tmp automatically on reboot, or you can manage cleanup.
+
     moveit_controllers_yaml_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.yaml')
     yaml.dump(config, moveit_controllers_yaml_file, default_flow_style=False, sort_keys=False)
-    moveit_controllers_yaml_file.close()  # Close so other processes can read it
-    
-    # Load the dynamically generated controllers
+    moveit_controllers_yaml_file.close()
+
     controller_config = yaml.safe_load(Path(moveit_controllers_yaml_file.name).read_text())
 
     # robot_description from URDF xacro
@@ -284,7 +317,7 @@ def launch_setup(context, *args, **kwargs):
     # Firefly camera bringup
     firefly_bringup_pkg = get_package_share_directory('multi_camera_rig_bringup')
     firefly_bringup_launch = os.path.join(firefly_bringup_pkg, 'launch', 'firefly_bringup.launch.py')
-    
+
     firefly_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(firefly_bringup_launch),
         launch_arguments={
@@ -348,28 +381,43 @@ def launch_setup(context, *args, **kwargs):
         }]
     )
 
-    gt_points_file = os.path.join(
-        LaunchConfiguration('gt_points_dir').perform(context),
-        LaunchConfiguration('gt_points_file').perform(context)
-    )
-    nbv_volumetric_planner_demo = Node(
-        package='husky_xarm6_mcr_nbv_planner',
-        executable='nbv_volumetric_planner_demo',
-        output='screen',
-        parameters=[
-            {'use_sim_time': use_sim_time},
-            robot_description,
-            robot_description_semantic,
-            kinematics_config,
-            joint_limits_config,
-            planner_config,
-            controller_config,
-            planning_scene_monitor_config,
-            node_parameters,  # Use the pre-built parameters dictionary
-        ],
-    )
+    if LaunchConfiguration('planner_type').perform(context).lower() == 'volumetric':
+        nbv_node = Node(
+            package='husky_xarm6_mcr_nbv_planner',
+            executable='nbv_volumetric_planner_demo',
+            output='screen',
+            parameters=[
+                {'use_sim_time': use_sim_time},
+                robot_description,
+                robot_description_semantic,
+                kinematics_config,
+                joint_limits_config,
+                planner_config,
+                controller_config,
+                planning_scene_monitor_config,
+                node_parameters,
+            ],
+        )
+    else:
+        nbv_node = Node(
+            package='husky_xarm6_mcr_nbv_planner',
+            executable='nbv_baseline_demo',
+            output='screen',
+            parameters=[
+                {'use_sim_time': use_sim_time},
+                robot_description,
+                robot_description_semantic,
+                kinematics_config,
+                joint_limits_config,
+                planner_config,
+                controller_config,
+                planning_scene_monitor_config,
+                node_parameters,
+            ],
+        )
+    
 
-    return [firefly_launch, octomap_server_node, nbv_volumetric_planner_demo]
+    return [firefly_launch, octomap_server_node, nbv_node]
 
 
 def generate_launch_description():
@@ -382,98 +430,111 @@ def generate_launch_description():
         DeclareLaunchArgument('platform_prefix', default_value='a200_'),
         DeclareLaunchArgument('platform_ns', default_value='husky'),
         DeclareLaunchArgument('manipulator_group_name', default_value='xarm6_manipulator'),
-        DeclareLaunchArgument('learn_workspace', default_value='false', 
-                            description='True to learn new workspace, False to load existing'),
+        DeclareLaunchArgument('planner_type', default_value='baseline',
+                              description='Type of planner to use (e.g., baseline, volumetric)'),
+        DeclareLaunchArgument('learn_workspace', default_value='false',
+                              description='True to learn new workspace, False to load existing'),
         DeclareLaunchArgument('visualize', default_value='true',
-                            description='Visualize nbv planner operation in RViz'),
+                              description='Visualize nbv planner operation in RViz'),
         DeclareLaunchArgument('visualization_topic', default_value='nbv_planner_visualization',
-                            description='Topic for workspace visualization markers'),
+                              description='Topic for workspace visualization markers'),
+        DeclareLaunchArgument('keep_alive', default_value='false',
+                              description='Keep node alive after planning completes (spin until Ctrl+C)'),
+        DeclareLaunchArgument('n_runs', default_value='1',
+                              description='Number of times to repeat the nbv planner (clears /occupancy_map/clear between runs)'),
+
         # NBV Planner Parameters
         DeclareLaunchArgument('max_iterations', default_value='100',
-                            description='Maximum number of NBV planning iterations'),
+                              description='Maximum number of NBV planning iterations'),
         DeclareLaunchArgument('min_information_gain', default_value='10.0',
-                            description='Minimum information gain threshold for termination'),
+                              description='Minimum information gain threshold for termination'),
         DeclareLaunchArgument('alpha_cost_weight', default_value='0.1',
-                            description='Weight for cost in utility function (IG - alpha*cost)'),
+                              description='Weight for cost in utility function (IG - alpha*cost)'),
         DeclareLaunchArgument('num_viewpoints_per_frontier', default_value='7',
-                            description='Number of viewpoint candidates per frontier cluster'),
+                              description='Number of viewpoint candidates per frontier cluster'),
+
         # Camera Parameters
         DeclareLaunchArgument('camera_optical_link', default_value='firefly_left_camera_optical_frame',
-                            description='TF frame of the camera optical link'),
+                              description='TF frame of the camera optical link'),
         DeclareLaunchArgument('camera_scaled_width', default_value='448',
-                            description='Camera scaled image width (pixels)'),
+                              description='Camera scaled image width (pixels)'),
         DeclareLaunchArgument('camera_scaled_height', default_value='224',
-                            description='Camera scaled image height (pixels)'),
+                              description='Camera scaled image height (pixels)'),
         DeclareLaunchArgument('camera_max_range', default_value='0.6',
-                            description='Camera maximum sensing range (meters)'),
+                              description='Camera maximum sensing range (meters)'),
         DeclareLaunchArgument('num_camera_rays', default_value='25',
-                            description='Number of rays for information gain computation'),
+                              description='Number of rays for information gain computation'),
         DeclareLaunchArgument('map_frame', default_value='husky/a200_base_footprint',
-                            description='Fixed frame for visualization markers'),
+                              description='Fixed frame for visualization markers'),
+
         # Ground Truth Evaluation Parameters
-        DeclareLaunchArgument('gt_points_dir', default_value=PathJoinSubstitution([FindPackageShare('husky_xarm6_mcr_nbv_planner'), 'metrics', 'gt_points']),
+        DeclareLaunchArgument(
+            'gt_points_dir',
+            default_value=PathJoinSubstitution([FindPackageShare('husky_xarm6_mcr_nbv_planner'), 'metrics', 'gt_points']),
             description='Directory containing ground truth points YAML files for semantic evaluation'),
         DeclareLaunchArgument('gt_points_file', default_value='aruco_gt_points_lab.yaml',
-                            description='Path to the ground truth points YAML file for semantic evaluation'),
+                              description='Path to the ground truth points YAML file for semantic evaluation'),
         DeclareLaunchArgument('enable_evaluation', default_value='true',
-                            description='Enable semantic octomap evaluation against ground truth'),
+                              description='Enable semantic octomap evaluation against ground truth'),
         DeclareLaunchArgument('eval_threshold_radius', default_value='0.1',
-                            description='Threshold radius (meters) for matching clusters to ground truth points'),
+                              description='Threshold radius (meters) for matching clusters to ground truth points'),
         DeclareLaunchArgument('metrics_dir', default_value='metrics',
-                            description='Directory for saving metrics (plots and CSV data)'),
+                              description='Directory for saving metrics (plots and CSV data)'),
         DeclareLaunchArgument('run', default_value='',
-                            description='Directory for saving run data'),
+                              description='Directory for saving run data'),
+
         # Firefly Camera Parameters
         DeclareLaunchArgument('calib_dir', default_value=PathJoinSubstitution([FindPackageShare('firefly-ros2-wrapper-bringup'), 'calibs']),
-                            description='Directory containing camera calibration YAML files'),
+                              description='Directory containing camera calibration YAML files'),
         DeclareLaunchArgument('spinnaker_config_file', default_value=PathJoinSubstitution([FindPackageShare('firefly-ros2-wrapper-bringup'), 'configs', 'firefly.yaml']),
-                            description='Path to the Spinnaker camera configuration YAML file'),
+                              description='Path to the Spinnaker camera configuration YAML file'),
         DeclareLaunchArgument('spinnaker_param_file', default_value=PathJoinSubstitution([FindPackageShare('firefly-ros2-wrapper-bringup'), 'params', 'firefly.yaml']),
-                            description='Path to the Spinnaker camera parameter definitions YAML file'),
+                              description='Path to the Spinnaker camera parameter definitions YAML file'),
         DeclareLaunchArgument('trigger_flash_duration_ms', default_value='200',
-                            description='Flash duration in milliseconds (0-300)'),
+                              description='Flash duration in milliseconds (0-300)'),
         DeclareLaunchArgument('trigger_frame_rate_hz', default_value='1',
-                            description='Trigger frame rate in Hz (1-20)'),
+                              description='Trigger frame rate in Hz (1-20)'),
         DeclareLaunchArgument('trigger_auto_start', default_value='false',
-                            description='Automatically start video triggering on launch'),
+                              description='Automatically start video triggering on launch'),
         DeclareLaunchArgument('stereo_matcher_model_dir', default_value=PathJoinSubstitution([FindPackageShare('multi_camera_rig_reconstruction'), 'models']),
-                            description='Directory containing TensorRT engine (.plan) files'),
+                              description='Directory containing TensorRT engine (.plan) files'),
         DeclareLaunchArgument('stereo_matcher_model_trt', default_value='fs_224x448_vit-small_iters5.plan',
-                            description='TensorRT engine file for the foundation stereo model'),
+                              description='TensorRT engine file for the foundation stereo model'),
         DeclareLaunchArgument('use_semantics', default_value='true',
-                            description='Enable semantic mode with detections for point cloud'),
+                              description='Enable semantic mode with detections for point cloud'),
         DeclareLaunchArgument('use_seg_detection', default_value='true',
-                            description='Use segmentation detections for semantic point cloud coloring'),
+                              description='Use segmentation detections for semantic point cloud coloring'),
         DeclareLaunchArgument('enable_detection', default_value='true',
-                            description='Enable YOLO detection node'),
+                              description='Enable YOLO detection node'),
         DeclareLaunchArgument('detection_model_dir', default_value=PathJoinSubstitution([FindPackageShare('multi_camera_rig_detection'), 'models']),
-                            description='Directory containing TensorRT engine (.plan) files'),
+                              description='Directory containing TensorRT engine (.plan) files'),
         DeclareLaunchArgument('detection_model_trt', default_value='best_lab_seg_v2.plan',
-                            description='TensorRT engine file for YOLO detection model'),
+                              description='TensorRT engine file for YOLO detection model'),
         DeclareLaunchArgument('conf_thresh', default_value='0.5',
-                            description='Confidence threshold for YOLO detections'),
+                              description='Confidence threshold for YOLO detections'),
+
         # Octomap Parameters
         DeclareLaunchArgument('octomap_resolution', default_value='0.04',
-                            description='Octomap resolution in meters'),
+                              description='Octomap resolution in meters'),
         DeclareLaunchArgument('octomap_max_range', default_value='0.6',
-                            description='Maximum sensor range in meters'),
+                              description='Maximum sensor range in meters'),
         DeclareLaunchArgument('octomap_use_moveit', default_value='false',
-                            description='Enable MoveIt planning scene integration'),
+                              description='Enable MoveIt planning scene integration'),
         DeclareLaunchArgument('octomap_use_bbox', default_value='true',
-                            description='Enable bounding box for octomap updates'),
+                              description='Enable bounding box for octomap updates'),
         DeclareLaunchArgument('octomap_use_semantics', default_value='true',
-                            description='Enable semantic occupancy mapping mode'),
+                              description='Enable semantic occupancy mapping mode'),
         DeclareLaunchArgument('octomap_pointcloud_topic', default_value='/firefly_left/points2',
-                            description='PointCloud2 topic for PointCloudUpdater'),
-        DeclareLaunchArgument('octomap_bbx_min_x', default_value='-0.4'),
+                              description='PointCloud2 topic for PointCloudUpdater'),
+        DeclareLaunchArgument('octomap_bbx_min_x', default_value='-0.8'),
         DeclareLaunchArgument('octomap_bbx_min_y', default_value='-1.6'),
         DeclareLaunchArgument('octomap_bbx_min_z', default_value='0.0'),
-        DeclareLaunchArgument('octomap_bbx_max_x', default_value='0.6'),
-        DeclareLaunchArgument('octomap_bbx_max_y', default_value='-0.6'),
+        DeclareLaunchArgument('octomap_bbx_max_x', default_value='0.8'),
+        DeclareLaunchArgument('octomap_bbx_max_y', default_value='-0.4'),
         DeclareLaunchArgument('octomap_bbx_max_z', default_value='2.0'),
         DeclareLaunchArgument('semantic_confidence_boost', default_value='0.1',
-                            description='Confidence boost for semantic occupancy updates'),
+                              description='Confidence boost for semantic occupancy updates'),
         DeclareLaunchArgument('semantic_mismatch_penalty', default_value='0.15',
-                            description='Penalty for semantic label mismatches'),
+                              description='Penalty for semantic label mismatches'),
         OpaqueFunction(function=launch_setup),
     ])
