@@ -214,12 +214,36 @@ int main(int argc, char **argv)
                 false, 0.8f, "frontier_clusters", moveit_interface->getPoseReferenceFrame());
 
         // Generate viewpoints
-        // Generate spherical planar viewpoints
-        std::vector<Viewpoint> spherical_planar_viewpoints = generatePlanarSphericalCapCandidates(
-            init_cam_position, init_cam_orientation, 
-            config.plane_half_extent, config.plane_spatial_resolution, 
-            config.cap_max_theta_rad, config.cap_min_theta_rad);
-        RCLCPP_DEBUG(node->get_logger(), "Generated %zu viewpoints from plane of spherical caps", spherical_planar_viewpoints.size());
+        // // Generate spherical planar viewpoints
+        // std::vector<Viewpoint> plane_viewpoints = generatePlanarSphericalCapCandidates(
+        //     init_cam_position, init_cam_orientation, 
+        //     config.plane_half_extent, config.plane_spatial_resolution, 
+        //     config.cap_max_theta_rad, config.cap_min_theta_rad);
+        // RCLCPP_DEBUG(node->get_logger(), "Generated %zu viewpoints from plane of spherical caps", plane_viewpoints.size());
+        Eigen::Vector3d cam_pos_map = transform_eigen * init_cam_position;
+        auto [plane_corners_map, distance] = computePlane(octomap_interface, cam_pos_map);
+        if (visualizer)
+        {
+            RCLCPP_DEBUG(node->get_logger(), "Publishing NBV midplane for visualization");
+            std_msgs::msg::ColorRGBA plane_color;
+            plane_color.r = 0.0f; plane_color.g = 1.0f; plane_color.b = 0.0f; plane_color.a = 0.5f;
+            visualizer->publishPlane(plane_corners_map, "nbv_plane", 0.02, plane_color);
+        }
+        // Generate viewpoints on the plane
+        Eigen::Quaterniond init_cam_quat_map = Eigen::Quaterniond(transform_eigen.rotation()) * geometry_utils::arrayToEigenQuat(init_cam_orientation);
+        auto [plane_viewpoints, coverage_planes_map] = generateViewpointsFromPlane(
+            plane_corners_map, distance, init_cam_quat_map, config.viewpoint_overlap_ratio, config.camera_horizontal_fov_rad, config.camera_vertical_fov_rad);
+        if (visualizer)
+        {
+            RCLCPP_DEBUG(node->get_logger(), "Publishing coverage planes for visualization");
+            for (size_t i = 0; i < coverage_planes_map.size(); ++i)
+            {
+                std_msgs::msg::ColorRGBA coverage_color;
+                coverage_color.r = 0.0f; coverage_color.g = 0.5f; coverage_color.b = 1.0f; coverage_color.a = 0.3f;
+                visualizer->publishPlane(coverage_planes_map[i], "coverage_" + std::to_string(i), 0.01, coverage_color);
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            }
+        }
         // Generate frontier-based viewpoints
         std::vector<Eigen::Vector3d> cluster_centers;
         for (const auto& cluster : frontier_clusters) {
@@ -233,7 +257,7 @@ int main(int argc, char **argv)
         RCLCPP_DEBUG(node->get_logger(), "Generated %zu viewpoints from frontier clusters", frontier_viewpoints.size());
         // Combine viewpoints
         std::vector<Viewpoint> total_viewpoints;
-        total_viewpoints.insert(total_viewpoints.end(), spherical_planar_viewpoints.begin(), spherical_planar_viewpoints.end());
+        total_viewpoints.insert(total_viewpoints.end(), plane_viewpoints.begin(), plane_viewpoints.end());
         total_viewpoints.insert(total_viewpoints.end(), frontier_viewpoints.begin(), frontier_viewpoints.end());
         RCLCPP_INFO(node->get_logger(), "Total generated viewpoints: %zu", total_viewpoints.size());
         if (total_viewpoints.empty()) {
@@ -262,7 +286,7 @@ int main(int argc, char **argv)
         double average_information_gain = 0.0;
         for (auto& vp : reachable_viewpoints) {
             vp.information_gain = computeInformationGain(vp, octomap_interface,
-                geometry_utils::rad2Deg(config.camera_horizontal_fov_rad), geometry_utils::rad2Deg(config.camera_vertical_fov_rad),
+                config.camera_horizontal_fov_rad, config.camera_vertical_fov_rad,
                 config.camera_width, config.camera_height, config.camera_max_range,
                 octomap_interface->getResolution(), config.num_camera_rays, octomap_interface->hasBoundingBox(), node->get_logger(), nullptr);
             double distance = (vp.position - current_cam_position).norm();

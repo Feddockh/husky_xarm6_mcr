@@ -171,7 +171,7 @@ int main(int argc, char **argv)
     RCLCPP_INFO(node->get_logger(), "\n=== Generate NBV Viewpoints ===");
     Eigen::Vector3d cam_pos_map = transform_eigen * init_cam_position;
     auto [plane_corners_map, distance] = computePlane(octomap_interface, cam_pos_map);
-    if (config.visualize && visualizer)
+    if (visualizer)
     {
         RCLCPP_DEBUG(node->get_logger(), "Publishing NBV midplane for visualization");
         std_msgs::msg::ColorRGBA plane_color;
@@ -180,10 +180,9 @@ int main(int argc, char **argv)
     }
     // Generate viewpoints on the plane
     Eigen::Quaterniond init_cam_quat_map = Eigen::Quaterniond(transform_eigen.rotation()) * geometry_utils::arrayToEigenQuat(init_cam_orientation);
-    double overlap_ratio = node->get_parameter("viewpoint_overlap_ratio").as_double(); // % overlap
     auto [all_viewpoints_map, coverage_planes_map] = generateViewpointsFromPlane(
-        plane_corners_map, distance, init_cam_quat_map, overlap_ratio, config);
-    if (config.visualize && visualizer)
+        plane_corners_map, distance, init_cam_quat_map, config.viewpoint_overlap_ratio, config.camera_horizontal_fov_rad, config.camera_vertical_fov_rad);
+    if (visualizer)
     {
         RCLCPP_DEBUG(node->get_logger(), "Publishing coverage planes for visualization");
         for (size_t i = 0; i < coverage_planes_map.size(); ++i)
@@ -221,7 +220,7 @@ int main(int argc, char **argv)
     // std::vector<std::string> axis_priority = {"-z", "-x"}; // Reading left to right and top to bottom
     // sortViewpointsByAxisPriority(reachable_viewpoints, axis_priority);
     lawnmowerSortViewpoints(reachable_viewpoints);
-    if (config.visualize && visualizer)
+    if (visualizer)
     {
         RCLCPP_INFO(node->get_logger(), "Publishing reachable viewpoints for visualization");
         for (size_t i = 0; i < reachable_viewpoints.size(); ++i)

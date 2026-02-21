@@ -414,11 +414,168 @@ namespace husky_xarm6_mcr_nbv_planner
         return viewpoints;
     }
 
+    std::pair<std::vector<Eigen::Vector3d>, Eigen::Vector3d> computePlane(
+        const std::shared_ptr<OctoMapInterface> &octomap_interface,
+        const Eigen::Vector3d &cam_position)
+    {
+        // Compute the midpoint of the bounding box
+        octomap::point3d min_octo, max_octo;
+        octomap_interface->getBoundingBox(min_octo, max_octo);
+        Eigen::Vector3d min_bbox = conversions::octomapToEigen(min_octo);
+        Eigen::Vector3d max_bbox = conversions::octomapToEigen(max_octo);
+        Eigen::Vector3d mid = 0.5 * (min_bbox + max_bbox);
+
+        // Compute the viewing direction
+        Eigen::Vector3d distance = (cam_position - mid);
+        Eigen::Vector3d view_dir = distance.normalized();
+        // If the viewing direction is aligned with the x axis, then we are using the YZ plane
+        Eigen::Vector3d abs_view_dir = view_dir.cwiseAbs();
+        if (abs_view_dir.x() >= abs_view_dir.y()) // YZ plane
+        {
+            std::vector<Eigen::Vector3d> corners = {
+                {mid.x(), min_bbox.y(), min_bbox.z()},
+                {mid.x(), max_bbox.y(), min_bbox.z()},
+                {mid.x(), max_bbox.y(), max_bbox.z()},
+                {mid.x(), min_bbox.y(), max_bbox.z()},
+            };
+            return std::make_pair(corners, distance);
+        }
+        else // XZ plane
+        {
+            std::vector<Eigen::Vector3d> corners = {
+                {min_bbox.x(), mid.y(), min_bbox.z()},
+                {max_bbox.x(), mid.y(), min_bbox.z()},
+                {max_bbox.x(), mid.y(), max_bbox.z()},
+                {min_bbox.x(), mid.y(), max_bbox.z()},
+            };
+            return std::make_pair(corners, distance);
+        }
+    }
+
+    std::pair<std::vector<Viewpoint>, std::vector<std::vector<Eigen::Vector3d>>> generateViewpointsFromPlane(
+        const std::vector<Eigen::Vector3d> &corners,
+        const Eigen::Vector3d &distance,
+        const Eigen::Quaterniond &orientation_base,
+        double overlap_ratio,
+        double camera_hfov_rad, 
+        double camera_vfov_rad)
+    {
+        // Determine the midpoint of the plane
+        Eigen::Vector3d mid = 0.25 * (corners[0] + corners[1] + corners[2] + corners[3]);
+
+        // Determine which plane we are using (YZ or XZ) based on the corners
+        bool is_yz_plane = (std::abs(corners[0].x() - corners[1].x()) < 1e-6);
+
+        // Calculate the coverage area at the given distance (just along the x or y direction)
+        double u_coverage, v_coverage;
+        if (is_yz_plane) // YZ plane
+        {
+            u_coverage = 2.0 * distance.x() * std::tan(camera_hfov_rad / 2.0);
+            v_coverage = 2.0 * distance.x() * std::tan(camera_vfov_rad / 2.0);
+        }
+        else // XZ plane
+        {
+            u_coverage = 2.0 * distance.y() * std::tan(camera_hfov_rad / 2.0);
+            v_coverage = 2.0 * distance.y() * std::tan(camera_vfov_rad / 2.0);
+        }
+
+        // Once we have the coverage, we can generate a grid of viewpoints on the plane
+        double spacing_u = u_coverage * (1.0 - overlap_ratio);
+        double spacing_v = v_coverage * (1.0 - overlap_ratio);
+
+        // Starting from the center of the plane, generate grid points
+        std::vector<Eigen::Vector3d> viewpoint_positions;
+        std::vector<std::vector<Eigen::Vector3d>> coverage_planes;
+        int num_u = 0, num_v = 0;
+        if (is_yz_plane)
+        {
+            // YZ plane at constant x
+            double plane_height = corners[2].z() - corners[0].z();
+            double plane_width = corners[1].y() - corners[0].y();
+            // Compute number of viewpoints along each axis
+            num_u = std::max(1, static_cast<int>(std::ceil(plane_width / spacing_u)));
+            num_v = std::max(1, static_cast<int>(std::ceil(plane_height / spacing_v)));
+            // Generate grid points
+            double start_y = mid.y() - (num_u - 1) * spacing_u / 2.0;
+            double start_z = mid.z() - (num_v - 1) * spacing_v / 2.0;
+            for (int i = 0; i < num_u; ++i)
+            {
+                for (int j = 0; j < num_v; ++j)
+                {
+                    viewpoint_positions.push_back(
+                        Eigen::Vector3d(distance.x() + mid.x(), // x is from distance
+                                        start_y + i * spacing_u,
+                                        start_z + j * spacing_v));
+                    coverage_planes.push_back({
+                        Eigen::Vector3d(mid.x(),
+                                        start_y + i * spacing_u - u_coverage / 2.0,
+                                        start_z + j * spacing_v - v_coverage / 2.0),
+                        Eigen::Vector3d(mid.x(),
+                                        start_y + i * spacing_u + u_coverage / 2.0,
+                                        start_z + j * spacing_v - v_coverage / 2.0),
+                        Eigen::Vector3d(mid.x(),
+                                        start_y + i * spacing_u + u_coverage / 2.0,
+                                        start_z + j * spacing_v + v_coverage / 2.0),
+                        Eigen::Vector3d(mid.x(),
+                                        start_y + i * spacing_u - u_coverage / 2.0,
+                                        start_z + j * spacing_v + v_coverage / 2.0),
+                    });
+                }
+            }
+        }
+        else // XZ plane
+        {
+            double plane_height = corners[2].z() - corners[0].z();
+            double plane_width = corners[1].x() - corners[0].x();
+            num_u = std::max(1, static_cast<int>(std::ceil(plane_width / spacing_u)));
+            num_v = std::max(1, static_cast<int>(std::ceil(plane_height / spacing_v)));
+            double start_x = mid.x() - (num_u - 1) * spacing_u / 2.0;
+            double start_z = mid.z() - (num_v - 1) * spacing_v / 2.0;
+            for (int i = 0; i < num_u; ++i)
+            {
+                for (int j = 0; j < num_v; ++j)
+                {
+                    viewpoint_positions.push_back(
+                        Eigen::Vector3d(start_x + i * spacing_u,
+                                        distance.y() + mid.y(), // y is from distance
+                                        start_z + j * spacing_v));
+                    coverage_planes.push_back({
+                        Eigen::Vector3d(start_x + i * spacing_u - u_coverage / 2.0,
+                                        mid.y(),
+                                        start_z + j * spacing_v - v_coverage / 2.0),
+                        Eigen::Vector3d(start_x + i * spacing_u + u_coverage / 2.0,
+                                        mid.y(),
+                                        start_z + j * spacing_v - v_coverage / 2.0),
+                        Eigen::Vector3d(start_x + i * spacing_u + u_coverage / 2.0,
+                                        mid.y(),
+                                        start_z + j * spacing_v + v_coverage / 2.0),
+                        Eigen::Vector3d(start_x + i * spacing_u - u_coverage / 2.0,
+                                        mid.y(),
+                                        start_z + j * spacing_v + v_coverage / 2.0),
+                    });
+                }
+            }
+        }
+
+        // Create the viewpoints with the computed positions and base orientation
+        std::vector<Viewpoint> viewpoints;
+        for (const auto &pos : viewpoint_positions)
+        {
+            Viewpoint vp;
+            vp.position = pos;
+            vp.orientation = {orientation_base.x(), orientation_base.y(),
+                            orientation_base.z(), orientation_base.w()};
+            viewpoints.push_back(vp);
+        }
+
+        return std::make_pair(viewpoints, coverage_planes);
+    }
+
     double computeInformationGain(
         const Viewpoint &viewpoint,
         const std::shared_ptr<OctoMapInterface> &octomap_interface,
-        double h_fov,
-        double v_fov,
+        double h_fov_rad,
+        double v_fov_rad,
         int width,
         int height,
         double max_range,
@@ -471,10 +628,8 @@ namespace husky_xarm6_mcr_nbv_planner
         const Eigen::Matrix3d R_wc = geometry_utils::quatToRotMat(viewpoint.orientation);
 
         // Camera intrinsics
-        const double hfov_rad = h_fov * M_PI / 180.0;
-        const double vfov_rad = v_fov * M_PI / 180.0;
-        const double focal_x = (width / 2.0) / std::tan(hfov_rad / 2.0);
-        const double focal_y = (height / 2.0) / std::tan(vfov_rad / 2.0);
+        const double focal_x = (width / 2.0) / std::tan(h_fov_rad / 2.0);
+        const double focal_y = (height / 2.0) / std::tan(v_fov_rad / 2.0);
         const double cx = (width - 1) * 0.5;
         const double cy = (height - 1) * 0.5;
 

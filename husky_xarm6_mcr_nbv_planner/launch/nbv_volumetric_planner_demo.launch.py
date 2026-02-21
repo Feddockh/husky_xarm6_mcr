@@ -126,7 +126,7 @@ def launch_setup(context, *args, **kwargs):
         'metrics_plots_dir': metrics_plots_dir,
         'metrics_data_dir': metrics_data_dir,
         # General Parameters
-        'init_joint_angles_deg': [0.0, -35.0, -55.0, 0.0, 0.0, 90.0],
+        'init_joint_angles_deg': [0.0, -45.0, -45.0, 0.0, 0.0, 90.0],
         'map_frame': LaunchConfiguration('map_frame').perform(context),
         # NBV Planning Parameters
         'max_iterations': int(LaunchConfiguration('max_iterations').perform(context)),

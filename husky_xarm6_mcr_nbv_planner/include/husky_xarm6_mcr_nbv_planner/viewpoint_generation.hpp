@@ -127,6 +127,33 @@ std::vector<Viewpoint> generateFrontierBasedViewpoints(
     const rclcpp::Logger& logger = rclcpp::get_logger("viewpoint_generation"));
 
 /**
+ * @brief Compute the plane intersection with the bounding box and return the corners and the distance to the midpoint.
+ * @cam_position: Camera position to build the viewing direction from.
+ * @return Pair of midplane corners and distance vector from the bbox midpoint to the camera position.
+ */
+std::pair<std::vector<Eigen::Vector3d>, Eigen::Vector3d> computePlane(
+        const std::shared_ptr<OctoMapInterface> &octomap_interface,
+        const Eigen::Vector3d &cam_position);
+
+/**
+ * @brief Generate viewpoints facing the plane defined by the corners and distance.
+ * @corners: Four corners of the midplane.
+ * @distance: Distance vector from the plane midpoint to the viewpoint positions.
+ * @orientation_base: Base orientation for the viewpoints.
+ * @overlap_ratio: Desired overlap ratio between viewpoint frustum cross-sections on the midplane.
+ * @camera_hfov_rad: Camera horizontal field of view (radians).
+ * @camera_vfov_rad: Camera vertical field of view (radians).
+ * @return Pair of viewpoints and coverage planes.
+ */
+std::pair<std::vector<Viewpoint>, std::vector<std::vector<Eigen::Vector3d>>> generateViewpointsFromPlane(
+    const std::vector<Eigen::Vector3d> &corners,
+    const Eigen::Vector3d &distance,
+    const Eigen::Quaterniond &orientation_base,
+    double overlap_ratio,
+    double camera_hfov_rad, 
+    double camera_vfov_rad);
+
+/**
  * @brief Compute information gain for a viewpoint using geometric octomap
  * 
  * Information gain is the average number of unknown voxels discovered per ray.
@@ -134,8 +161,8 @@ std::vector<Viewpoint> generateFrontierBasedViewpoints(
  * 
  * @param viewpoint Candidate viewpoint
  * @param octomap_interface OctoMap interface for scene representation
- * @param h_fov Camera horizontal field of view (degrees)
- * @param v_fov Camera vertical field of view (degrees)
+ * @param h_fov_rad Camera horizontal field of view (radians)
+ * @param v_fov_rad Camera vertical field of view (radians)
  * @param width Image width (pixels)
  * @param height Image height (pixels)
  * @param max_range Maximum sensor range (meters)
@@ -147,8 +174,8 @@ std::vector<Viewpoint> generateFrontierBasedViewpoints(
 double computeInformationGain(
     const Viewpoint& viewpoint,
     const std::shared_ptr<OctoMapInterface>& octomap_interface,
-    double h_fov = 60.0,
-    double v_fov = 45.0,
+    double h_fov_rad = 1.0472,  // 60 degrees
+    double v_fov_rad = 0.7854,  // 45 degrees
     int width = 640,
     int height = 480,
     double max_range = 3.0,
@@ -169,8 +196,8 @@ double computeInformationGain(
  * 
  * @param viewpoint Candidate viewpoint
  * @param octomap_interface OctoMap interface for scene representation
- * @param h_fov Camera horizontal field of view (degrees)
- * @param v_fov Camera vertical field of view (degrees)
+ * @param h_fov_rad Camera horizontal field of view (radians)
+ * @param v_fov_rad Camera vertical field of view (radians)
  * @param width Image width (pixels)
  * @param height Image height (pixels)
  * @param max_range Maximum sensor range (meters)
@@ -183,8 +210,8 @@ double computeInformationGain(
 double computeSemanticInformationGain(
     const Viewpoint& viewpoint,
     const std::shared_ptr<OctoMapInterface>& octomap_interface,
-    double h_fov = 60.0,
-    double v_fov = 45.0,
+    double h_fov_rad = 1.0472,  // 60 degrees
+    double v_fov_rad = 0.7854,  // 45 degrees
     int width = 640,
     int height = 480,
     double max_range = 3.0,
