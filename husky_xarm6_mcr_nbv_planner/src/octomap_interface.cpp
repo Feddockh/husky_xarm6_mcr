@@ -293,6 +293,90 @@ namespace husky_xarm6_mcr_nbv_planner
         return frontiers;
     }
 
+    std::vector<octomap::point3d> OctoMapInterface::getUncertainVoxels(
+        float max_confidence,
+        bool use_bbox,
+        bool count_background) const
+    {
+        std::vector<octomap::point3d> voxels;
+
+        auto sem_tree = getSemanticTree();
+        if (!sem_tree)
+        {
+            RCLCPP_WARN(node_->get_logger(), "getUncertainVoxels called on non-semantic tree");
+            return voxels;
+        }
+
+        // Clamp threshold defensively
+        if (std::isnan(max_confidence) || std::isinf(max_confidence))
+            max_confidence = 0.5f;
+        max_confidence = std::min(1.0f, std::max(0.0f, max_confidence));
+
+        // BBox availability
+        if (!hasBoundingBox() && use_bbox)
+        {
+            RCLCPP_WARN(node_->get_logger(), "getUncertainVoxels: use_bbox=true but no valid bounding box available");
+            return voxels;
+        }
+
+        auto is_in_bbox = [&](const octomap::point3d &p) -> bool
+        {
+            if (!use_bbox) return true;
+            return p.x() >= bbox_min_.x() && p.x() <= bbox_max_.x() &&
+                p.y() >= bbox_min_.y() && p.y() <= bbox_max_.y() &&
+                p.z() >= bbox_min_.z() && p.z() <= bbox_max_.z();
+        };
+
+        // Iterate leaf nodes (optionally within bbox)
+        if (!use_bbox)
+        {
+            for (auto it = sem_tree->begin_leafs(); it != sem_tree->end_leafs(); ++it)
+            {
+                if (!sem_tree->isNodeOccupied(*it))
+                    continue;
+
+                const auto *node = &(*it);
+
+                if (!count_background && !node->isSemanticSet())
+                    continue;
+
+                float conf = node->getConfidence();
+                if (std::isnan(conf) || std::isinf(conf)) conf = 0.0f;
+                conf = std::min(1.0f, std::max(0.0f, conf));
+
+                if (conf <= max_confidence)
+                    voxels.push_back(it.getCoordinate()); // voxel center
+            }
+        }
+        else
+        {
+            for (auto it = sem_tree->begin_leafs_bbx(bbox_min_, bbox_max_); it != sem_tree->end_leafs_bbx(); ++it)
+            {
+                if (!sem_tree->isNodeOccupied(*it))
+                    continue;
+
+                const auto *node = &(*it);
+
+                if (!count_background && !node->isSemanticSet())
+                    continue;
+
+                float conf = node->getConfidence();
+                if (std::isnan(conf) || std::isinf(conf)) conf = 0.0f;
+                conf = std::min(1.0f, std::max(0.0f, conf));
+
+                // Note: begin_leafs_bbx should already be inside bbox, but keep it robust:
+                const auto p = it.getCoordinate();
+                if (!is_in_bbox(p))
+                    continue;
+
+                if (conf <= max_confidence)
+                    voxels.push_back(p);
+            }
+        }
+
+        return voxels;
+    }
+
     static inline double sqdist(const octomap::point3d &a, const octomap::point3d &b)
     {
         const double dx = a.x() - b.x();
