@@ -38,6 +38,13 @@ namespace husky_xarm6_mcr_nbv_planner
         std::vector<octomap::point3d> findFrontiers(int min_unknown_neighbors = 1,
                                                     bool use_bbox = false) const;
 
+        // Returns centers of occupied semantic voxels with low confidence.
+        // These can be treated as "semantic frontiers".
+        std::vector<octomap::point3d> getUncertainVoxels(
+            float max_confidence = 0.5f,
+            bool use_bbox = true,
+            bool count_background = true) const;
+
         std::vector<Cluster> kmeansCluster(const std::vector<octomap::point3d> &points,
                                            int n_clusters = 0,
                                            int max_iters = 50,
