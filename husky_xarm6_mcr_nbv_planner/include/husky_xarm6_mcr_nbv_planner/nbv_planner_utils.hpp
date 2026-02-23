@@ -74,6 +74,10 @@ struct NBVPlannerConfig
     int max_iterations;
     double min_information_gain;
     double alpha_cost_weight;
+    double beta_semantic_weight;
+    double conf_thresh;
+    double semantic_confidence_boost;
+    double semantic_mismatch_penalty;
 
     // Viewpoint Parameters
     double plane_half_extent;
@@ -179,6 +183,10 @@ NBVPlannerConfig loadConfiguration(const std::shared_ptr<rclcpp::Node> &node)
     config.max_iterations = node->get_parameter("max_iterations").as_int();
     config.min_information_gain = node->get_parameter("min_information_gain").as_double();
     config.alpha_cost_weight = node->get_parameter("alpha_cost_weight").as_double();
+    config.beta_semantic_weight = node->get_parameter("beta_semantic_weight").as_double();
+    config.conf_thresh = node->get_parameter("conf_thresh").as_double();
+    config.semantic_confidence_boost = node->get_parameter("semantic_confidence_boost").as_double();
+    config.semantic_mismatch_penalty = node->get_parameter("semantic_mismatch_penalty").as_double();
 
     // Viewpoint Parameters
     config.plane_half_extent = node->get_parameter("plane_half_extent").as_double();
@@ -259,6 +267,10 @@ void printConfiguration(const NBVPlannerConfig &config, const rclcpp::Logger &lo
     RCLCPP_INFO(logger, "  Max iterations: %d", config.max_iterations);
     RCLCPP_INFO(logger, "  Min information gain: %.4f", config.min_information_gain);
     RCLCPP_INFO(logger, "  Alpha cost weight: %.4f", config.alpha_cost_weight);
+    RCLCPP_INFO(logger, "  Beta semantic weight: %.4f", config.beta_semantic_weight);
+    RCLCPP_INFO(logger, "  Confidence threshold: %.4f", config.conf_thresh);
+    RCLCPP_INFO(logger, "  Semantic confidence boost: %.4f", config.semantic_confidence_boost);
+    RCLCPP_INFO(logger, "  Semantic mismatch penalty: %.4f", config.semantic_mismatch_penalty);
 
     // Viewpoint Parameters
     RCLCPP_INFO(logger, "--- Viewpoints ---");
