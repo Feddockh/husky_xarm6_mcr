@@ -154,6 +154,20 @@ std::pair<std::vector<Viewpoint>, std::vector<std::vector<Eigen::Vector3d>>> gen
     double camera_vfov_rad);
 
 /**
+ * @brief Generate spherical cap viewpoints for each viewpoint in the input grid.
+ * @grid_viewpoints: Input grid of viewpoints to generate spherical caps from.
+ * @orientation: Base orientation for the spherical cap.
+ * @max_theta: Maximum angle for the spherical cap (radians).
+ * @angular_resolution: Angular resolution for the spherical cap (radians).
+ * @return Vector of viewpoints with spherical cap orientations.
+ */
+std::vector<Viewpoint> generateSphericalCaps(
+    const std::vector<Viewpoint> &grid_viewpoints,
+    const std::array<double, 4> &orientation,
+    double max_theta,
+    double angular_resolution);
+
+/**
  * @brief Compute information gain for a viewpoint using geometric octomap
  * 
  * Information gain is the average number of unknown voxels discovered per ray.
@@ -182,9 +196,7 @@ double computeInformationGain(
     double resolution = 0.1,
     int num_rays = -1,
     bool use_bbox = true,
-    const rclcpp::Logger& logger = rclcpp::get_logger("viewpoint_generation"),
-    const std::shared_ptr<NBVVisualizer>& visualizer = nullptr
-    );
+    const rclcpp::Logger& logger = rclcpp::get_logger("viewpoint_generation"));
 
 /**
  * @brief Compute semantic information gain for a viewpoint
@@ -218,6 +230,8 @@ double computeSemanticInformationGain(
     double resolution = 0.1,
     int num_rays = -1,
     bool use_bbox = true,
-    double beta = 1.0);
+    double beta = 1.0,
+    bool count_background = true,
+    const rclcpp::Logger& logger = rclcpp::get_logger("viewpoint_generation"));
 
 } // namespace husky_xarm6_mcr_nbv_planner

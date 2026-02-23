@@ -571,6 +571,49 @@ namespace husky_xarm6_mcr_nbv_planner
         return std::make_pair(viewpoints, coverage_planes);
     }
 
+    std::vector<Viewpoint> generateSphericalCaps(
+        const std::vector<Viewpoint> &grid_viewpoints,
+        const std::array<double, 4> &orientation,
+        double max_theta,
+        double angular_resolution)
+    {
+        // Generate orientation variations
+        std::vector<std::array<double, 4>> orientations;
+        Eigen::Vector3d normal = geometry_utils::quatToRotMat(orientation).col(2);
+
+        if (max_theta == 0 || angular_resolution == 0)
+        {
+            // No variations, just use base orientation
+            orientations.push_back(orientation);
+        }
+        else
+        {
+            // Get orientations from spherical cap (dummy position)
+            const auto cap_viewpoints = computeSphericalCap(
+                Eigen::Vector3d::Zero(), orientation, 1.0,
+                angular_resolution, max_theta, false, true);
+
+            for (const auto &vp : cap_viewpoints)
+            {
+                orientations.push_back(vp.orientation);
+            }
+        }
+
+        // Create viewpoints for each position with each orientation
+        std::vector<Viewpoint> viewpoints;
+        for (const auto &pos : grid_viewpoints)
+        {
+            for (const auto &orient : orientations)
+            {
+                Viewpoint vp(pos.position, orient);
+                vp.target = pos.position + normal;
+                viewpoints.push_back(vp);
+            }
+        }
+    
+        return viewpoints;
+    }
+
     double computeInformationGain(
         const Viewpoint &viewpoint,
         const std::shared_ptr<OctoMapInterface> &octomap_interface,
@@ -582,8 +625,7 @@ namespace husky_xarm6_mcr_nbv_planner
         double resolution,
         int num_rays,
         bool use_bbox,
-        const rclcpp::Logger &logger,
-        const std::shared_ptr<NBVVisualizer> &visualizer)
+        const rclcpp::Logger &logger)
     {
         if (!octomap_interface || width <= 0 || height <= 0 || max_range <= 0 || resolution <= 0)
         {
@@ -722,12 +764,12 @@ namespace husky_xarm6_mcr_nbv_planner
                         }
                     }
 
-                    if (visualizer)
-                    {
-                        visualizer->publishPoint(oct_point, point_id++, 0.015, color, 0.8f, "ig_rays");
-                        // Small delay to allow RViz to process the marker
-                        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                    }
+                    // if (visualizer)
+                    // {
+                    //     visualizer->publishPoint(oct_point, point_id++, 0.015, color, 0.8f, "ig_rays");
+                    //     // Small delay to allow RViz to process the marker
+                    //     std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    // }
 
                     // Stop ray if hit occupied voxel
                     if (should_break)
@@ -745,32 +787,137 @@ namespace husky_xarm6_mcr_nbv_planner
     double computeSemanticInformationGain(
         const Viewpoint &viewpoint,
         const std::shared_ptr<OctoMapInterface> &octomap_interface,
-        double h_fov,
-        double v_fov,
+        double h_fov_rad,
+        double v_fov_rad,
         int width,
         int height,
         double max_range,
         double resolution,
         int num_rays,
         bool use_bbox,
-        double beta)
+        double beta,
+        bool count_background,
+        const rclcpp::Logger &logger)
     {
-        // Note: This is a simplified version that treats the semantic octree
-        // like a regular octree. For full semantic functionality, you would
-        // need to integrate with the SemanticOctoMap class and access the
-        // semantic_map to get confidence values.
+        if (!octomap_interface || width <= 0 || height <= 0 || max_range <= 0 || resolution <= 0)
+            return 0.0;
 
-        // Suppress unused parameter warning
-        (void)beta;
+        // Must have a semantic tree
+        auto sem_tree = octomap_interface->getSemanticTree();
+        if (!sem_tree)
+        {
+            RCLCPP_WARN(logger, "Octomap semantic tree is not available, cannot compute semantic IG");
+            // Fallback: just volumetric IG
+            return computeInformationGain(
+                viewpoint, octomap_interface,
+                h_fov_rad, v_fov_rad,
+                width, height,
+                max_range, resolution,
+                num_rays, use_bbox,
+                logger);
+        }
 
-        // For now, this returns the same as computeInformationGain
-        // You can extend this by passing a SemanticOctoMap pointer instead
+        // Bounding box
+        octomap::point3d bbox_min, bbox_max;
+        if (use_bbox)
+        {
+            if (!octomap_interface->getBoundingBox(bbox_min, bbox_max))
+                return 0.0;
+        }
 
-        return computeInformationGain(
-            viewpoint, octomap_interface, h_fov, v_fov, width, height,
-            max_range, resolution, num_rays, use_bbox,
-            rclcpp::get_logger("viewpoint_generation"),
-            nullptr);
+        // Ray strides
+        const auto [stride_u, stride_v] = geometry_utils::computeRayStrides(width, height, num_rays);
+
+        // Camera extrinsics (world <- cam)
+        const Eigen::Matrix3d R_wc = geometry_utils::quatToRotMat(viewpoint.orientation);
+
+        // Camera intrinsics (pinhole from FOV)
+        const double focal_x = (width  / 2.0) / std::tan(h_fov_rad / 2.0);
+        const double focal_y = (height / 2.0) / std::tan(v_fov_rad / 2.0);
+        const double cx = (width  - 1) * 0.5;
+        const double cy = (height - 1) * 0.5;
+
+        auto in_bbox = [&](const octomap::point3d& p) -> bool {
+            if (!use_bbox) return true;
+            return (p.x() >= bbox_min.x() && p.x() <= bbox_max.x() &&
+                    p.y() >= bbox_min.y() && p.y() <= bbox_max.y() &&
+                    p.z() >= bbox_min.z() && p.z() <= bbox_max.z());
+        };
+
+        double total_gain = 0.0;
+        int num_rays_cast = 0;
+
+        const int num_steps = static_cast<int>(max_range / resolution);
+
+        for (int v = 0; v < height; v += stride_v)
+        {
+            for (int u = 0; u < width; u += stride_u)
+            {
+                // Ray in camera frame (z forward)
+                const double x = (u - cx) / focal_x;
+                const double y = (v - cy) / focal_y;
+                Eigen::Vector3d ray_cam(x, y, 1.0);
+                ray_cam.normalize();
+
+                // Transform to world
+                Eigen::Vector3d ray_world = R_wc * ray_cam;
+                ray_world.normalize();
+
+                double ray_gain = 0.0;
+                bool prev_in_bbox = false;
+
+                for (int i = 0; i < num_steps; ++i)
+                {
+                    const double t = i * resolution;
+                    const Eigen::Vector3d point = viewpoint.position + t * ray_world;
+                    const octomap::point3d oct_point(point.x(), point.y(), point.z());
+
+                    const bool cur_in_bbox = in_bbox(oct_point);
+
+                    // Stop the ray once we leave bbox after being inside (single convex region)
+                    if (use_bbox && !cur_in_bbox && prev_in_bbox)
+                        break;
+                    prev_in_bbox = cur_in_bbox;
+
+                    if (use_bbox && !cur_in_bbox)
+                        continue;
+
+                    // Semantic tree search
+                    octomap::SemanticOcTreeNode* node = sem_tree->search(oct_point);
+
+                    if (!node)
+                    {
+                        // Unknown voxel => volumetric uncertainty
+                        ray_gain += 1.0;
+                        continue;
+                    }
+
+                    // Known voxel:
+                    if (sem_tree->isNodeOccupied(node))
+                    {
+                        // Occupied => semantic uncertainty term
+                        if (node->isSemanticSet() || count_background)
+                        {
+                            float conf = node->getConfidence();
+                            if (std::isnan(conf) || std::isinf(conf)) conf = 0.0f;
+                            conf = std::min(1.0f, std::max(0.0f, conf));
+                            ray_gain += static_cast<double>(beta) * (1.0 - static_cast<double>(conf));
+                        }
+                        // else { ray_gain += static_cast<double>(beta) * 1.0; } // No semantic info => max uncertainty
+
+                        // Stop ray at occupied voxel
+                        break;
+                    }
+
+                    // Free voxel => nothing, keep marching
+                }
+
+                total_gain += ray_gain;
+                num_rays_cast++;
+            }
+        }
+
+        return (num_rays_cast > 0) ? (total_gain / static_cast<double>(num_rays_cast)) : 0.0;
     }
 
 } // namespace husky_xarm6_mcr_nbv_planner

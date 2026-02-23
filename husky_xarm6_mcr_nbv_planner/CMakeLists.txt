@@ -146,6 +146,22 @@ ament_target_dependencies(octomap_interface_demo
   geometry_msgs
 )
 
+# Define the NBV Semantic Planner demo executable
+add_executable(nbv_semantic_planner_demo src/nbv_semantic_planner_demo.cpp)
+target_link_libraries(nbv_semantic_planner_demo 
+  moveit_interface 
+  manipulation_workspace
+  octomap_interface
+  nbv_visualizer
+  viewpoint_generation
+)
+ament_target_dependencies(nbv_semantic_planner_demo
+  rclcpp
+  moveit_ros_planning_interface
+  moveit_ros_planning
+  geometry_msgs
+)
+
 # Define the NBV Volumetric Planner demo executable
 add_executable(nbv_volumetric_planner_demo src/nbv_volumetric_planner_demo.cpp)
 target_link_libraries(nbv_volumetric_planner_demo 
@@ -187,6 +203,7 @@ install(TARGETS
   viewpoint_generation
   moveit_interface_demo
   octomap_interface_demo
+  nbv_semantic_planner_demo
   nbv_volumetric_planner_demo
   nbv_baseline_demo
   DESTINATION lib/${PROJECT_NAME})

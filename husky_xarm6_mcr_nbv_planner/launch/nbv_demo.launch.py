@@ -165,14 +165,18 @@ def launch_setup(context, *args, **kwargs):
         'max_iterations': int(LaunchConfiguration('max_iterations').perform(context)),
         'min_information_gain': float(LaunchConfiguration('min_information_gain').perform(context)),
         'alpha_cost_weight': float(LaunchConfiguration('alpha_cost_weight').perform(context)),
+        'beta_semantic_weight': float(LaunchConfiguration('beta_semantic_weight').perform(context)),
+        'conf_thresh': float(LaunchConfiguration('conf_thresh').perform(context)),
+        'semantic_confidence_boost': float(LaunchConfiguration('semantic_confidence_boost').perform(context)),
+        'semantic_mismatch_penalty': float(LaunchConfiguration('semantic_mismatch_penalty').perform(context)), 
 
         # Viewpoint Parameters
         'plane_half_extent': 1.0,  # Not used in planner
         'plane_spatial_resolution': 0.1,  # Not used in planner
         'cap_max_theta_deg': 60.0,  # Not used in planner
-        'cap_min_theta_deg': 15.0,  # Not used in planner
+        'cap_min_theta_deg': 30.0,  # Not used in planner
         'num_viewpoints_per_frontier': int(LaunchConfiguration('num_viewpoints_per_frontier').perform(context)),
-        'z_bias_sigma': 0.3,
+        'z_bias_sigma': 0.5,
         'viewpoint_overlap_ratio': 0.42,
 
         # Debug Parameters
@@ -381,7 +385,24 @@ def launch_setup(context, *args, **kwargs):
         }]
     )
 
-    if LaunchConfiguration('planner_type').perform(context).lower() == 'volumetric':
+    if LaunchConfiguration('planner_type').perform(context).lower() == 'semantic':
+        nbv_node = Node(
+            package='husky_xarm6_mcr_nbv_planner',
+            executable='nbv_semantic_planner_demo',
+            output='screen',
+            parameters=[
+                {'use_sim_time': use_sim_time},
+                robot_description,
+                robot_description_semantic,
+                kinematics_config,
+                joint_limits_config,
+                planner_config,
+                controller_config,
+                planning_scene_monitor_config,
+                node_parameters,
+            ],
+        )
+    elif LaunchConfiguration('planner_type').perform(context).lower() == 'volumetric':
         nbv_node = Node(
             package='husky_xarm6_mcr_nbv_planner',
             executable='nbv_volumetric_planner_demo',
@@ -450,6 +471,8 @@ def generate_launch_description():
                               description='Minimum information gain threshold for termination'),
         DeclareLaunchArgument('alpha_cost_weight', default_value='0.1',
                               description='Weight for cost in utility function (IG - alpha*cost)'),
+        DeclareLaunchArgument('beta_semantic_weight', default_value='1000.0',
+                              description='Weight for semantic information in utility function'),
         DeclareLaunchArgument('num_viewpoints_per_frontier', default_value='7',
                               description='Number of viewpoint candidates per frontier cluster'),
 
@@ -526,10 +549,10 @@ def generate_launch_description():
                               description='Enable semantic occupancy mapping mode'),
         DeclareLaunchArgument('octomap_pointcloud_topic', default_value='/firefly_left/points2',
                               description='PointCloud2 topic for PointCloudUpdater'),
-        DeclareLaunchArgument('octomap_bbx_min_x', default_value='-0.8'),
+        DeclareLaunchArgument('octomap_bbx_min_x', default_value='-0.6'),
         DeclareLaunchArgument('octomap_bbx_min_y', default_value='-1.6'),
         DeclareLaunchArgument('octomap_bbx_min_z', default_value='0.0'),
-        DeclareLaunchArgument('octomap_bbx_max_x', default_value='0.8'),
+        DeclareLaunchArgument('octomap_bbx_max_x', default_value='0.6'),
         DeclareLaunchArgument('octomap_bbx_max_y', default_value='-0.4'),
         DeclareLaunchArgument('octomap_bbx_max_z', default_value='2.0'),
         DeclareLaunchArgument('semantic_confidence_boost', default_value='0.1',
