@@ -272,7 +272,7 @@ int main(int argc, char **argv)
             // Pre-filter the frontiers based on manipulation workspace
             std::vector<Eigen::Vector3d> viewable_frontiers;
             for (const auto& tff : frontiers_eigen) {
-                if (manip_workspace->getDistance(tff) < config.ideal_camera_distance) {
+                if (manip_workspace->getDistance(tff) < config.ideal_camera_distance/2) {
                     viewable_frontiers.push_back(tff);
                 }
             }
@@ -328,6 +328,9 @@ int main(int argc, char **argv)
                     std::this_thread::sleep_for(std::chrono::milliseconds(50));
                 }
             }
+            // Generate a spherical cap of viewpoints
+            auto spherical_cap_viewpoints = generateSphericalCaps(plane_viewpoints, init_cam_orientation,
+                config.cap_max_theta_rad, config.cap_min_theta_rad);
             // Generate frontier-based viewpoints
             std::vector<Eigen::Vector3d> cluster_centers;
             for (const auto& cluster : frontier_clusters) {
@@ -341,7 +344,7 @@ int main(int argc, char **argv)
             RCLCPP_DEBUG(node->get_logger(), "Generated %zu viewpoints from frontier clusters", frontier_viewpoints.size());
             // Combine viewpoints
             std::vector<Viewpoint> total_viewpoints;
-            total_viewpoints.insert(total_viewpoints.end(), plane_viewpoints.begin(), plane_viewpoints.end());
+            total_viewpoints.insert(total_viewpoints.end(), spherical_cap_viewpoints.begin(), spherical_cap_viewpoints.end());
             total_viewpoints.insert(total_viewpoints.end(), frontier_viewpoints.begin(), frontier_viewpoints.end());
             RCLCPP_INFO(node->get_logger(), "Total generated viewpoints: %zu", total_viewpoints.size());
             if (total_viewpoints.empty()) {
@@ -355,12 +358,16 @@ int main(int argc, char **argv)
                 RCLCPP_WARN(node->get_logger(), "No reachable viewpoints found!");
                 break;
             }
-            if (visualizer) {
+            if (visualizer)
+            {
                 std::vector<geometry_msgs::msg::Pose> viewpoint_poses;
-                for (const auto& vp : reachable_viewpoints) {
+                viewpoint_poses.reserve(reachable_viewpoints.size());
+                for (const auto &vp : reachable_viewpoints)
+                {
                     viewpoint_poses.push_back(eigenToPose(vp.position, vp.orientation));
                 }
-                visualizer->publishCoordinates(viewpoint_poses, 0.15, 0.01, 0.5f, "reachable_viewpoints", moveit_interface->getPoseReferenceFrame());
+                visualizer->publishCoordinates(
+                    viewpoint_poses, 0.15, 0.01, 0.5f, "reachable_viewpoints", moveit_interface->getPoseReferenceFrame());
             }
 
             // Compute utilities
@@ -372,7 +379,7 @@ int main(int argc, char **argv)
                 vp.information_gain = computeInformationGain(vp, octomap_interface,
                     config.camera_horizontal_fov_rad, config.camera_vertical_fov_rad,
                     config.camera_scaled_width, config.camera_scaled_height, config.camera_max_range,
-                    octomap_interface->getResolution(), config.num_camera_rays, octomap_interface->hasBoundingBox(), node->get_logger(), nullptr);
+                    octomap_interface->getResolution(), config.num_camera_rays, octomap_interface->hasBoundingBox(), node->get_logger());
                 double distance = (vp.position - current_cam_position).norm();
                 vp.cost = distance;
                 vp.utility = vp.information_gain - config.alpha_cost_weight * distance;
