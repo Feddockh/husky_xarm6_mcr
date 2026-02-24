@@ -751,7 +751,8 @@ namespace husky_xarm6_mcr_nbv_planner
                                                        int num_ik_seeds,
                                                        int plans_per_seed,
                                                        double ik_timeout,
-                                                       int ik_attempts)
+                                                       int ik_attempts,
+                                                       const std::vector<std::vector<double>> &hint_seeds)
     {
         // Get current joint state as baseline seed
         std::vector<double> current_joint_state;
@@ -764,20 +765,33 @@ namespace husky_xarm6_mcr_nbv_planner
         // Random number generator for seed jittering
         std::mt19937 rng(static_cast<unsigned>(std::time(nullptr)));
 
+        // Build ordered seed list: current state → caller hints → jittered random
+        std::vector<std::vector<double>> seeds;
+        seeds.push_back(current_joint_state);
+        for (const auto &hint : hint_seeds)
+        {
+            if (hint.size() == current_joint_state.size())
+                seeds.push_back(hint);
+            else
+                RCLCPP_WARN(node_->get_logger(), "Hint seed size %zu != expected %zu, skipping.",
+                            hint.size(), current_joint_state.size());
+        }
+        while (static_cast<int>(seeds.size()) < num_ik_seeds)
+            seeds.push_back(jitterJointSeed(current_joint_state, 0.4, rng));
+
         // Track best plan found
         bool found_valid_plan = false;
         double best_cost = std::numeric_limits<double>::infinity();
         const double dt_sec = 0.02; // Time step for trajectory timestamps
 
-        RCLCPP_DEBUG(node_->get_logger(), "Attempting to find best plan with %d IK seeds and %d plans per seed",
-                    num_ik_seeds, plans_per_seed);
+        RCLCPP_DEBUG(node_->get_logger(),
+                    "Attempting to find best plan with %zu seeds (%zu hints) and %d plans per seed",
+                    seeds.size(), hint_seeds.size(), plans_per_seed);
 
-        // Try multiple IK seeds
-        for (int seed_idx = 0; seed_idx < num_ik_seeds; ++seed_idx)
+        // Try seeds in order
+        for (int seed_idx = 0; seed_idx < static_cast<int>(seeds.size()); ++seed_idx)
         {
-            // Generate IK seed (first iteration uses current state, rest are jittered)
-            std::vector<double> seed = (seed_idx == 0) ? current_joint_state
-                                                        : jitterJointSeed(current_joint_state, 0.4, rng);
+            const std::vector<double> &seed = seeds[seed_idx];
 
             // Compute IK with this seed
             auto ik_solution = computeIK(seed, target_ee_pose, ik_timeout, ik_attempts);
@@ -810,9 +824,11 @@ namespace husky_xarm6_mcr_nbv_planner
                     best_plan_out = plan;
                     found_valid_plan = true;
                     
-                    RCLCPP_DEBUG(node_->get_logger(), 
-                                "Found better plan (cost=%.3f) with IK seed %d, attempt %d",
-                                path_cost, seed_idx, plan_idx);
+                    const char* seed_type = (seed_idx == 0) ? "current"
+                        : (seed_idx <= static_cast<int>(hint_seeds.size()) ? "hint" : "jittered");
+                    RCLCPP_DEBUG(node_->get_logger(),
+                                "Found better plan (cost=%.3f) with %s seed %d, attempt %d",
+                                path_cost, seed_type, seed_idx, plan_idx);
                 }
             }
 
@@ -831,8 +847,9 @@ namespace husky_xarm6_mcr_nbv_planner
             return true;
         }
 
-        RCLCPP_WARN(node_->get_logger(), 
-                   "No valid plan found after trying %d IK seeds", num_ik_seeds);
+        RCLCPP_WARN(node_->get_logger(),
+                   "No valid plan found after trying %zu seeds (%zu hints + jittered)",
+                   seeds.size(), hint_seeds.size());
         return false;
     }
     // Frame configuration

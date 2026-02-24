@@ -176,7 +176,7 @@ int main(int argc, char **argv)
         moveit_interface->setOrientationConstraints(
             config.camera_optical_link,
             arrayToQuaternion(init_cam_orientation),
-            M_PI / 2, M_PI / 2, M_PI);
+            M_PI / 2, M_PI / 2, M_PI / 2);
 
         // Wait for initial octomap (fresh after clear)
         waitForOctomap(node, octomap_interface, trigger_clients, config, node->get_logger());
@@ -408,7 +408,7 @@ int main(int argc, char **argv)
                 RCLCPP_DEBUG(node->get_logger(), "Trying viewpoint with utility %.4f, IG %.4f, cost %.4f",
                         best_viewpoint.utility, best_viewpoint.information_gain, best_viewpoint.cost);
                 // Select best viewpoint with valid plan
-                best_plan = planPathsToViewpoint(best_viewpoint, moveit_interface, config, node->get_logger());
+                best_plan = planPathsToViewpoint(best_viewpoint, moveit_interface, config, node->get_logger(), config.hint_joint_configs);
                 if (!best_plan) {
                     RCLCPP_INFO(node->get_logger(), "Failed to plan to the best viewpoint, trying next best...");
                     continue;
@@ -476,7 +476,7 @@ int main(int argc, char **argv)
         }
 
         // Return to initial joint configuration
-        moveit_interface->clearPathConstraints();
+        // moveit_interface->clearPathConstraints();
         RCLCPP_INFO(node->get_logger(), "\nReturning to initial joint configuration...");
         if (!moveit_interface->planAndExecute(config.init_joint_angles_rad))
         {

@@ -68,6 +68,7 @@ struct NBVPlannerConfig
 
     // General Parameters
     std::vector<double> init_joint_angles_rad;
+    std::vector<std::vector<double>> hint_joint_configs; // optional IK seed hints (rad)
     std::string map_frame;
 
     // NBV Planning Parameters
@@ -177,6 +178,28 @@ NBVPlannerConfig loadConfiguration(const std::shared_ptr<rclcpp::Node> &node)
 
     // General Parameters
     config.init_joint_angles_rad = geometry_utils::deg2Rad(node->get_parameter("init_joint_angles_deg").as_double_array());
+
+    // Optional flat list of hint joint configs (groups of N joints, in degrees)
+    if (node->has_parameter("hint_joint_angles_deg"))
+    {
+        auto flat = node->get_parameter("hint_joint_angles_deg").as_double_array();
+        const size_t n = config.init_joint_angles_rad.size();
+        if (n > 0 && !flat.empty() && flat.size() % n == 0)
+        {
+            for (size_t i = 0; i < flat.size(); i += n)
+            {
+                std::vector<double> hint_deg(flat.begin() + i, flat.begin() + i + n);
+                config.hint_joint_configs.push_back(geometry_utils::deg2Rad(hint_deg));
+            }
+        }
+        else if (!flat.empty())
+        {
+            RCLCPP_WARN(node->get_logger(),
+                "hint_joint_angles_deg size %zu is not a multiple of num_joints %zu, ignoring hints.",
+                flat.size(), n);
+        }
+    }
+
     config.map_frame = node->get_parameter("map_frame").as_string();
 
     // NBV Planning Parameters
@@ -767,7 +790,8 @@ std::optional<moveit::planning_interface::MoveGroupInterface::Plan> planPathsToV
     const Viewpoint &viewpoint,
     const std::shared_ptr<MoveItInterface> &moveit_interface,
     const NBVPlannerConfig &config,
-    const rclcpp::Logger &logger)
+    const rclcpp::Logger &logger,
+    const std::vector<std::vector<double>> &hint_seeds = {})
 {
     // Convert camera pose to end-effector pose
     geometry_msgs::msg::Pose cam_pose = eigenToPose(viewpoint.position, viewpoint.orientation);
@@ -786,7 +810,8 @@ std::optional<moveit::planning_interface::MoveGroupInterface::Plan> planPathsToV
         config.num_ik_seeds,
         config.plans_per_seed,
         config.ik_timeout,
-        config.ik_attempts);
+        config.ik_attempts,
+        hint_seeds);
 
     if (!success)
     {

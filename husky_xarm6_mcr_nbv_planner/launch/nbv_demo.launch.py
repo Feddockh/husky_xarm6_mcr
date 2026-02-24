@@ -1,7 +1,9 @@
 # nbv_demo.launch.py
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, OpaqueFunction, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, OpaqueFunction, IncludeLaunchDescription, RegisterEventHandler, EmitEvent
+from launch.event_handlers import OnProcessExit
+from launch.events import Shutdown
 from launch.substitutions import LaunchConfiguration, Command
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
@@ -129,14 +131,14 @@ def launch_setup(context, *args, **kwargs):
         # Manipulation Parameters
         'planning_pipeline_id': 'ompl',
         'planner_id': 'RRTConnect',
-        'planning_time': 0.5,
-        'num_planning_attempts': 1,
-        'max_velocity_scaling_factor': 0.8,
-        'max_acceleration_scaling_factor': 0.8,
-        'num_ik_seeds': 5,
+        'planning_time': 1.0,
+        'num_planning_attempts': 5,
+        'max_velocity_scaling_factor': 0.2,
+        'max_acceleration_scaling_factor': 0.2,
+        'num_ik_seeds': 10,
         'plans_per_seed': 1,
-        'ik_timeout': 0.05,
-        'ik_attempts': 5,
+        'ik_timeout': 0.01,
+        'ik_attempts': 20,
 
         # Camera Parameters
         'capture_type': 'triggered',
@@ -159,6 +161,19 @@ def launch_setup(context, *args, **kwargs):
 
         # General Parameters
         'init_joint_angles_deg': [0.0, -45.0, -45.0, 0.0, 0.0, 90.0],
+        # Flat list of hint IK seed configs (groups of 6, in degrees).
+        # Each group of 6 values is one joint configuration tried before jittered seeds.
+        'hint_joint_angles_deg': [
+            -42.0, -8.0, -119.0, 57.0, 54.0, 48.0, # Top Right
+            42.0, -8.0, -119.0, 57.0, 54.0, 132.0, # Top Left
+            -38.0, -35.0, -53.0, 92.0, 38.0, -3.0, # Mid Right
+            38.0, -34.0, -54.0, -92.0, 38.0, 183.0, # Mid Left
+            -50.0, 27.0, -31.0, 130.0, 87.0, -87.0, # Bottom Right
+            50.0, 27.0, -31.0, 230.0, 87.0, -93.0, # Bottom Right
+            -56.0, 97.0, -92.0, 124.0, 93.0, -94.0, # Far Bottom Right
+            -56.0, 97.0, -92.0, 124.0, 93.0, -94.0, # Far Bottom Right
+            56.0, 97.0, -91.0, 230.0, 93.0, -85.0, # Far Bottom Left
+        ],
         'map_frame': LaunchConfiguration('map_frame').perform(context),
 
         # NBV Planning Parameters
@@ -202,7 +217,7 @@ def launch_setup(context, *args, **kwargs):
     # Capture octomap parameters
     octomap_parameters = {
         'resolution': float(LaunchConfiguration('octomap_resolution').perform(context)),
-        'max_range': float(LaunchConfiguration('octomap_max_range').perform(context)),
+        'max_range': float(LaunchConfiguration('camera_max_range').perform(context)),
         'min_range': 0.01,
         'use_moveit': LaunchConfiguration('octomap_use_moveit').perform(context).lower() == 'true',
         'use_bbox': LaunchConfiguration('octomap_use_bbox').perform(context).lower() == 'true',
@@ -355,7 +370,7 @@ def launch_setup(context, *args, **kwargs):
             'use_sim_time': use_sim_time,
             'resolution': LaunchConfiguration('octomap_resolution'),
             'map_frame': LaunchConfiguration('map_frame'),
-            'max_range': LaunchConfiguration('octomap_max_range'),
+            'max_range': LaunchConfiguration('camera_max_range'),
             'min_range': 0.01,
             'prob_hit': 0.7,
             'prob_miss': 0.4,
@@ -375,7 +390,7 @@ def launch_setup(context, *args, **kwargs):
             'pointcloud_topic': LaunchConfiguration('octomap_pointcloud_topic'),
             'use_moveit': LaunchConfiguration('octomap_use_moveit'),
             'planning_scene_world_topic': '/planning_scene_world',
-            'publish_free_voxels': True,
+            'publish_free_voxels': False,
             'enable_visualization': True,
             'visualization_topic': 'occupancy_map_markers',
             'visualization_rate': 1.0,
@@ -438,7 +453,17 @@ def launch_setup(context, *args, **kwargs):
         )
     
 
-    return [firefly_launch, octomap_server_node, nbv_node]
+    actions = [firefly_launch, octomap_server_node, nbv_node]
+
+    if not node_parameters['keep_alive']:
+        actions.append(RegisterEventHandler(
+            OnProcessExit(
+                target_action=nbv_node,
+                on_exit=[EmitEvent(event=Shutdown())]
+            )
+        ))
+
+    return actions
 
 
 def generate_launch_description():
@@ -467,11 +492,11 @@ def generate_launch_description():
         # NBV Planner Parameters
         DeclareLaunchArgument('max_iterations', default_value='100',
                               description='Maximum number of NBV planning iterations'),
-        DeclareLaunchArgument('min_information_gain', default_value='10.0',
+        DeclareLaunchArgument('min_information_gain', default_value='5.0',
                               description='Minimum information gain threshold for termination'),
         DeclareLaunchArgument('alpha_cost_weight', default_value='0.1',
                               description='Weight for cost in utility function (IG - alpha*cost)'),
-        DeclareLaunchArgument('beta_semantic_weight', default_value='1000.0',
+        DeclareLaunchArgument('beta_semantic_weight', default_value='0.5',
                               description='Weight for semantic information in utility function'),
         DeclareLaunchArgument('num_viewpoints_per_frontier', default_value='7',
                               description='Number of viewpoint candidates per frontier cluster'),
@@ -539,8 +564,6 @@ def generate_launch_description():
         # Octomap Parameters
         DeclareLaunchArgument('octomap_resolution', default_value='0.04',
                               description='Octomap resolution in meters'),
-        DeclareLaunchArgument('octomap_max_range', default_value='0.6',
-                              description='Maximum sensor range in meters'),
         DeclareLaunchArgument('octomap_use_moveit', default_value='false',
                               description='Enable MoveIt planning scene integration'),
         DeclareLaunchArgument('octomap_use_bbox', default_value='true',

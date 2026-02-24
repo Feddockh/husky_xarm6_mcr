@@ -176,7 +176,8 @@ int main(int argc, char **argv)
         moveit_interface->setOrientationConstraints(
             config.camera_optical_link,
             arrayToQuaternion(init_cam_orientation),
-            M_PI / 2, M_PI / 2, M_PI);
+            M_PI / 2, M_PI / 2, 5 * M_PI / 6);
+            // M_PI / 2, M_PI / 2, M_PI);
 
         // Wait for initial octomap (fresh after clear)
         waitForOctomap(node, octomap_interface, trigger_clients, config, node->get_logger());
@@ -219,11 +220,8 @@ int main(int argc, char **argv)
             }
 
             // These write into the per-run folders (if n_runs>1)
-            if (visualizer)
-            {
-                visualizer->plotAllMetrics(all_metrics, config.metrics_plots_dir);
-                visualizer->logAllMetricsToCSV(all_metrics, config.metrics_data_dir);
-            }
+            visualizer->plotAllMetrics(all_metrics, config.metrics_plots_dir);
+            visualizer->logAllMetricsToCSV(all_metrics, config.metrics_data_dir);
         }
         else
         {
@@ -322,7 +320,7 @@ int main(int argc, char **argv)
         {
             RCLCPP_INFO(node->get_logger(), "\n********** NBV Baseline Iteration %ld **********", i);
 
-            auto plan = planPathsToViewpoint(reachable_viewpoints[i], moveit_interface, config, node->get_logger());
+            auto plan = planPathsToViewpoint(reachable_viewpoints[i], moveit_interface, config, node->get_logger(), config.hint_joint_configs);
             if (!plan)
             {
                 RCLCPP_WARN(node->get_logger(), "Failed to plan to the next viewpoint, skipping iteration...");
@@ -374,9 +372,9 @@ int main(int argc, char **argv)
                 if (visualizer)
                 {
                     visualizer->publishMatchResults(match_result, config.eval_threshold_radius * 2, 0.8f);
-                    visualizer->plotAllMetrics(all_metrics, config.metrics_plots_dir);
-                    visualizer->logAllMetricsToCSV(all_metrics, config.metrics_data_dir);
                 }
+                visualizer->plotAllMetrics(all_metrics, config.metrics_plots_dir);
+                visualizer->logAllMetricsToCSV(all_metrics, config.metrics_data_dir);
             }
 
             // Clear visualization
@@ -394,7 +392,7 @@ int main(int argc, char **argv)
         }
 
         // Return to initial joint configuration
-        moveit_interface->clearPathConstraints();
+        // moveit_interface->clearPathConstraints();
         RCLCPP_INFO(node->get_logger(), "\nReturning to initial joint configuration...");
         if (!moveit_interface->planAndExecute(config.init_joint_angles_rad))
         {

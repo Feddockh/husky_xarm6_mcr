@@ -112,14 +112,15 @@ namespace husky_xarm6_mcr_nbv_planner
                                 std::array<double, 4> &ee_orientation_out,
                                 const std::string &reference_frame = "") const;
 
-        // Advanced planning with multiple IK seeds and retry logic
-        // Returns the best plan found after trying multiple IK seeds and planners
+        // Advanced planning with multiple IK seeds and retry logic.
+        // hint_seeds are tried (in order) before jittered random seeds.
         bool planToTargetPoseWithRetries(const geometry_msgs::msg::Pose &target_ee_pose,
                                          moveit::planning_interface::MoveGroupInterface::Plan &best_plan_out,
                                          int num_ik_seeds = 5,
                                          int plans_per_seed = 1,
                                          double ik_timeout = 0.05,
-                                         int ik_attempts = 5);
+                                         int ik_attempts = 5,
+                                         const std::vector<std::vector<double>> &hint_seeds = {});
 
         // IK configuration
         double getIKTimeout() const;

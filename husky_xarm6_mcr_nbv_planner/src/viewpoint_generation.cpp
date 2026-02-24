@@ -887,8 +887,8 @@ namespace husky_xarm6_mcr_nbv_planner
 
                     if (!node)
                     {
-                        // Unknown voxel => volumetric uncertainty
-                        ray_gain += 1.0;
+                        // Unknown voxel => volumetric uncertainty weighted by (1 - beta)
+                        ray_gain += (1.0 - static_cast<double>(beta));
                         continue;
                     }
 
