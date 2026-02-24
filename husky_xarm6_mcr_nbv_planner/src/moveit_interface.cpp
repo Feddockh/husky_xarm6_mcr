@@ -231,6 +231,64 @@ namespace husky_xarm6_mcr_nbv_planner
         return planToJointGoal(joint_positions, plan) && execute(plan);
     }
 
+    bool MoveItInterface::planToJointStateWithRetries(const std::vector<double> &joint_positions,
+                                                      int num_attempts,
+                                                      int plans_per_attempt)
+    {
+        if (!validateJointPositions(joint_positions))
+            return false;
+
+        const double dt_sec = 0.02;
+        bool found_valid_plan = false;
+        double best_cost = std::numeric_limits<double>::infinity();
+        moveit::planning_interface::MoveGroupInterface::Plan best_plan;
+
+        RCLCPP_DEBUG(node_->get_logger(),
+                    "Planning to joint state with %d attempts x %d plans",
+                    num_attempts, plans_per_attempt);
+
+        for (int attempt = 0; attempt < num_attempts; ++attempt)
+        {
+            for (int p = 0; p < plans_per_attempt; ++p)
+            {
+                moveit::planning_interface::MoveGroupInterface::Plan plan;
+                if (!planToJointGoal(joint_positions, plan) ||
+                    plan.trajectory_.joint_trajectory.points.empty())
+                    continue;
+
+                ensureStrictlyIncreasingTime(plan.trajectory_.joint_trajectory, dt_sec);
+                double cost = computeJointSpacePathLength(plan.trajectory_.joint_trajectory);
+
+                if (!found_valid_plan || cost < best_cost)
+                {
+                    best_cost = cost;
+                    best_plan = plan;
+                    found_valid_plan = true;
+                    RCLCPP_DEBUG(node_->get_logger(),
+                                "Joint state plan: attempt %d/%d cost=%.3f",
+                                attempt, p, cost);
+                }
+            }
+
+            if (found_valid_plan && best_cost < 2.0)
+            {
+                RCLCPP_DEBUG(node_->get_logger(), "Found sufficiently good joint plan early, stopping search");
+                break;
+            }
+        }
+
+        if (!found_valid_plan)
+        {
+            RCLCPP_WARN(node_->get_logger(),
+                       "No valid plan found to joint state after %d attempts", num_attempts);
+            return false;
+        }
+
+        RCLCPP_INFO(node_->get_logger(),
+                   "Executing best joint state plan (cost=%.3f)", best_cost);
+        return execute(best_plan);
+    }
+
     std::vector<double> MoveItInterface::computeIK(const std::vector<double> &seed_positions,
                                                    const geometry_msgs::msg::Pose &target_pose,
                                                    double timeout, int attempts,
@@ -629,6 +687,19 @@ namespace husky_xarm6_mcr_nbv_planner
             move_group_->setMaxAccelerationScalingFactor(scale);
             RCLCPP_DEBUG(node_->get_logger(), "Set max acceleration scaling factor to: %.2f", scale);
         }
+    }
+
+    bool MoveItInterface::getCurrentEndEffectorPose(geometry_msgs::msg::Pose &pose_out)
+    {
+        // Use PSM-based getLinkPose — reads the cached planning scene state and does
+        // not wait for a fresh joint_states timestamp (avoids post-execution race condition).
+        const std::string ee_link = getEndEffectorLink();
+        if (ee_link.empty())
+        {
+            RCLCPP_ERROR(node_->get_logger(), "getCurrentEndEffectorPose: end effector link is empty");
+            return false;
+        }
+        return getLinkPose(ee_link, pose_out);
     }
 
     void MoveItInterface::setOrientationConstraints(const std::string& link_name,

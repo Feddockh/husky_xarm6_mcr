@@ -63,6 +63,11 @@ namespace husky_xarm6_mcr_nbv_planner
         // Combined plan and execute
         bool planAndExecute(const std::vector<double> &joint_positions);
 
+        // Plan to joint state with multiple attempts, execute the shortest path found
+        bool planToJointStateWithRetries(const std::vector<double> &joint_positions,
+                                         int num_attempts = 5,
+                                         int plans_per_attempt = 1);
+
         // Forward kinematics
         // Returns pose in reference_frame (default: robot base_link)
         bool getEndEffectorPose(const std::vector<double> &joint_positions,
@@ -72,6 +77,9 @@ namespace husky_xarm6_mcr_nbv_planner
         bool getEndEffectorPose(const std::vector<double> &joint_positions,
                                 geometry_msgs::msg::Pose &ee_pose_out,
                                 const std::string &reference_frame = "") const;
+
+        // Returns the current EE pose directly from MoveGroup (no FK needed)
+        bool getCurrentEndEffectorPose(geometry_msgs::msg::Pose &pose_out);
 
         // Inverse kinematics
         // Target pose is interpreted in reference_frame (default: robot base_link)

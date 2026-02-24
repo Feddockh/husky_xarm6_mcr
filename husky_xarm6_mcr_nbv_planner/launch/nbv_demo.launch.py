@@ -131,14 +131,14 @@ def launch_setup(context, *args, **kwargs):
         # Manipulation Parameters
         'planning_pipeline_id': 'ompl',
         'planner_id': 'RRTConnect',
-        'planning_time': 1.0,
-        'num_planning_attempts': 5,
+        'planning_time': 0.5,
+        'num_planning_attempts': 2,
         'max_velocity_scaling_factor': 0.2,
         'max_acceleration_scaling_factor': 0.2,
         'num_ik_seeds': 10,
         'plans_per_seed': 1,
         'ik_timeout': 0.01,
-        'ik_attempts': 20,
+        'ik_attempts': 15,
 
         # Camera Parameters
         'capture_type': 'triggered',
@@ -573,10 +573,12 @@ def generate_launch_description():
         DeclareLaunchArgument('octomap_pointcloud_topic', default_value='/firefly_left/points2',
                               description='PointCloud2 topic for PointCloudUpdater'),
         DeclareLaunchArgument('octomap_bbx_min_x', default_value='-0.6'),
-        DeclareLaunchArgument('octomap_bbx_min_y', default_value='-1.6'),
+        # DeclareLaunchArgument('octomap_bbx_min_y', default_value='-1.6'),
+        DeclareLaunchArgument('octomap_bbx_min_y', default_value='-1.3'), # Lab tree
         DeclareLaunchArgument('octomap_bbx_min_z', default_value='0.0'),
         DeclareLaunchArgument('octomap_bbx_max_x', default_value='0.6'),
-        DeclareLaunchArgument('octomap_bbx_max_y', default_value='-0.4'),
+        # DeclareLaunchArgument('octomap_bbx_max_y', default_value='-0.4'),
+        DeclareLaunchArgument('octomap_bbx_max_y', default_value='-0.7'), # Lab tree
         DeclareLaunchArgument('octomap_bbx_max_z', default_value='2.0'),
         DeclareLaunchArgument('semantic_confidence_boost', default_value='0.1',
                               description='Confidence boost for semantic occupancy updates'),

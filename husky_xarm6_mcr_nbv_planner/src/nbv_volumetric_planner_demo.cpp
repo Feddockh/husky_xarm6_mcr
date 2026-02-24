@@ -155,7 +155,7 @@ int main(int argc, char **argv)
 
         // Move to initial joint configuration
         RCLCPP_DEBUG(node->get_logger(), "\nMoving to initial joint configuration...");
-        if (!moveit_interface->planAndExecute(config.init_joint_angles_rad))
+        if (!moveit_interface->planToJointStateWithRetries(config.init_joint_angles_rad))
         {
             RCLCPP_ERROR(node->get_logger(), "Failed to move to initial joint configuration");
             rclcpp::shutdown();
@@ -173,10 +173,21 @@ int main(int argc, char **argv)
         }
 
         // Set orientation constraints (±90 degrees tolerance)
-        moveit_interface->setOrientationConstraints(
-            config.camera_optical_link,
-            arrayToQuaternion(init_cam_orientation),
-            M_PI / 2, M_PI / 2, M_PI / 2);
+        // Read current EE pose directly — arm is already at init config, no FK race condition
+        geometry_msgs::msg::Pose init_ee_pose;
+        if (moveit_interface->getCurrentEndEffectorPose(init_ee_pose))
+        {
+            moveit_interface->setOrientationConstraints(
+                moveit_interface->getEndEffectorLink(),
+                init_ee_pose.orientation,
+                M_PI / 2, M_PI / 2, M_PI / 2);
+        }
+        else
+        {
+            RCLCPP_ERROR(node->get_logger(), "Failed to get current end-effector pose for orientation constraints");
+            rclcpp::shutdown();
+            return 1;
+        }
 
         // Wait for initial octomap (fresh after clear)
         waitForOctomap(node, octomap_interface, trigger_clients, config, node->get_logger());
@@ -478,7 +489,7 @@ int main(int argc, char **argv)
         // Return to initial joint configuration
         // moveit_interface->clearPathConstraints();
         RCLCPP_INFO(node->get_logger(), "\nReturning to initial joint configuration...");
-        if (!moveit_interface->planAndExecute(config.init_joint_angles_rad))
+        if (!moveit_interface->planToJointStateWithRetries(config.init_joint_angles_rad))
         {
             RCLCPP_ERROR(node->get_logger(), "Failed to move to initial joint configuration");
             rclcpp::shutdown();

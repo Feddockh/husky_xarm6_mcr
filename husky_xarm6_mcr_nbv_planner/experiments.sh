@@ -36,7 +36,8 @@ LAUNCH="ros2 launch husky_xarm6_mcr_nbv_planner nbv_demo.launch.py"
 # Volumetric planner
 # ==============================================================================
 # Run 10 times to average out randomness
-$LAUNCH $COMMON $VOL_DEFAULTS metrics_dir:=metrics/volumetric run:=best_results_lab_p2 n_runs:=10
+# $LAUNCH $COMMON $VOL_DEFAULTS metrics_dir:=metrics/volumetric run:=best_results_lab_v3 n_runs:=10
+$LAUNCH $COMMON $VOL_DEFAULTS metrics_dir:=metrics/volumetric run:=best_results_lab_smaller_bbox_v2 n_runs:=10
 
 # # Volumetric — semantic_confidence_boost x semantic_mismatch_penalty grid
 # for boost in 0.1 0.2 0.3; do

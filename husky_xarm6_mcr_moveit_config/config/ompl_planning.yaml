@@ -123,6 +123,9 @@ planner_configs:
 
 xarm6_manipulator: # Has to match in the srdf file
   default_planner_config: RRTConnect
+  longest_valid_segment_fraction: 0.001  # finer constraint checking along interpolated segments (very important for constrained planning)
+  enforce_constrained_state_space: true  # use constrained sampler when path constraints are set (very important for constrained planning)
+  projection_evaluator: joints(xarm/xarm6_joint1,xarm/xarm6_joint2) # Recommended for enforcing the constrained state space
   planner_configs:
     - SBL
     - EST
