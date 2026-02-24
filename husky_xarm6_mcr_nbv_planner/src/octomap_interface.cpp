@@ -11,6 +11,8 @@
 #include <fstream>
 #include <queue>
 #include <set>
+#include <sstream>
+#include <stdexcept>
 #include <unordered_set>
 
 namespace husky_xarm6_mcr_nbv_planner
@@ -827,6 +829,38 @@ namespace husky_xarm6_mcr_nbv_planner
             RCLCPP_WARN(node_->get_logger(), 
                 "Frame IDs not available (GT: '%s', octomap: '%s') - assuming same frame",
                 gt_frame_id_.c_str(), octomap_frame.c_str());
+        }
+
+        // Warn about any GT points that fall outside the octomap bounding box.
+        // These can never produce a match and almost certainly indicate a frame or
+        // configuration mistake.
+        {
+            std::shared_lock lk(mtx_);
+            if (has_valid_bbox_)
+            {
+                for (const auto &gt_pt : transformed_gt_points)
+                {
+                    const auto &p = gt_pt.position;
+                    if (p.x() < bbox_min_.x() || p.x() > bbox_max_.x() ||
+                        p.y() < bbox_min_.y() || p.y() > bbox_max_.y() ||
+                        p.z() < bbox_min_.z() || p.z() > bbox_max_.z())
+                    {
+                        const std::string msg = [&] {
+                            std::ostringstream oss;
+                            oss << "Ground truth point (class " << gt_pt.class_id << ") ["
+                                << p.x() << ", " << p.y() << ", " << p.z()
+                                << "] is OUTSIDE the octomap bounding box ["
+                                << bbox_min_.x() << "," << bbox_min_.y() << "," << bbox_min_.z()
+                                << "] -> ["
+                                << bbox_max_.x() << "," << bbox_max_.y() << "," << bbox_max_.z()
+                                << "]. Check GT frame_id / transform.";
+                            return oss.str();
+                        }();
+                        RCLCPP_FATAL(node_->get_logger(), "%s", msg.c_str());
+                        throw std::runtime_error(msg);
+                    }
+                }
+            }
         }
 
         if (verbose)

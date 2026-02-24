@@ -4,9 +4,15 @@
 #include <moveit/move_group_interface/move_group_interface.h>
 #include <moveit/planning_scene_monitor/planning_scene_monitor.h>
 #include <geometry_msgs/msg/pose.hpp>
+#include <geometry_msgs/msg/point.hpp>
+#include <moveit_msgs/msg/constraints.hpp>
+#include <moveit_msgs/msg/orientation_constraint.hpp>
+#include <moveit_msgs/msg/position_constraint.hpp>
+#include <shape_msgs/msg/solid_primitive.hpp>
 #include <Eigen/Geometry>
 #include <vector>
 #include <random>
+#include <limits>
 
 namespace husky_xarm6_mcr_nbv_planner
 {
@@ -14,6 +20,9 @@ namespace husky_xarm6_mcr_nbv_planner
     class MoveItInterface
     {
     public:
+        /// Sentinel value — pass for any constraint tolerance to leave that axis unconstrained.
+        static constexpr double UNCONSTRAINED = std::numeric_limits<double>::quiet_NaN();
+
         MoveItInterface(const std::shared_ptr<rclcpp::Node> &node, const std::string &group_name);
 
         // Validation methods
@@ -151,9 +160,21 @@ namespace husky_xarm6_mcr_nbv_planner
         void setMaxAccelerationScalingFactor(double scale);
 
         // Path constraints
-        void setOrientationConstraints(const std::string& link_name, 
-                                      const geometry_msgs::msg::Quaternion& target_orientation,
-                                      double tolerance_roll, double tolerance_pitch, double tolerance_yaw);
+        // Pass UNCONSTRAINED (NaN) for any tolerance to leave that axis unconstrained.
+        void setOrientationConstraints(const std::string& link_name,
+                                       const geometry_msgs::msg::Quaternion& target_orientation,
+                                       double tolerance_roll  = UNCONSTRAINED,
+                                       double tolerance_pitch = UNCONSTRAINED,
+                                       double tolerance_yaw   = UNCONSTRAINED);
+
+        // Constrain the EE position to an axis-aligned bounding box.
+        // Pass UNCONSTRAINED (NaN) for any bound to leave that side unbounded.
+        // e.g. setPositionConstraints(link, NaN, NaN, 0.0, NaN, NaN, NaN)  → only Y >= 0
+        void setPositionConstraints(const std::string& link_name,
+                                    double x_min = UNCONSTRAINED, double x_max = UNCONSTRAINED,
+                                    double y_min = UNCONSTRAINED, double y_max = UNCONSTRAINED,
+                                    double z_min = UNCONSTRAINED, double z_max = UNCONSTRAINED);
+
         void clearPathConstraints();
 
         // Frame configuration

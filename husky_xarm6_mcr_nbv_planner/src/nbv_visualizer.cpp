@@ -1176,6 +1176,21 @@ namespace husky_xarm6_mcr_nbv_planner
         visualization_msgs::msg::MarkerArray marker_array;
         auto stamp = node_->now();
 
+        // Delete all previous markers in this namespace (sphere and text) before
+        // publishing new ones. Without this, a GT point that changes category
+        // between calls (e.g., correct → missed) retains a stale color because its
+        // sequential marker ID changes — the old marker just stays in RViz.
+        for (const auto &clear_ns : {ns, ns + "_text"})
+        {
+            visualization_msgs::msg::Marker del;
+            del.header.frame_id = viz_frame;
+            del.header.stamp = stamp;
+            del.ns = clear_ns;
+            del.id = 0;
+            del.action = visualization_msgs::msg::Marker::DELETEALL;
+            marker_array.markers.push_back(del);
+        }
+
         // Create individual sphere markers for each point (to support per-point colors)
         for (size_t i = 0; i < points.size(); ++i)
         {
@@ -1715,19 +1730,19 @@ namespace husky_xarm6_mcr_nbv_planner
         try
         {
             // Write CSV header
-            csv_file << "Run,Time,Occupied_Voxels,Free_Voxels,Total_Voxels,Coverage_Percent,Class_ID,TP_Clusters,FP_Clusters,TP_Points,FN_Points,Precision,Recall,F1_Score\n";
+            csv_file << "Viewpoint,Time,Occupied_Voxels,Free_Voxels,Total_Voxels,Coverage_Percent,Class_ID,TP_Clusters,FP_Clusters,TP_Points,FN_Points,Precision,Recall,F1_Score\n";
 
             // Write data for each run and class
-            for (size_t run_idx = 0; run_idx < all_metrics.size(); ++run_idx)
+            for (size_t vp_idx = 0; vp_idx < all_metrics.size(); ++vp_idx)
             {
-                const auto &eval_metrics = all_metrics[run_idx];
+                const auto &eval_metrics = all_metrics[vp_idx];
                 
                 // If there are class metrics, write one row per class
                 if (!eval_metrics.class_metrics.empty())
                 {
                     for (const auto &class_metrics : eval_metrics.class_metrics)
                     {
-                        csv_file << run_idx << ","
+                        csv_file << vp_idx << ","
                                  << std::fixed << std::setprecision(3) << eval_metrics.time << ","
                                  << eval_metrics.occupied_voxels << ","
                                  << eval_metrics.free_voxels << ","
@@ -1746,7 +1761,7 @@ namespace husky_xarm6_mcr_nbv_planner
                 else
                 {
                     // If no class metrics, still log voxel and coverage data
-                    csv_file << run_idx << ","
+                    csv_file << vp_idx << ","
                              << std::fixed << std::setprecision(3) << eval_metrics.time << ","
                              << eval_metrics.occupied_voxels << ","
                              << eval_metrics.free_voxels << ","

@@ -132,13 +132,13 @@ def launch_setup(context, *args, **kwargs):
         'planning_pipeline_id': 'ompl',
         'planner_id': 'RRTConnect',
         'planning_time': 0.5,
-        'num_planning_attempts': 2,
+        'num_planning_attempts': 1,
         'max_velocity_scaling_factor': 0.2,
         'max_acceleration_scaling_factor': 0.2,
         'num_ik_seeds': 10,
         'plans_per_seed': 1,
         'ik_timeout': 0.01,
-        'ik_attempts': 15,
+        'ik_attempts': 10,
 
         # Camera Parameters
         'capture_type': 'triggered',
@@ -524,7 +524,7 @@ def generate_launch_description():
                               description='Path to the ground truth points YAML file for semantic evaluation'),
         DeclareLaunchArgument('enable_evaluation', default_value='true',
                               description='Enable semantic octomap evaluation against ground truth'),
-        DeclareLaunchArgument('eval_threshold_radius', default_value='0.1',
+        DeclareLaunchArgument('eval_threshold_radius', default_value='0.12',
                               description='Threshold radius (meters) for matching clusters to ground truth points'),
         DeclareLaunchArgument('metrics_dir', default_value='metrics',
                               description='Directory for saving metrics (plots and CSV data)'),
@@ -574,11 +574,11 @@ def generate_launch_description():
                               description='PointCloud2 topic for PointCloudUpdater'),
         DeclareLaunchArgument('octomap_bbx_min_x', default_value='-0.6'),
         # DeclareLaunchArgument('octomap_bbx_min_y', default_value='-1.6'),
-        DeclareLaunchArgument('octomap_bbx_min_y', default_value='-1.3'), # Lab tree
+        DeclareLaunchArgument('octomap_bbx_min_y', default_value='-1.4'), # Lab tree
         DeclareLaunchArgument('octomap_bbx_min_z', default_value='0.0'),
         DeclareLaunchArgument('octomap_bbx_max_x', default_value='0.6'),
         # DeclareLaunchArgument('octomap_bbx_max_y', default_value='-0.4'),
-        DeclareLaunchArgument('octomap_bbx_max_y', default_value='-0.7'), # Lab tree
+        DeclareLaunchArgument('octomap_bbx_max_y', default_value='-0.6'), # Lab tree
         DeclareLaunchArgument('octomap_bbx_max_z', default_value='2.0'),
         DeclareLaunchArgument('semantic_confidence_boost', default_value='0.1',
                               description='Confidence boost for semantic occupancy updates'),

@@ -328,17 +328,17 @@ int main(int argc, char **argv)
             Eigen::Quaterniond init_cam_quat_map = Eigen::Quaterniond(transform_eigen.rotation()) * geometry_utils::arrayToEigenQuat(init_cam_orientation);
             auto [plane_viewpoints, coverage_planes_map] = generateViewpointsFromPlane(
                 plane_corners_map, distance, init_cam_quat_map, config.viewpoint_overlap_ratio, config.camera_horizontal_fov_rad, config.camera_vertical_fov_rad);
-            if (visualizer)
-            {
-                RCLCPP_DEBUG(node->get_logger(), "Publishing coverage planes for visualization");
-                for (size_t i = 0; i < coverage_planes_map.size(); ++i)
-                {
-                    std_msgs::msg::ColorRGBA coverage_color;
-                    coverage_color.r = 0.0f; coverage_color.g = 0.5f; coverage_color.b = 1.0f; coverage_color.a = 0.3f;
-                    visualizer->publishPlane(coverage_planes_map[i], "coverage_" + std::to_string(i), 0.01, coverage_color);
-                    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-                }
-            }
+            // if (visualizer)
+            // {
+            //     RCLCPP_DEBUG(node->get_logger(), "Publishing coverage planes for visualization");
+            //     for (size_t i = 0; i < coverage_planes_map.size(); ++i)
+            //     {
+            //         std_msgs::msg::ColorRGBA coverage_color;
+            //         coverage_color.r = 0.0f; coverage_color.g = 0.5f; coverage_color.b = 1.0f; coverage_color.a = 0.3f;
+            //         visualizer->publishPlane(coverage_planes_map[i], "coverage_" + std::to_string(i), 0.01, coverage_color);
+            //         std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            //     }
+            // }
             // Generate a spherical cap of viewpoints
             auto spherical_cap_viewpoints = generateSphericalCaps(plane_viewpoints, init_cam_orientation,
                 config.cap_max_theta_rad, config.cap_min_theta_rad);

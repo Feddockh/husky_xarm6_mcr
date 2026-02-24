@@ -702,28 +702,181 @@ namespace husky_xarm6_mcr_nbv_planner
         return getLinkPose(ee_link, pose_out);
     }
 
-    void MoveItInterface::setOrientationConstraints(const std::string& link_name,
-                                                    const geometry_msgs::msg::Quaternion& target_orientation,
-                                                    double tolerance_roll, double tolerance_pitch, double tolerance_yaw)
+    void MoveItInterface::setOrientationConstraints(
+        const std::string& link_name,
+        const geometry_msgs::msg::Quaternion& target_orientation,
+        double tolerance_roll,
+        double tolerance_pitch,
+        double tolerance_yaw)
     {
         if (!isMoveGroupValid())
             return;
 
+        // MoveIt expects tolerances in [0, pi]. Using pi means "no constraint" on that axis.
+        auto sanitize_tol = [](double t) -> double {
+            if (!std::isfinite(t) || t <= 0.0) return M_PI;      // unconstrained
+            return std::min(t, M_PI);
+        };
+
+        const double tol_x = sanitize_tol(tolerance_roll);
+        const double tol_y = sanitize_tol(tolerance_pitch);
+        const double tol_z = sanitize_tol(tolerance_yaw);
+
+        // Normalize quaternion (important for constraint projection).
+        Eigen::Quaterniond q(target_orientation.w,
+                            target_orientation.x,
+                            target_orientation.y,
+                            target_orientation.z);
+        if (!std::isfinite(q.w()) || !std::isfinite(q.x()) || !std::isfinite(q.y()) || !std::isfinite(q.z()) ||
+            q.norm() < 1e-9)
+        {
+            RCLCPP_WARN(node_->get_logger(),
+                        "setOrientationConstraints: invalid quaternion for link '%s' — skipping",
+                        link_name.c_str());
+            return;
+        }
+        q.normalize();
+
+        geometry_msgs::msg::Quaternion q_msg;
+        q_msg.w = q.w(); q_msg.x = q.x(); q_msg.y = q.y(); q_msg.z = q.z();
+
+        // IMPORTANT: Use planning frame for constraints unless you *explicitly* know another frame is correct.
+        const std::string frame_id = move_group_->getPlanningFrame();
+
         moveit_msgs::msg::OrientationConstraint ocm;
         ocm.link_name = link_name;
-        ocm.header.frame_id = getPoseReferenceFrame();
-        ocm.orientation = target_orientation;
-        ocm.absolute_x_axis_tolerance = tolerance_roll;
-        ocm.absolute_y_axis_tolerance = tolerance_pitch;
-        ocm.absolute_z_axis_tolerance = tolerance_yaw;
+        ocm.header.frame_id = frame_id;
+        ocm.orientation = q_msg;
+        ocm.absolute_x_axis_tolerance = tol_x;
+        ocm.absolute_y_axis_tolerance = tol_y;
+        ocm.absolute_z_axis_tolerance = tol_z;
         ocm.weight = 1.0;
 
-        moveit_msgs::msg::Constraints constraints;
-        constraints.orientation_constraints.push_back(ocm);
+        // Merge with existing constraints, but REPLACE any existing orientation constraints for this link.
+        moveit_msgs::msg::Constraints constraints = move_group_->getPathConstraints();
+
+        constraints.orientation_constraints.erase(
+            std::remove_if(constraints.orientation_constraints.begin(),
+                        constraints.orientation_constraints.end(),
+                        [&](const auto& c){ return c.link_name == link_name; }),
+            constraints.orientation_constraints.end());
+
+        // If all axes are effectively unconstrained, don't add anything.
+        const bool unconstrained =
+            (tol_x >= M_PI - 1e-9) && (tol_y >= M_PI - 1e-9) && (tol_z >= M_PI - 1e-9);
+
+        if (!unconstrained)
+            constraints.orientation_constraints.push_back(ocm);
+
         move_group_->setPathConstraints(constraints);
 
-        RCLCPP_DEBUG(node_->get_logger(), "Set orientation constraints for link '%s' with tolerances [R:%.2f, P:%.2f, Y:%.2f] rad",
-                    link_name.c_str(), tolerance_roll, tolerance_pitch, tolerance_yaw);
+        RCLCPP_DEBUG(node_->get_logger(),
+                    "Orientation constraints for '%s' in frame '%s' tol=[x:%.3f y:%.3f z:%.3f]",
+                    link_name.c_str(), frame_id.c_str(), tol_x, tol_y, tol_z);
+    }
+
+    void MoveItInterface::setPositionConstraints(
+        const std::string& link_name,
+        double x_min, double x_max,
+        double y_min, double y_max,
+        double z_min, double z_max)
+    {
+        if (!isMoveGroupValid())
+            return;
+
+        auto is_unconstrained = [](double v) { return !std::isfinite(v); };
+
+        // If every bound is unconstrained, remove any existing position constraint for this link and return.
+        const bool all_uncon =
+            is_unconstrained(x_min) && is_unconstrained(x_max) &&
+            is_unconstrained(y_min) && is_unconstrained(y_max) &&
+            is_unconstrained(z_min) && is_unconstrained(z_max);
+
+        moveit_msgs::msg::Constraints constraints = move_group_->getPathConstraints();
+
+        // Always REPLACE existing position constraints for this link.
+        constraints.position_constraints.erase(
+            std::remove_if(constraints.position_constraints.begin(),
+                        constraints.position_constraints.end(),
+                        [&](const auto& c){ return c.link_name == link_name; }),
+            constraints.position_constraints.end());
+
+        if (all_uncon)
+        {
+            move_group_->setPathConstraints(constraints);
+            RCLCPP_DEBUG(node_->get_logger(),
+                        "setPositionConstraints: all unconstrained — removed any existing constraint for '%s'",
+                        link_name.c_str());
+            return;
+        }
+
+        // Replace unconstrained sides with large bounds.
+        // NOTE: This is still a box constraint (PositionConstraint only supports regions),
+        // but we avoid pathological huge numbers.
+        constexpr double WS = 5.0;  // meters
+        if (is_unconstrained(x_min)) x_min = -WS;
+        if (is_unconstrained(x_max)) x_max =  WS;
+        if (is_unconstrained(y_min)) y_min = -WS;
+        if (is_unconstrained(y_max)) y_max =  WS;
+        if (is_unconstrained(z_min)) z_min = -WS;
+        if (is_unconstrained(z_max)) z_max =  WS;
+
+        // Ensure ordering and non-degenerate sizes.
+        auto fix_bounds = [](double& mn, double& mx, const char* axis, rclcpp::Logger logger){
+            if (!std::isfinite(mn) || !std::isfinite(mx))
+                return;
+            if (mn > mx) std::swap(mn, mx);
+            if (std::abs(mx - mn) < 1e-6)
+            {
+                // Expand a tiny bit to avoid zero-size primitive.
+                const double c = 0.5 * (mn + mx);
+                mn = c - 5e-4;
+                mx = c + 5e-4;
+                RCLCPP_WARN(logger, "setPositionConstraints: %s bounds were degenerate; expanded slightly", axis);
+            }
+        };
+
+        fix_bounds(x_min, x_max, "x", node_->get_logger());
+        fix_bounds(y_min, y_max, "y", node_->get_logger());
+        fix_bounds(z_min, z_max, "z", node_->get_logger());
+
+        const double cx = 0.5 * (x_min + x_max);
+        const double cy = 0.5 * (y_min + y_max);
+        const double cz = 0.5 * (z_min + z_max);
+        const double sx = std::max(x_max - x_min, 1e-4);
+        const double sy = std::max(y_max - y_min, 1e-4);
+        const double sz = std::max(z_max - z_min, 1e-4);
+
+        moveit_msgs::msg::PositionConstraint pcm;
+        pcm.header.frame_id = move_group_->getPlanningFrame();  // match the planning frame
+        pcm.link_name = link_name;
+        pcm.weight = 1.0;
+
+        shape_msgs::msg::SolidPrimitive box;
+        box.type = shape_msgs::msg::SolidPrimitive::BOX;
+        box.dimensions.resize(3);
+        box.dimensions[shape_msgs::msg::SolidPrimitive::BOX_X] = sx;
+        box.dimensions[shape_msgs::msg::SolidPrimitive::BOX_Y] = sy;
+        box.dimensions[shape_msgs::msg::SolidPrimitive::BOX_Z] = sz;
+
+        geometry_msgs::msg::Pose box_pose;
+        box_pose.position.x = cx;
+        box_pose.position.y = cy;
+        box_pose.position.z = cz;
+        box_pose.orientation.w = 1.0;
+
+        pcm.constraint_region.primitives.clear();
+        pcm.constraint_region.primitive_poses.clear();
+        pcm.constraint_region.primitives.push_back(box);
+        pcm.constraint_region.primitive_poses.push_back(box_pose);
+
+        constraints.position_constraints.push_back(pcm);
+        move_group_->setPathConstraints(constraints);
+
+        RCLCPP_DEBUG(node_->get_logger(),
+                    "Position constraint for '%s' frame '%s': x=[%.3f, %.3f] y=[%.3f, %.3f] z=[%.3f, %.3f]",
+                    link_name.c_str(), pcm.header.frame_id.c_str(),
+                    x_min, x_max, y_min, y_max, z_min, z_max);
     }
 
     void MoveItInterface::clearPathConstraints()

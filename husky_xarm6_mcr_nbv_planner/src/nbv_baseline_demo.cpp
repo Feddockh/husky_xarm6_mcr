@@ -177,10 +177,8 @@ int main(int argc, char **argv)
         geometry_msgs::msg::Pose init_ee_pose;
         if (moveit_interface->getCurrentEndEffectorPose(init_ee_pose))
         {
-            moveit_interface->setOrientationConstraints(
-                moveit_interface->getEndEffectorLink(),
-                init_ee_pose.orientation,
-                M_PI / 2, M_PI / 2, M_PI / 2);
+            moveit_interface->setOrientationConstraints(moveit_interface->getEndEffectorLink(),
+                init_ee_pose.orientation, M_PI/2, M_PI/2, M_PI/2);
         }
         else
         {
@@ -188,6 +186,12 @@ int main(int argc, char **argv)
             rclcpp::shutdown();
             return 1;
         }
+
+        // Keep EE in front of robot (Y ≥ 0), all other axes free
+        moveit_interface->setPositionConstraints(moveit_interface->getEndEffectorLink(),
+            MoveItInterface::UNCONSTRAINED, MoveItInterface::UNCONSTRAINED,   // x
+            MoveItInterface::UNCONSTRAINED, MoveItInterface::UNCONSTRAINED,   // y
+            MoveItInterface::UNCONSTRAINED, MoveItInterface::UNCONSTRAINED);  // z
 
         // Wait for initial octomap (fresh after clear)
         waitForOctomap(node, octomap_interface, trigger_clients, config, node->get_logger());
@@ -284,20 +288,20 @@ int main(int argc, char **argv)
             plane_corners_map, distance, init_cam_quat_map,
             config.viewpoint_overlap_ratio, config.camera_horizontal_fov_rad, config.camera_vertical_fov_rad);
 
-        if (visualizer)
-        {
-            RCLCPP_DEBUG(node->get_logger(), "Publishing coverage planes for visualization");
-            for (size_t i = 0; i < coverage_planes_map.size(); ++i)
-            {
-                std_msgs::msg::ColorRGBA coverage_color;
-                coverage_color.r = 0.0f;
-                coverage_color.g = 0.5f;
-                coverage_color.b = 1.0f;
-                coverage_color.a = 0.3f;
-                visualizer->publishPlane(coverage_planes_map[i], "coverage_" + std::to_string(i), 0.01, coverage_color);
-                std::this_thread::sleep_for(std::chrono::milliseconds(50));
-            }
-        }
+        // if (visualizer)
+        // {
+        //     RCLCPP_DEBUG(node->get_logger(), "Publishing coverage planes for visualization");
+        //     for (size_t i = 0; i < coverage_planes_map.size(); ++i)
+        //     {
+        //         std_msgs::msg::ColorRGBA coverage_color;
+        //         coverage_color.r = 0.0f;
+        //         coverage_color.g = 0.5f;
+        //         coverage_color.b = 1.0f;
+        //         coverage_color.a = 0.3f;
+        //         visualizer->publishPlane(coverage_planes_map[i], "coverage_" + std::to_string(i), 0.01, coverage_color);
+        //         std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        //     }
+        // }
 
         auto all_viewpoints = all_viewpoints_map; // Since frames are aligned
 

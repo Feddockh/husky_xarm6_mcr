@@ -4,7 +4,7 @@ set -e
 # Simulation Common
 # COMMON="use_sim_time:=true use_gazebo:=true visualize:=false keep_alive:=false gt_points_file:=sim_aruco_gt_points.yaml detection_model_trt:=best_sim_seg_v2.plan"
 # Lab Common
-COMMON="use_sim_time:=false use_gazebo:=false visualize:=false keep_alive:=false gt_points_file:=aruco_gt_points_lab.yaml detection_model_trt:=best_lab_seg_v2.plan"
+COMMON="use_sim_time:=false use_gazebo:=false visualize:=true keep_alive:=false gt_points_file:=aruco_gt_points_lab.yaml detection_model_trt:=best_lab_seg_v2.plan"
 VOL_DEFAULTS="planner_type:=volumetric alpha_cost_weight:=0.1 beta_semantic_weight:=0.5 camera_max_range:=0.9 conf_thresh:=0.3 octomap_resolution:=0.04 semantic_confidence_boost:=0.3 semantic_mismatch_penalty:=0.2"
 SEM_DEFAULTS="planner_type:=semantic alpha_cost_weight:=0.1 beta_semantic_weight:=0.5 camera_max_range:=0.9 conf_thresh:=0.3 octomap_resolution:=0.04 semantic_confidence_boost:=0.3 semantic_mismatch_penalty:=0.2"
 
@@ -14,7 +14,7 @@ LAUNCH="ros2 launch husky_xarm6_mcr_nbv_planner nbv_demo.launch.py"
 # Baseline — semantic_confidence_boost x semantic_mismatch_penalty grid
 # ==============================================================================
 # # Run 10 times to average out randomness
-# $LAUNCH $COMMON planner_type:=baseline camera_max_range:=0.9 conf_thresh:=0.3 octomap_resolution:=0.04 semantic_confidence_boost:=0.3 semantic_mismatch_penalty:=0.2 metrics_dir:=metrics/baseline run:=best_results_lab n_runs:=10
+# $LAUNCH $COMMON planner_type:=baseline camera_max_range:=0.9 conf_thresh:=0.3 octomap_resolution:=0.04 semantic_confidence_boost:=0.3 semantic_mismatch_penalty:=0.2 metrics_dir:=metrics/final_runs run:=baseline n_runs:=10
 
 # for boost in 0.1 0.2 0.3; do
 #     for penalty in 0.1 0.2 0.3; do
@@ -36,8 +36,7 @@ LAUNCH="ros2 launch husky_xarm6_mcr_nbv_planner nbv_demo.launch.py"
 # Volumetric planner
 # ==============================================================================
 # Run 10 times to average out randomness
-# $LAUNCH $COMMON $VOL_DEFAULTS metrics_dir:=metrics/volumetric run:=best_results_lab_v3 n_runs:=10
-$LAUNCH $COMMON $VOL_DEFAULTS metrics_dir:=metrics/volumetric run:=best_results_lab_smaller_bbox_v2 n_runs:=10
+$LAUNCH $COMMON $VOL_DEFAULTS metrics_dir:=metrics/final_runs run:=volumetric n_runs:=10
 
 # # Volumetric — semantic_confidence_boost x semantic_mismatch_penalty grid
 # for boost in 0.1 0.2 0.3; do

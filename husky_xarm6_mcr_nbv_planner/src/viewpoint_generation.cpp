@@ -677,7 +677,7 @@ namespace husky_xarm6_mcr_nbv_planner
 
         int total_unknown = 0;
         int num_rays_cast = 0;
-        int point_id = 0; // Counter for unique point marker IDs
+        // int point_id = 0; // Counter for unique point marker IDs
 
         for (int v = 0; v < height; v += stride_v)
         {
