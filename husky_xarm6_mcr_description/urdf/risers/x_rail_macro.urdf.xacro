@@ -38,14 +38,14 @@
             <collision>
                 <origin xyz="${riser_x_origin} ${riser_y_offset} ${riser_z_origin + riser_z_offset + riser_z_size/2}" rpy="0 0 0"/>
                 <geometry>
-                    <box size="${riser_x_size} ${riser_y_size + riser_y_extension} ${riser_z_size}"/>
+                    <box size="${riser_x_size + 0.02} ${riser_y_size + riser_y_extension + 0.02} ${riser_z_size + 0.02}"/>
                 </geometry>
             </collision>
             <!-- Mounted battery collisions -->
             <collision>
                 <origin xyz="0 0 ${battery_z_origin}" rpy="0 0 0"/>
                 <geometry>
-                    <box size="${riser_x_size} ${riser_y_size} ${battery_z_size}"/>
+                    <box size="${riser_x_size + 0.02} ${riser_y_size + 0.02} ${battery_z_size + 0.02}"/>
                 </geometry>
             </collision>
             <inertial>
