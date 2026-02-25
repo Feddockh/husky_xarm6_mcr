@@ -177,10 +177,8 @@ int main(int argc, char **argv)
         geometry_msgs::msg::Pose init_ee_pose;
         if (moveit_interface->getCurrentEndEffectorPose(init_ee_pose))
         {
-            moveit_interface->setOrientationConstraints(
-                moveit_interface->getEndEffectorLink(),
-                init_ee_pose.orientation,
-                M_PI / 2, M_PI / 2, M_PI / 2);
+            moveit_interface->setOrientationConstraints(moveit_interface->getEndEffectorLink(),
+                init_ee_pose.orientation, M_PI/2, M_PI/2, M_PI/2);
         }
         else
         {
@@ -188,6 +186,12 @@ int main(int argc, char **argv)
             rclcpp::shutdown();
             return 1;
         }
+
+        // // Keep EE in front of robot (Y ≥ 0), all other axes free
+        // moveit_interface->setPositionConstraints(moveit_interface->getEndEffectorLink(),
+        //     MoveItInterface::UNCONSTRAINED, MoveItInterface::UNCONSTRAINED,   // x
+        //     MoveItInterface::UNCONSTRAINED, 0.0,   // y
+        //     MoveItInterface::UNCONSTRAINED, MoveItInterface::UNCONSTRAINED);  // z
 
         // Wait for initial octomap (fresh after clear)
         waitForOctomap(node, octomap_interface, trigger_clients, config, node->get_logger());
@@ -228,13 +232,8 @@ int main(int argc, char **argv)
             {
                 visualizer->publishMatchResults(match_result, config.eval_threshold_radius * 2, 0.8f);
             }
-
-            // These write into the per-run folders (if n_runs>1)
-            if (visualizer)
-            {
-                visualizer->plotAllMetrics(all_metrics, config.metrics_plots_dir);
-                visualizer->logAllMetricsToCSV(all_metrics, config.metrics_data_dir);
-            }
+            visualizer->plotAllMetrics(all_metrics, config.metrics_plots_dir);
+            visualizer->logAllMetricsToCSV(all_metrics, config.metrics_data_dir);
         }
         else
         {
@@ -304,9 +303,9 @@ int main(int argc, char **argv)
                 RCLCPP_WARN(node->get_logger(), "No frontier clusters found after clustering");
                 break;
             }
-            if (visualizer)
-                visualizer->publishClusteredVoxels(frontier_clusters, octomap_interface->getResolution(), 
-                    false, 0.8f, "frontier_clusters", moveit_interface->getPoseReferenceFrame());
+            // if (visualizer)
+            //     visualizer->publishClusteredVoxels(frontier_clusters, octomap_interface->getResolution(), 
+            //         false, 0.8f, "frontier_clusters", moveit_interface->getPoseReferenceFrame());
 
             // Generate viewpoints
             // // Generate spherical planar viewpoints

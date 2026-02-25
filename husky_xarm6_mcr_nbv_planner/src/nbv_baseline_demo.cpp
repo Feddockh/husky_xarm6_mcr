@@ -187,11 +187,11 @@ int main(int argc, char **argv)
             return 1;
         }
 
-        // Keep EE in front of robot (Y ≥ 0), all other axes free
-        moveit_interface->setPositionConstraints(moveit_interface->getEndEffectorLink(),
-            MoveItInterface::UNCONSTRAINED, MoveItInterface::UNCONSTRAINED,   // x
-            MoveItInterface::UNCONSTRAINED, MoveItInterface::UNCONSTRAINED,   // y
-            MoveItInterface::UNCONSTRAINED, MoveItInterface::UNCONSTRAINED);  // z
+        // // Keep EE in front of robot (Y ≥ 0), all other axes free
+        // moveit_interface->setPositionConstraints(moveit_interface->getEndEffectorLink(),
+        //     MoveItInterface::UNCONSTRAINED, MoveItInterface::UNCONSTRAINED,   // x
+        //     MoveItInterface::UNCONSTRAINED, 0.0,   // y
+        //     MoveItInterface::UNCONSTRAINED, MoveItInterface::UNCONSTRAINED);  // z
 
         // Wait for initial octomap (fresh after clear)
         waitForOctomap(node, octomap_interface, trigger_clients, config, node->get_logger());
@@ -232,8 +232,6 @@ int main(int argc, char **argv)
             {
                 visualizer->publishMatchResults(match_result, config.eval_threshold_radius * 2, 0.8f);
             }
-
-            // These write into the per-run folders (if n_runs>1)
             visualizer->plotAllMetrics(all_metrics, config.metrics_plots_dir);
             visualizer->logAllMetricsToCSV(all_metrics, config.metrics_data_dir);
         }

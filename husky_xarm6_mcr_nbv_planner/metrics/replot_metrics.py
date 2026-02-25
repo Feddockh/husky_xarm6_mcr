@@ -23,7 +23,6 @@ import argparse
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
-import matplotlib.cm as cm
 import numpy as np
 from pathlib import Path
 
@@ -157,14 +156,27 @@ def plot_metrics(
                              figsize=(10, 4 * n_metrics),
                              sharex=True, squeeze=False)
 
-    # Assign enough colors for all series — for non-avg studies each run gets its own color
+    # Fixed high-contrast palette — colors are perceptually distinct regardless of how
+    # many series are shown. Cycles if there are more than 8 series.
+    PALETTE = [
+        "#e6194b",  # red
+        "#3cb44b",  # green
+        "#4363d8",  # blue
+        "#f58231",  # orange
+        "#911eb4",  # purple
+        "#42d4f4",  # cyan
+        "#f032e6",  # magenta
+        "#bfef45",  # lime
+        "#fabed4",  # pink
+        "#469990",  # teal
+    ]
+
     n_study_series = sum(len(v) for v in study_data.values()) if study_data else 0
     n_series = len(run_data) + (len(study_data) if avg_studies else n_study_series)
-    colors = cm.tab10(np.linspace(0, 1, max(n_series, 1)))
 
     for ax, metric in zip(axes[:, 0], metrics):
         # Fresh iterator each subplot so every subplot uses the same color assignment
-        color_iter = iter(colors)
+        color_iter = (PALETTE[i % len(PALETTE)] for i in range(n_series))
 
         # ── Individual runs ──
         for run_name, df in run_data.items():
@@ -193,7 +205,7 @@ def plot_metrics(
                 ax.fill_between(x, y - err, y + err, color=color, alpha=0.2)
             else:
                 # Plot each run in the study individually with its own legend entry
-                run_colors = cm.tab10(np.linspace(0, 1, max(len(run_dfs), 1)))
+                run_colors = [PALETTE[i % len(PALETTE)] for i in range(len(run_dfs))]
                 for run_name, df, rc in zip(run_names, run_dfs, run_colors):
                     if metric not in df.columns:
                         continue

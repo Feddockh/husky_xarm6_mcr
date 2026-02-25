@@ -183,7 +183,8 @@ def launch_setup(context, *args, **kwargs):
         'beta_semantic_weight': float(LaunchConfiguration('beta_semantic_weight').perform(context)),
         'conf_thresh': float(LaunchConfiguration('conf_thresh').perform(context)),
         'semantic_confidence_boost': float(LaunchConfiguration('semantic_confidence_boost').perform(context)),
-        'semantic_mismatch_penalty': float(LaunchConfiguration('semantic_mismatch_penalty').perform(context)), 
+        'semantic_mismatch_penalty': float(LaunchConfiguration('semantic_mismatch_penalty').perform(context)),
+        'max_semantic_certainty': float(LaunchConfiguration('max_semantic_certainty').perform(context)), 
 
         # Viewpoint Parameters
         'plane_half_extent': 1.0,  # Not used in planner
@@ -492,11 +493,11 @@ def generate_launch_description():
         # NBV Planner Parameters
         DeclareLaunchArgument('max_iterations', default_value='100',
                               description='Maximum number of NBV planning iterations'),
-        DeclareLaunchArgument('min_information_gain', default_value='5.0',
-                              description='Minimum information gain threshold for termination'),
+        DeclareLaunchArgument('min_information_gain', default_value='1.0',
+                              description='Minimum information gain threshold for termination'), # Decreased from 5.0
         DeclareLaunchArgument('alpha_cost_weight', default_value='0.1',
                               description='Weight for cost in utility function (IG - alpha*cost)'),
-        DeclareLaunchArgument('beta_semantic_weight', default_value='0.5',
+        DeclareLaunchArgument('beta_semantic_weight', default_value='0.7',
                               description='Weight for semantic information in utility function'),
         DeclareLaunchArgument('num_viewpoints_per_frontier', default_value='7',
                               description='Number of viewpoint candidates per frontier cluster'),
@@ -575,7 +576,7 @@ def generate_launch_description():
         DeclareLaunchArgument('octomap_bbx_min_x', default_value='-0.6'),
         # DeclareLaunchArgument('octomap_bbx_min_y', default_value='-1.6'),
         DeclareLaunchArgument('octomap_bbx_min_y', default_value='-1.4'), # Lab tree
-        DeclareLaunchArgument('octomap_bbx_min_z', default_value='0.0'),
+        DeclareLaunchArgument('octomap_bbx_min_z', default_value='0.1'), # Increased this to avoid floor
         DeclareLaunchArgument('octomap_bbx_max_x', default_value='0.6'),
         # DeclareLaunchArgument('octomap_bbx_max_y', default_value='-0.4'),
         DeclareLaunchArgument('octomap_bbx_max_y', default_value='-0.6'), # Lab tree
@@ -584,5 +585,8 @@ def generate_launch_description():
                               description='Confidence boost for semantic occupancy updates'),
         DeclareLaunchArgument('semantic_mismatch_penalty', default_value='0.15',
                               description='Penalty for semantic label mismatches'),
+        DeclareLaunchArgument('max_semantic_certainty', default_value='1.0',
+                              description='Voxels with confidence above this threshold are considered '
+                                           'fully certain and excluded from uncertain voxel search'),
         OpaqueFunction(function=launch_setup),
     ])

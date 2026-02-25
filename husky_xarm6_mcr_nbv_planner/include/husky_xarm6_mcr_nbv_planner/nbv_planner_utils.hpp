@@ -79,6 +79,9 @@ struct NBVPlannerConfig
     double conf_thresh;
     double semantic_confidence_boost;
     double semantic_mismatch_penalty;
+    // Voxels with confidence above this are considered fully certain and are
+    // excluded from getUncertainVoxels (replaces conf_thresh + boost in that call)
+    double max_semantic_certainty;
 
     // Viewpoint Parameters
     double plane_half_extent;
@@ -210,6 +213,7 @@ NBVPlannerConfig loadConfiguration(const std::shared_ptr<rclcpp::Node> &node)
     config.conf_thresh = node->get_parameter("conf_thresh").as_double();
     config.semantic_confidence_boost = node->get_parameter("semantic_confidence_boost").as_double();
     config.semantic_mismatch_penalty = node->get_parameter("semantic_mismatch_penalty").as_double();
+    config.max_semantic_certainty = node->get_parameter("max_semantic_certainty").as_double();
 
     // Viewpoint Parameters
     config.plane_half_extent = node->get_parameter("plane_half_extent").as_double();
@@ -294,6 +298,7 @@ void printConfiguration(const NBVPlannerConfig &config, const rclcpp::Logger &lo
     RCLCPP_INFO(logger, "  Confidence threshold: %.4f", config.conf_thresh);
     RCLCPP_INFO(logger, "  Semantic confidence boost: %.4f", config.semantic_confidence_boost);
     RCLCPP_INFO(logger, "  Semantic mismatch penalty: %.4f", config.semantic_mismatch_penalty);
+    RCLCPP_INFO(logger, "  Max semantic certainty: %.4f", config.max_semantic_certainty);
 
     // Viewpoint Parameters
     RCLCPP_INFO(logger, "--- Viewpoints ---");
