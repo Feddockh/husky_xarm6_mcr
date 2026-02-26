@@ -7,6 +7,7 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_python REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(ros2_control REQUIRED)
 
@@ -14,11 +15,15 @@ install(DIRECTORY launch worlds models
   DESTINATION share/${PROJECT_NAME}
 )
 
-# Install Python scripts as executables
+# Install plain Python tools / node scripts as executables
 install(PROGRAMS
   tools/generate_aruco_models.py
+  husky_xarm6_mcr_gz/gazebo_viewpoint_capture_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
+
+# Install the Python package so the module is importable
+ament_python_install_package(${PROJECT_NAME})
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

@@ -8,6 +8,8 @@
   <license>MIT</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
+  <buildtool_depend>ament_python</buildtool_depend>
   <build_depend>controller_manager</build_depend>
   <build_depend>ros2_controllers</build_depend>
   <build_depend>joint_state_broadcaster</build_depend>
@@ -17,10 +19,28 @@
   <depend>ros2_control</depend>
   <depend>controller_manager_msgs</depend>
 
+  <!-- Python node: gazebo_viewpoint_capture_node -->
+  <depend>rclpy</depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_srvs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>cv_bridge</depend>
+  <depend>ros_gz_interfaces</depend>
+  <depend>tf2_ros</depend>
+  <depend>python3-numpy</depend>
+  <depend>python3-opencv</depend>
+  <depend>python3-yaml</depend>
+
+  <!-- Launch file deps -->
+  <depend>multi_camera_rig_description</depend>
+  <depend>multi_camera_rig_reconstruction</depend>
+  <depend>ros_gz_sim</depend>
+
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 
   <export>
-    <build_type>ament_cmake</build_type>
+    <!-- <build_type>ament_cmake</build_type> -->
+    <buildtool_type>ament_python</buildtool_type>
   </export>
 </package>
