@@ -196,7 +196,7 @@ def launch_setup(context, *args, **kwargs):
         'viewpoint_overlap_ratio': 0.42,
 
         # Debug Parameters
-        'visualize': LaunchConfiguration('visualize').perform(context).lower() == 'true',
+        'visualize': LaunchConfiguration('visualize_nbv').perform(context).lower() == 'true',
         'visualization_topic': LaunchConfiguration('visualization_topic').perform(context),
         'keep_alive': LaunchConfiguration('keep_alive').perform(context).lower() == 'true',
     }
@@ -481,7 +481,7 @@ def generate_launch_description():
                               description='Type of planner to use (e.g., baseline, volumetric)'),
         DeclareLaunchArgument('learn_workspace', default_value='false',
                               description='True to learn new workspace, False to load existing'),
-        DeclareLaunchArgument('visualize', default_value='true',
+        DeclareLaunchArgument('visualize_nbv', default_value='false',
                               description='Visualize nbv planner operation in RViz'),
         DeclareLaunchArgument('visualization_topic', default_value='nbv_planner_visualization',
                               description='Topic for workspace visualization markers'),
@@ -509,7 +509,7 @@ def generate_launch_description():
                               description='Camera scaled image width (pixels)'),
         DeclareLaunchArgument('camera_scaled_height', default_value='224',
                               description='Camera scaled image height (pixels)'),
-        DeclareLaunchArgument('camera_max_range', default_value='0.6',
+        DeclareLaunchArgument('camera_max_range', default_value='0.9',
                               description='Camera maximum sensing range (meters)'),
         DeclareLaunchArgument('num_camera_rays', default_value='25',
                               description='Number of rays for information gain computation'),
@@ -523,7 +523,7 @@ def generate_launch_description():
             description='Directory containing ground truth points YAML files for semantic evaluation'),
         DeclareLaunchArgument('gt_points_file', default_value='aruco_gt_points_lab.yaml',
                               description='Path to the ground truth points YAML file for semantic evaluation'),
-        DeclareLaunchArgument('enable_evaluation', default_value='true',
+        DeclareLaunchArgument('enable_evaluation', default_value='false',
                               description='Enable semantic octomap evaluation against ground truth'),
         DeclareLaunchArgument('eval_threshold_radius', default_value='0.12',
                               description='Threshold radius (meters) for matching clusters to ground truth points'),
@@ -559,7 +559,7 @@ def generate_launch_description():
                               description='Directory containing TensorRT engine (.plan) files'),
         DeclareLaunchArgument('detection_model_trt', default_value='best_lab_seg_v2.plan',
                               description='TensorRT engine file for YOLO detection model'),
-        DeclareLaunchArgument('conf_thresh', default_value='0.5',
+        DeclareLaunchArgument('conf_thresh', default_value='0.3',
                               description='Confidence threshold for YOLO detections'),
 
         # Octomap Parameters
@@ -581,9 +581,9 @@ def generate_launch_description():
         # DeclareLaunchArgument('octomap_bbx_max_y', default_value='-0.4'),
         DeclareLaunchArgument('octomap_bbx_max_y', default_value='-0.6'), # Lab tree
         DeclareLaunchArgument('octomap_bbx_max_z', default_value='2.0'),
-        DeclareLaunchArgument('semantic_confidence_boost', default_value='0.1',
+        DeclareLaunchArgument('semantic_confidence_boost', default_value='0.3',
                               description='Confidence boost for semantic occupancy updates'),
-        DeclareLaunchArgument('semantic_mismatch_penalty', default_value='0.15',
+        DeclareLaunchArgument('semantic_mismatch_penalty', default_value='0.2',
                               description='Penalty for semantic label mismatches'),
         DeclareLaunchArgument('max_semantic_certainty', default_value='1.0',
                               description='Voxels with confidence above this threshold are considered '
