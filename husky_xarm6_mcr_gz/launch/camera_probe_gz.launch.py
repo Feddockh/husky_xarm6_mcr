@@ -1,133 +1,131 @@
 import os
+from pathlib import Path
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, RegisterEventHandler, TimerAction
+from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, Command, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 from ament_index_python.packages import get_package_share_directory
+from launch_param_builder import load_xacro
 from launch_ros.parameter_descriptions import ParameterValue
 
 
+def get_xacro_content(context, xacro_file, **kwargs):
+    xacro_file = Path(xacro_file.perform(context)) if isinstance(xacro_file, LaunchConfiguration) else Path(xacro_file) if isinstance(xacro_file, str) else xacro_file
+    
+    def get_param_str(param):
+        val = param if isinstance(param, str) else 'false' if param == False else 'true' if param == True else (param.perform(context) if context is not None else param) if isinstance(param, LaunchConfiguration) else str(param)
+        return val if not val else val[1:-1] if isinstance(val, str) and val[0] in ['"', '\''] and val[-1] in ['"', '\''] else val
+
+    mappings = {}
+    for k, v in kwargs.items():
+        mappings[k] = get_param_str(v)
+    return load_xacro(xacro_file, mappings=mappings)
+
 def launch_setup(context, *args, **kwargs):
-    actions = []
+    launch_nodes = []
 
     # ------------------------------------------------------------
     # 1) Launch Gazebo world (your existing launch)
     # ------------------------------------------------------------
     pkg_gz = get_package_share_directory('husky_xarm6_mcr_gz')
-    actions.append(
+    launch_nodes.append(
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(os.path.join(pkg_gz, 'launch', 'gazebo.launch.py')),
             launch_arguments={
                 'world': LaunchConfiguration('world'),
-                'generate_markers': LaunchConfiguration('generate_markers'),
-                'num_markers': LaunchConfiguration('num_markers'),
-                'marker_dict': LaunchConfiguration('marker_dict'),
-                'marker_size': LaunchConfiguration('marker_size'),
+                'generate_markers': 'false',
+                'launch_clock_bridge': 'false', # disable clock bridge in nested launch, we'll add it ourselves
             }.items()
         )
     )
-
-    # ------------------------------------------------------------
-    # 2) Spawn the camera rig as a standalone Gazebo entity
-    #    This uses your multi_camera_rig.urdf.xacro
-    # ------------------------------------------------------------
-    rig_xacro = PathJoinSubstitution([
-        FindPackageShare('multi_camera_rig_description'),
-        'urdf',
-        'multi_camera_rig_description.urdf.xacro'
-    ])
-
-    robot_description = ParameterValue(
-        Command(['xacro ', rig_xacro, ' ', 'use_gazebo:=true']),
-        value_type=str
-    )
-
-    # robot_state_publisher provides /robot_description for ros_gz_sim/create
-    actions.append(
-        Node(
-            package='robot_state_publisher',
-            executable='robot_state_publisher',
-            name='camera_probe_state_publisher',
+    clock_bridge = Node(
+            name='clock_bridge',
+            package='ros_gz_bridge',
+            executable='parameter_bridge',
+            arguments=[
+                '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock'
+            ],
             output='screen',
-            parameters=[{
-                'robot_description': robot_description,
-                'use_sim_time': True,
-            }],
+            parameters=[{'use_sim_time': True}]
         )
+    launch_nodes.append(clock_bridge)
+
+    # ------------------------------------------------------------
+    # 2) Initialize the camera rig model (spawn as Gazebo entity)
+    # ------------------------------------------------------------
+    description_pkg = get_package_share_directory('multi_camera_rig_description')
+    xacro_file = Path(description_pkg) / 'urdf' / 'multi_camera_rig_description.urdf.xacro'
+
+    # Process the xacro files
+    robot_description = get_xacro_content(
+        context,
+        xacro_file=xacro_file,
+        use_gazebo='true',
     )
+
+    # Publish the robot state to tf (use simulated time)
+    robot_state_publisher = Node(
+        package='robot_state_publisher',
+        executable='robot_state_publisher',
+        name='robot_state_publisher',
+        output='screen',
+        parameters=[
+            {'use_sim_time': True}, 
+            {'robot_description': robot_description},
+        ]
+    )
+    launch_nodes.append(robot_state_publisher)
+
+    map_frame_publisher = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        arguments=['0', '0', '0', '0', '0', '0', 'map', 'husky/a200_base_footprint'],
+        output='screen'
+    )
+    launch_nodes.append(map_frame_publisher)
 
     # Spawn into Gazebo as entity camera_probe
-    actions.append(
-        Node(
-            package='ros_gz_sim',
-            executable='create',
-            output='screen',
-            arguments=[
-                '-name', LaunchConfiguration('camera_entity'),
+    spawn_node = Node(
+        package='ros_gz_sim',
+        executable='create',
+        output='screen',
+        arguments=[
+            '-name', 'multi_camera_rig',
                 '-topic', 'robot_description',
                 '-x', LaunchConfiguration('spawn_x'),
                 '-y', LaunchConfiguration('spawn_y'),
                 '-z', LaunchConfiguration('spawn_z'),
             ],
         )
+    launch_nodes.append(spawn_node)
+
+    # ------------------------------------------------------------
+    # 3) Initialize the camera rig image capture pipeline (trigger + transport)
+    # ------------------------------------------------------------
+    firefly_bringup_pkg = get_package_share_directory('firefly-ros2-wrapper-bringup')
+    firefly_bringup_launch = os.path.join(firefly_bringup_pkg, 'launch', 'bringup.launch.py')
+    
+    camera_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(firefly_bringup_launch),
+        launch_arguments={
+            'use_gazebo': 'true',
+            'trigger_auto_connect': 'true',
+            'trigger_auto_start': 'false',
+        }.items()
     )
+    launch_nodes.append(camera_launch)
 
     # ------------------------------------------------------------
-    # 3) Fake trigger node (gates raw -> triggered topics)
-    #    NOTE: update topic names here if your Gazebo firefly topics differ.
+    # 4) Initialize the rectify/scale nodes (one per camera)
     # ------------------------------------------------------------
-    # ---- build real python strings ----
-    image_sub_topics = [
-        '/firefly_left/image_raw',
-        '/firefly_right/image_raw',
-    ]
-    image_pub_topics = [
-        '/firefly_left/image_raw/triggered',
-        '/firefly_right/image_raw/triggered',
-    ]
-    info_sub_topics = [
-        '/firefly_left/camera_info',
-        '/firefly_right/camera_info',
-    ]
-    info_pub_topics = [
-        '/firefly_left/camera_info/triggered',
-        '/firefly_right/camera_info/triggered',
-    ]
-
-    trigger_node = Node(
-        package='multi_camera_rig_trigger',
-        executable='trigger_node_fake',
-        name='trigger_node',
-        output='screen',
-        parameters=[{
-            'flash_duration_ms': int(LaunchConfiguration('trigger_flash_duration_ms').perform(context)),
-            'frame_rate_hz': int(LaunchConfiguration('trigger_frame_rate_hz').perform(context)),
-            'auto_connect': True,
-            'auto_start': False,
-
-            # IMPORTANT: these must be real python lists of strings
-            'image_sub_topics': image_sub_topics,
-            'image_pub_topics': image_pub_topics,
-            'info_sub_topics': info_sub_topics,
-            'info_pub_topics': info_pub_topics,
-        }]
-    )
-    actions.append(trigger_node)
-
-    # ------------------------------------------------------------
-    # 4) Rectify nodes (subscribe to triggered topics)
-    # ------------------------------------------------------------
-    output_width = int(LaunchConfiguration('output_width').perform(context))
-    output_height = int(LaunchConfiguration('output_height').perform(context))
-
     for cam_name, in_img, in_info, out_rect in [
-        ('firefly_left',  LaunchConfiguration('left_triggered_image'),  LaunchConfiguration('left_triggered_info'),  LaunchConfiguration('left_rect_image')),
-        ('firefly_right', LaunchConfiguration('right_triggered_image'), LaunchConfiguration('right_triggered_info'), LaunchConfiguration('right_rect_image')),
+        (f'firefly_left',  f'/firefly_left/image_raw',  f'/firefly_left/camera_info',  LaunchConfiguration('left_rect_image').perform(context)),
     ]:
-        actions.append(
+        launch_nodes.append(
             Node(
                 package='multi_camera_rig_reconstruction',
                 executable='stereo_rectify_scale_node',
@@ -140,8 +138,8 @@ def launch_setup(context, *args, **kwargs):
                     'out_rect_info_topic': f'/{cam_name}/camera_info_rect',
                     'publish_scaled': False,
 
-                    'output_width': output_width,
-                    'output_height': output_height,
+                    'output_width': 1440,
+                    'output_height': 1088,
                     'interpolation': 'linear',
 
                     # QoS (match your pipeline)
@@ -159,15 +157,13 @@ def launch_setup(context, *args, **kwargs):
 
     # ------------------------------------------------------------
     # 5) Image saver nodes (let these do all disk saving)
-    #    Save rectified images (not scaled by default — pick what you want).
     # ------------------------------------------------------------
     save_root = LaunchConfiguration('save_directory').perform(context)
     if save_root:
         for cam_name, rect_topic in [
             ('firefly_left', LaunchConfiguration('left_rect_image').perform(context)),
-            ('firefly_right', LaunchConfiguration('right_rect_image').perform(context)),
         ]:
-            actions.append(
+            launch_nodes.append(
                 Node(
                     package='multi_camera_rig_bringup',  # <-- where image_saver_node is
                     executable='image_saver_node',
@@ -189,90 +185,95 @@ def launch_setup(context, *args, **kwargs):
     # ------------------------------------------------------------
     # 6) Capture mover node (teleport + trigger + metadata)
     # ------------------------------------------------------------
-    actions.append(
-        Node(
-            package='husky_xarm6_mcr_gz',                    # <-- adjust to where you install it
-            executable='gazebo_viewpoint_capture_node.py',   # <-- entrypoint name
-            name='gazebo_viewpoint_capture_node',
-            output='screen',
-            parameters=[{
-                'gt_yaml': LaunchConfiguration('gt_yaml').perform(context),
-                'output_dir': save_root,  # metadata will be saved here
-                'camera_entity': LaunchConfiguration('camera_entity').perform(context),
-                'world_name': LaunchConfiguration('world_name').perform(context),
-                'trigger_service': LaunchConfiguration('trigger_service').perform(context),
+    world_name = LaunchConfiguration('world').perform(context)  # apple_tree_1
+    pose_bridge = Node(
+        package='ros_gz_bridge',
+        executable='parameter_bridge',
+        name='pose_bridge',
+        arguments=[
+            f'/world/{LaunchConfiguration("world").perform(context)}/set_pose@ros_gz_interfaces/srv/SetEntityPose',
+        ],
+        output='screen',
+        parameters=[{'use_sim_time': True}],
+    )
+    launch_nodes.append(pose_bridge)
 
-                # Wait topic (use left rect or triggered; just used as an ack)
-                'ack_image_topic': LaunchConfiguration('left_rect_image').perform(context),
+    capture_node = Node(
+        package='husky_xarm6_mcr_gz',
+        executable='gazebo_viewpoint_capture_node',
+        name='gazebo_viewpoint_capture_node',
+        output='screen',
+        parameters=[{
+            'use_sim_time': True,
 
-                # Where to look for newest saved file (left camera)
-                'left_save_dir': os.path.join(save_root, 'firefly_left'),
+            # ---- GT + world ----
+            'gt_yaml': LaunchConfiguration('gt_yaml'),
+            'world_name': LaunchConfiguration('world'),
+            'camera_entity': 'multi_camera_rig',
 
-                # sampling
-                'num_views_per_point': int(LaunchConfiguration('num_views_per_point').perform(context)),
-                'min_radius': float(LaunchConfiguration('min_radius').perform(context)),
-                'max_radius': float(LaunchConfiguration('max_radius').perform(context)),
-                'seed': int(LaunchConfiguration('seed').perform(context)),
-            }]
+            # ---- Frames (fixed TF lookup) ----
+            'entity_frame': 'multi_camera_rig_mount',
+            'optical_frame': 'firefly_left_camera_optical_frame',
+
+            # ---- Viewpoint pattern ----
+            # front  = decreasing Y
+            # back   = increasing Y
+            'side': LaunchConfiguration('side'), # 'front' or 'back'
+            'distances': [0.2, 0.5],
+            'angle_deg': LaunchConfiguration('angle_deg'), # 0 for front/back, 90 for left/right
+
+            # ---- Timing ----
+            'settle_s': 0.1,
+            'pose_timeout_s': 0.2,
+            'trigger_timeout_s': 0.2,
+
+            # ---- Trigger ----
+            'use_trigger': True,
+            'trigger_service': LaunchConfiguration('trigger_service'),
+
+            # ---- Loop ----
+            'loop': False,
+        }]
+    )
+
+    # Start capture node *after* spawn completes, with a small delay
+    launch_nodes.append(
+        RegisterEventHandler(
+            OnProcessExit(
+                target_action=spawn_node,
+                on_exit=[
+                    TimerAction(period=2.0, actions=[capture_node])
+                ],
+            )
         )
     )
 
-    return actions
+    return launch_nodes
 
 
 def generate_launch_description():
     return LaunchDescription([
         # Gazebo world args
         DeclareLaunchArgument('world', default_value='apple_orchard'),
-        DeclareLaunchArgument('generate_markers', default_value='true'),
-        DeclareLaunchArgument('num_markers', default_value='20'),
-        DeclareLaunchArgument('marker_dict', default_value='DICT_4X4_50'),
-        DeclareLaunchArgument('marker_size', default_value='0.05'),
+        DeclareLaunchArgument('side', default_value='front'),
+        DeclareLaunchArgument('angle_deg', default_value='30.0'),
 
         # Spawn camera rig entity
-        DeclareLaunchArgument('camera_entity', default_value='camera_probe'),
         DeclareLaunchArgument('spawn_x', default_value='0.0'),
         DeclareLaunchArgument('spawn_y', default_value='0.0'),
         DeclareLaunchArgument('spawn_z', default_value='1.2'),
 
-        # World name for /world/<name>/set_entity_pose (often "default")
-        DeclareLaunchArgument('world_name', default_value='default'),
-
         # Trigger node executable location
-        DeclareLaunchArgument('trigger_pkg', default_value='multi_camera_rig_trigger'),  # <-- change if needed
-        DeclareLaunchArgument('trigger_exec', default_value='trigger_node_fake'),       # <-- change if needed
-        DeclareLaunchArgument('trigger_flash_duration_ms', default_value='200'),
-        DeclareLaunchArgument('trigger_frame_rate_hz', default_value='10'),
         DeclareLaunchArgument('trigger_service', default_value='/trigger/send_trigger'),
-
-        # Firefly topic wiring (CHANGE THESE if your sim topics differ)
-        DeclareLaunchArgument('left_raw_image', default_value='/firefly_left/image_raw'),
-        DeclareLaunchArgument('right_raw_image', default_value='/firefly_right/image_raw'),
-        DeclareLaunchArgument('left_raw_info', default_value='/firefly_left/camera_info'),
-        DeclareLaunchArgument('right_raw_info', default_value='/firefly_right/camera_info'),
-
-        DeclareLaunchArgument('left_triggered_image', default_value='/firefly_left/image_raw/triggered'),
-        DeclareLaunchArgument('right_triggered_image', default_value='/firefly_right/image_raw/triggered'),
-        DeclareLaunchArgument('left_triggered_info', default_value='/firefly_left/camera_info/triggered'),
-        DeclareLaunchArgument('right_triggered_info', default_value='/firefly_right/camera_info/triggered'),
 
         # Rectified output topics
         DeclareLaunchArgument('left_rect_image', default_value='/firefly_left/image_rect'),
         DeclareLaunchArgument('right_rect_image', default_value='/firefly_right/image_rect'),
 
-        # Rectify/scale parameters
-        DeclareLaunchArgument('output_width', default_value='448'),
-        DeclareLaunchArgument('output_height', default_value='224'),
-
         # Dataset params
         DeclareLaunchArgument('gt_yaml', default_value=''),
         DeclareLaunchArgument('save_directory', default_value='/home/hayden/tmp/saved_images'),
         DeclareLaunchArgument('image_format', default_value='png'),
-
-        DeclareLaunchArgument('num_views_per_point', default_value='10'),
-        DeclareLaunchArgument('min_radius', default_value='0.15'),
-        DeclareLaunchArgument('max_radius', default_value='0.60'),
-        DeclareLaunchArgument('seed', default_value='0'),
 
         OpaqueFunction(function=launch_setup),
     ])

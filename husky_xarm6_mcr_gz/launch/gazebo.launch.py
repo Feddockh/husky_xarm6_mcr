@@ -116,7 +116,7 @@ def launch_setup(context, *args, **kwargs):
         
         marker_generator = ExecuteProcess(
             cmd=[
-                script_path,
+                os.path.join(pkg_prefix, 'lib', 'husky_xarm6_mcr_gz', 'generate_aruco_models'),
                 '--count', num_markers_value,
                 '--dict', marker_dict_value,
                 '--marker_size', marker_size_value,
@@ -161,18 +161,19 @@ def launch_setup(context, *args, **kwargs):
         launch_actions.append(gazebo_launch)
     
     # Clock bridge - always add
-    launch_actions.append(
-        Node(
-            name='clock_bridge',
-            package='ros_gz_bridge',
-            executable='parameter_bridge',
-            arguments=[
-                '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock'
-            ],
-            output='screen',
-            parameters=[{'use_sim_time': True}]
+    if LaunchConfiguration('launch_clock_bridge').perform(context).lower() in ['true', '1', 'yes']:
+        launch_actions.append(
+            Node(
+                name='clock_bridge',
+                package='ros_gz_bridge',
+                executable='parameter_bridge',
+                arguments=[
+                    '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock'
+                ],
+                output='screen',
+                parameters=[{'use_sim_time': True}]
+            )
         )
-    )
 
     return launch_actions
 
@@ -203,6 +204,11 @@ def generate_launch_description():
             'marker_size',
             default_value='0.05',
             description='Physical size of markers in meters'
+        ),
+        DeclareLaunchArgument(
+            'launch_clock_bridge',
+            default_value='true',
+            description='Whether to launch the ROS-Gazebo clock bridge (true/false)'
         ),
         OpaqueFunction(function=launch_setup)
     ])
