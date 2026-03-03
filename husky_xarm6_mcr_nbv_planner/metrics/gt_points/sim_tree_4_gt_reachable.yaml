@@ -1,0 +1,110 @@
+# ArUco Marker Positions
+# Generated at: 273.93
+# Reference frame: husky/a200_base_footprint
+frame_id: husky/a200_base_footprint
+markers:
+  - id: 0
+    class_id: 0
+    position:
+      x: -0.47065
+      y: -0.797089
+      z: 0.590241
+    last_seen: 67.57  # seconds ago
+  - id: 1
+    class_id: 0
+    position:
+      x: -0.419587
+      y: -1.04497
+      z: 0.850166
+    last_seen: 29.77  # seconds ago
+  - id: 2
+    class_id: 0
+    position:
+      x: 0.365147
+      y: -0.824294
+      z: 0.961286
+    last_seen: 113.17  # seconds ago
+  - id: 3
+    class_id: 0
+    position:
+      x: 0.271708
+      y: -1.28629
+      z: 0.731122
+    last_seen: 102.97  # seconds ago
+  - id: 4
+    class_id: 0
+    position:
+      x: -0.203442
+      y: -1.25052
+      z: 1.24312
+    last_seen: 4.36  # seconds ago
+  - id: 5
+    class_id: 0
+    position:
+      x: -0.161164
+      y: -0.779171
+      z: 1.34267
+    last_seen: 4.36  # seconds ago
+  - id: 6
+    class_id: 0
+    position:
+      x: 0.0725168
+      y: -0.525952
+      z: 0.523003
+    last_seen: 125.76  # seconds ago
+  - id: 7
+    class_id: 0
+    position:
+      x: -0.345306
+      y: -1.35693
+      z: 0.363511
+    last_seen: 37.53  # seconds ago
+  - id: 8
+    class_id: 1
+    position:
+      x: 0.00656769
+      y: -0.967686
+      z: 0.147722
+    last_seen: 78.34  # seconds ago
+  - id: 9
+    class_id: 1
+    position:
+      x: -0.383879
+      y: -0.831418
+      z: 0.593261
+    last_seen: 49.95  # seconds ago
+  - id: 10
+    class_id: 1
+    position:
+      x: -0.057853
+      y: -1.09744
+      z: 0.591862
+    last_seen: 32.76  # seconds ago
+  - id: 11
+    class_id: 1
+    position:
+      x: 0.0758616
+      y: -0.812859
+      z: 0.806111
+    last_seen: 102.36  # seconds ago
+  - id: 12
+    class_id: 1
+    position:
+      x: 0.00374087
+      y: -0.988442
+      z: 1.03557
+    last_seen: 97.58  # seconds ago
+  - id: 13
+    class_id: 1
+    position:
+      x: -0.125132
+      y: -1.13814
+      z: 1.21749
+    last_seen: 4.36  # seconds ago
+  - id: 14
+    class_id: 1
+    position:
+      x: -0.024133
+      y: -0.982372
+      z: 1.41189
+    last_seen: 0.16  # seconds ago
