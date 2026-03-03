@@ -289,10 +289,10 @@ int main(int argc, char **argv)
             }
             RCLCPP_DEBUG(node->get_logger(), "%zu out of %zu frontiers are viewable from the workspace",
                 viewable_frontiers.size(), frontiers_eigen.size());
-            // if (viewable_frontiers.empty()) {
-            //     RCLCPP_WARN(node->get_logger(), "No viewable frontiers found within manipulation workspace");
-            //     break;
-            // }
+            if (viewable_frontiers.empty()) {
+                RCLCPP_WARN(node->get_logger(), "No viewable frontiers found within manipulation workspace");
+                // break;
+            }
 
             // Cluster frontiers
             int n_clusters = std::max(1, (int)viewable_frontiers.size() / 100);
@@ -302,7 +302,7 @@ int main(int argc, char **argv)
                 viewable_frontiers.size(), frontier_clusters.size());
             if (frontier_clusters.empty()) {
                 RCLCPP_WARN(node->get_logger(), "No frontier clusters found after clustering");
-                break;
+                // break;
             }
             // if (visualizer)
             //     visualizer->publishClusteredVoxels(frontier_clusters, octomap_interface->getResolution(), 
