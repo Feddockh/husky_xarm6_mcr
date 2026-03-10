@@ -105,7 +105,7 @@ namespace husky_xarm6_mcr_occupancy_map
             free_marker.color.r = 0.0;
             free_marker.color.g = 1.0;
             free_marker.color.b = 0.0;
-            free_marker.color.a = 0.2;
+            free_marker.color.a = 0.15;
         }
 
         // Iterate through octree - use standard or semantic tree appropriately
@@ -309,11 +309,34 @@ namespace husky_xarm6_mcr_occupancy_map
         }
 
         // Predefined color palette for classes 0-19
+        // const uint8_t palette[][3] = {
+        //     {230, 25, 75},    // Red - class 0
+        //     {60, 180, 75},    // Green - class 1
+        //     {255, 225, 25},   // Yellow - class 2
+        //     {0, 130, 200},    // Blue - class 3
+        //     {245, 130, 48},   // Orange - class 4
+        //     {145, 30, 180},   // Purple - class 5
+        //     {70, 240, 240},   // Cyan - class 6
+        //     {240, 50, 230},   // Magenta - class 7
+        //     {210, 245, 60},   // Lime - class 8
+        //     {250, 190, 212},  // Pink - class 9
+        //     {0, 128, 128},    // Teal - class 10
+        //     {220, 190, 255},  // Lavender - class 11
+        //     {170, 110, 40},   // Brown - class 12
+        //     {255, 250, 200},  // Beige - class 13
+        //     {128, 0, 0},      // Maroon - class 14
+        //     {170, 255, 195},  // Mint - class 15
+        //     {128, 128, 0},    // Olive - class 16
+        //     {255, 215, 180},  // Coral - class 17
+        //     {0, 0, 128},      // Navy - class 18
+        //     {128, 128, 128}   // Grey - class 19
+        // };
+
         const uint8_t palette[][3] = {
-            {230, 25, 75},    // Red - class 0
-            {60, 180, 75},    // Green - class 1
-            {255, 225, 25},   // Yellow - class 2
-            {0, 130, 200},    // Blue - class 3
+            {0, 150, 255},    // Blue - class 0
+            {230, 25, 75},    // Red - class 1
+            {60, 180, 75},    // Green - class 2
+            {255, 225, 25},   // Yellow - class 3
             {245, 130, 48},   // Orange - class 4
             {145, 30, 180},   // Purple - class 5
             {70, 240, 240},   // Cyan - class 6

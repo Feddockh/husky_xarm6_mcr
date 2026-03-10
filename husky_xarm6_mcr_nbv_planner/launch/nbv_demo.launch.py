@@ -391,7 +391,7 @@ def launch_setup(context, *args, **kwargs):
             'pointcloud_topic': LaunchConfiguration('octomap_pointcloud_topic'),
             'use_moveit': LaunchConfiguration('octomap_use_moveit'),
             'planning_scene_world_topic': '/planning_scene_world',
-            'publish_free_voxels': False,
+            'publish_free_voxels': True,
             'enable_visualization': True,
             'visualization_topic': 'occupancy_map_markers',
             'visualization_rate': 1.0,
@@ -422,6 +422,23 @@ def launch_setup(context, *args, **kwargs):
         nbv_node = Node(
             package='husky_xarm6_mcr_nbv_planner',
             executable='nbv_volumetric_planner_demo',
+            output='screen',
+            parameters=[
+                {'use_sim_time': use_sim_time},
+                robot_description,
+                robot_description_semantic,
+                kinematics_config,
+                joint_limits_config,
+                planner_config,
+                controller_config,
+                planning_scene_monitor_config,
+                node_parameters,
+            ],
+        )
+    elif LaunchConfiguration('planner_type').perform(context).lower() == 'paper': # This is just a demo for the paper figures
+        nbv_node = Node(
+            package='husky_xarm6_mcr_nbv_planner',
+            executable='paper_demo',
             output='screen',
             parameters=[
                 {'use_sim_time': use_sim_time},
