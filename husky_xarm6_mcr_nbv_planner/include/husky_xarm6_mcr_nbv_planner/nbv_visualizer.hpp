@@ -356,62 +356,7 @@ namespace husky_xarm6_mcr_nbv_planner
             float alpha = 0.8f,
             const std::string &ns = "match_results",
             const std::string &frame_id = "");
-
-        /**
-         * @brief Plot generic data as line chart with customizable labels and colors
-         * @param y_data 2D vector where each inner vector represents one series of y values
-         * @param x_data X-axis values (shared across all series, optional - will use 0,1,2... if empty)
-         * @param series_labels Labels for each series (legend entries)
-         * @param plot_title Title of the plot
-         * @param x_title X-axis label
-         * @param y_title Y-axis label
-         * @param colors Colors for each series (optional, uses defaults if empty)
-         * @param save_path Path to save the plot (default: "/tmp/plot.png")
-         * @param y_min Minimum y-axis value (default: 0.0)
-         * @param y_max Maximum y-axis value (default: 1.0)
-         * @return true if successful, false otherwise
-         */
-        static bool plotMetric(
-            const std::vector<std::vector<double>> &y_data,
-            const std::vector<double> &x_data,
-            const std::vector<std::string> &series_labels,
-            const std::string &plot_title = "Metric",
-            const std::string &x_title = "X",
-            const std::string &y_title = "Y",
-            const std::vector<std::array<float, 3>> &colors = {},
-            const std::string &save_path = "/tmp/plot.png",
-            double y_min = 0.0,
-            double y_max = 1.0
-        );
-
-        /**
-         * @brief Plot evaluation metrics from ClassMetrics structure
-         * @param class_metrics 2D vector of ClassMetrics (outer: different runs, inner: classes)
-         * @param x_data X-axis values
-         * @param x_data_label X-axis label
-         * @param plot_title Title of the plot (default: "Class Metrics")
-         * @param save_path Path to save the plot (default: "/tmp/metrics.png")
-         * @return true if successful, false otherwise
-         */
-        static bool plotClassMetrics(
-            const std::vector<std::vector<ClassMetrics>> &metrics,
-            const std::vector<double> &x_data,
-            const std::string &x_data_label,
-            const std::string &plot_title = "Class Metrics",
-            const std::string &save_path = "/tmp/metrics.png"
-        );
-
-        /**
-         * @brief Plots evaluation metrics from EvaluationMetrics structure
-         * @param all_metrics 2D vector of ClassMetrics (outer: different runs, inner: classes)
-         * @param dir_path Path to save the plots (default: "/tmp/metrics.png")
-         * @return true if successful, false otherwise
-         */
-        static bool plotAllMetrics(
-            const std::vector<EvaluationMetrics> &all_metrics,
-            const std::string &dir_path = "/tmp"
-        );
-
+            
         /**
          * @brief Log metrics to csv file
          * @param all_metrics 2D vector of EvaluationMetrics (outer: different runs, inner: classes)

@@ -232,7 +232,7 @@ int main(int argc, char **argv)
             {
                 visualizer->publishMatchResults(match_result, config.eval_threshold_radius * 2, 0.8f);
             }
-            visualizer->plotAllMetrics(all_metrics, config.metrics_plots_dir);
+            // visualizer->plotAllMetrics(all_metrics, config.metrics_plots_dir);
             visualizer->logAllMetricsToCSV(all_metrics, config.metrics_data_dir);
         }
         else
@@ -467,7 +467,7 @@ int main(int argc, char **argv)
                 if (visualizer) {
                     visualizer->publishMatchResults(match_result, config.eval_threshold_radius * 2, 0.8f);
                 }
-                visualizer->plotAllMetrics(all_metrics, config.metrics_plots_dir);
+                // visualizer->plotAllMetrics(all_metrics, config.metrics_plots_dir);
                 visualizer->logAllMetricsToCSV(all_metrics, config.metrics_data_dir);
             }
 
